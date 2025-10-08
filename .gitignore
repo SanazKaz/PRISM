@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+
+# PyTorch Lightning
+lightning_logs/
+Log_Results/
+wandb/
+
+# Data and checkpoints
+data/
+checkpoints/
+*.ckpt
+*.pth
+*.npz
+*.pdb
+*.sdf
+
+src/models
+
+# Job files and logs
+jobs_files/
+*.log
+
+# IDE
+.vscode/
+.idea/
+
+# System
+.DS_Store
