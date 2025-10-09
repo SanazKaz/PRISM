@@ -124,6 +124,11 @@ class RolloutCollector:
         """
         Generates, remaps, and calculates rewards for a single chunk of molecules.
         """
+    
+        for key, tensor in single_pocket_data.items():
+            if torch.is_tensor(tensor):
+                single_pocket_data[key] = tensor.to(self.device) # move to device
+                
         num_nodes_lig_config = self.config.ppo_params.num_nodes_lig
         if num_nodes_lig_config is None:
             num_nodes_lig = self.policy_network.size_distribution.sample_conditional(
@@ -136,13 +141,17 @@ class RolloutCollector:
                 (samples_in_chunk,),
                 dtype=torch.long
             )
+        
+        num_nodes_lig = num_nodes_lig.to(self.device)
+        
+
 
         local_mask_base = torch.arange(samples_in_chunk, device=self.device)
         batched_pocket_data = {
             'x': single_pocket_data['x'].repeat(samples_in_chunk, 1),
             'one_hot': single_pocket_data['one_hot'].repeat(samples_in_chunk, 1),
             'size': single_pocket_data['size'].repeat(samples_in_chunk),
-            'mask': local_mask_base.repeat_interleave(single_pocket_data['x'].shape[0])
+            'mask': local_mask_base.repeat_interleave(single_pocket_data['x'].shape[0]).to(self.device)
         }
 
         xh_lig, xh_pocket, lig_mask, pocket_mask, mol_log_probs, z_states = \

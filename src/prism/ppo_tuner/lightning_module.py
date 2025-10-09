@@ -14,22 +14,28 @@ class PPOFineTuner(pl.LightningModule):
     This is the main LightningModule for PPO fine-tuning.
     It acts as a lightweight wrapper around the core PPOAlgorithm.
     """
-    def __init__(self, config, warm_start_checkpoint=None):
+    def __init__(self, config, node_histogram, warm_start_checkpoint=None):
         super().__init__()
         self.save_hyperparameters(config)
         self.config = config
         self.automatic_optimization = False # Crucial for PPO
+        
+        device = torch.device("cuda" if self.config.gpus > 0 else "cpu")
+
 
         # Filter out PPO-specific and Lightning-specific parameters
         ddpm_config = {k: v for k, v in vars(self.config).items() 
                     if k not in ['ppo_params', 'enable_progress_bar', 
-                                'num_sanity_val_steps', 'wandb_params', 'gpus', 'n_epochs']}
+                                'num_sanity_val_steps', 'wandb_params', 'gpus', 'n_epochs', 'logdir', 'fp16']}
 
         self.ddpm_model = LigandPocketDDPM(
             outdir=Path(self.config.logdir, self.config.run_identifier),
-            node_histogram=[],
+            node_histogram=node_histogram,
             **ddpm_config
         )
+        
+        self.ddpm_model.to(device)
+
         
         # Load pretrained weights if provided
         if warm_start_checkpoint is not None:

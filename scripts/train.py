@@ -3,6 +3,7 @@
 import sys
 import os
 from pathlib import Path
+# later add in wandb logging
 
 # Add project root to path
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -49,7 +50,12 @@ def main(args):
 
     # --- 3. Instantiate the LightningModule ---
     # The LightningModule handles the model and training logic.
-    model = PPOFineTuner(config=config, warm_start_checkpoint=args.warm_start_from_ddpm)
+    histogram_file = Path(config.datadir, 'size_distribution.npy')
+    if not histogram_file.exists():
+        raise FileNotFoundError(f"Histogram file not found at {histogram_file}")
+    node_histogram = np.load(histogram_file).tolist()
+    
+    model = PPOFineTuner(config=config, warm_start_checkpoint=args.warm_start_from_ddpm, node_histogram=node_histogram)
 
     
     # --- 4. Setup Callbacks and Trainer ---

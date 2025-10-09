@@ -58,7 +58,6 @@ def compute_ppo_loss(policy_network, minibatch, timestep_idx, config):
 def _get_log_probs(policy_network, timestep_batch, total_timesteps):
     """
     Helper function to compute log π_θ(z_s | z_t, pocket).
-    This is your original `get_log_probs` method, now as a private helper function.
     """
     z_t, z_s = timestep_batch["latents"], timestep_batch["next_latents"]
     xh_lig, xh_pock = timestep_batch["molecules"]
@@ -69,6 +68,7 @@ def _get_log_probs(policy_network, timestep_batch, total_timesteps):
     device = z_t.device
     unique_ids, new_lig_mask = torch.unique(lig_mask, return_inverse=True)
     
+    # build pocket mask on the correct device
     mapping = -torch.ones(int(poc_mask.max()) + 1, dtype=torch.long, device=device)
     mapping[unique_ids] = torch.arange(len(unique_ids), device=device)
     new_poc_mask = mapping[poc_mask]

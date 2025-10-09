@@ -114,7 +114,7 @@ class RolloutBuffer:
             
         # NOTE: This shuffling is on a per-molecule basis
         num_molecules = self.rewards.shape[0]
-        mol_indices = torch.randperm(num_molecules)
+        mol_indices = torch.randperm(num_molecules, device=self.rewards.device)
         
         ppo_batch_size = self.config.ppo_params.ppo_batch_size
         
