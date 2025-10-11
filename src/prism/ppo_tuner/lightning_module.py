@@ -106,7 +106,9 @@ class PPOFineTuner(pl.LightningModule):
         opt.zero_grad()
 
         # Log the metrics returned by the algorithm
-        self.log_dict(logs, on_step=False, on_epoch=True, prog_bar=True)
+        self.log_dict(logs, on_step=False, on_epoch=True, prog_bar=False)
+        
+        return logs
 
     def configure_optimizers(self):
         # The optimizer is created and owned by the PPOAlgorithm

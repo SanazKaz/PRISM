@@ -47,22 +47,6 @@ class RolloutBuffer:
         self.timesteps = rollout_data['timesteps']
         self.data_loaded = True
         
-        # === DEBUG INFO ===
-        xh_lig, xh_pocket = self.molecules
-        lig_mask, pocket_mask = self.masks
-        
-        print(f"[DEBUG] RolloutBuffer loaded:")
-        print(f"  - Molecules: {self.rewards.shape[0]} molecules")
-        print(f"  - xh_lig shape: {xh_lig.shape} (total ligand atoms)")
-        print(f"  - xh_pocket shape: {xh_pocket.shape} (total pocket atoms)")
-        print(f"  - lig_mask shape: {lig_mask.shape}, min={lig_mask.min()}, max={lig_mask.max()}")
-        print(f"  - pocket_mask shape: {pocket_mask.shape}, min={pocket_mask.min()}, max={pocket_mask.max()}")
-        print(f"  - unique molecule IDs in lig_mask: {torch.unique(lig_mask).shape[0]}")
-        print(f"  - unique molecule IDs in pocket_mask: {torch.unique(pocket_mask).shape[0]}")
-        
-        # Check if masks reference atoms that exist
-        print(f"  - Max lig_mask ID ({lig_mask.max()}) should match unique count - 1")
-        print(f"  - Max pocket_mask ID ({pocket_mask.max()}) should match unique count - 1")
 
     def compute_advantages(self):
         """

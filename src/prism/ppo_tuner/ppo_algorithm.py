@@ -71,11 +71,9 @@ class PPOAlgorithm:
         for inner_epoch in range(num_inner_epochs):
             for minibatch in self.buffer.get_minibatches():
                 
-                # Your specific logic loops over diffusion timesteps for each minibatch
                 num_train_timesteps = self.config.ppo_params.num_train_timesteps
                 for t_idx in range(num_train_timesteps):
                 
-                    # NOTE: We call our clean, standalone loss function
                     policy_loss, approx_kl, clipfrac, entropy = compute_ppo_loss(
                         policy_network=self.policy_network.ddpm,
                         minibatch=minibatch,
@@ -111,12 +109,12 @@ class PPOAlgorithm:
                     total_entropy += entropy.item()
 
         # Final logs for the entire outer step
-        num_updates = max(1, update_count / self.config.ppo_params.gradient_accumulation_steps)
+        num_loss_computations = max(1, update_count)
         final_logs = {
-            "train/policy_loss": total_loss / num_updates,
-            "train/approx_kl": total_kl / num_updates,
-            "train/clipfrac": total_clipfrac / num_updates,
-            "train/entropy": total_entropy / num_updates,
+            "train/policy_loss": total_loss / num_loss_computations,
+            "train/approx_kl": total_kl / num_loss_computations,
+            "train/clipfrac": total_clipfrac / num_loss_computations,
+            "train/entropy": total_entropy / num_loss_computations,
             "train/reward_mean": self.buffer.rewards.mean().item(),
             "train/advantages_mean": self.buffer.advantages.mean().item(),
         }

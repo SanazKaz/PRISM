@@ -1,25 +1,26 @@
 #!/bin/bash
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=64GB
-#SBATCH --gres=gpu:h100:1
+#SBATCH --gres=gpu:1
 #SBATCH --ntasks-per-node=1  # node is auto as 1, then n tasks per node should match num of gpus #SBATCH --constraint=gpu_sku:H100
-#SBATCH --partition=short
-#SBATCH --time 04:00:00
-#SBATCH --job-name=Crossdock_QED(1.0)_lr3e-5_resume
+#SBATCH --partition=devel
+#SBATCH --time 00:10:00
+#SBATCH --job-name=Refactored_PPO
 #SBATCH --mail-user=wolf7055@ox.ac.uk
 #SBATCH --mail-type=END,FAIL
 #SBATCH --array=0-2
-#SBATCH --output=jobs_files/Crossdock_QED(1.0)_lr3e-5_resume-%A_%a.log 
+#SBATCH --output=jobs_files/Refactored_PPO-%A_%a.log 
 # Redirect stderr to stdout
 exec 2>&1 
 
+# #SBATCH --gres=gpu:h100:1
 
 module purge
 module load Anaconda3
 # Load required module
 source activate /data/stat-cadd/wolf7055/conda/envs/TEST_ENV
 which python
-chmod +x analysis/smina.static # make exc
+# chmod +x analysis/smina.static # make exc
 
 # Define seeds array
 SEEDS=(42 976 123)
@@ -47,9 +48,9 @@ export DEBUG_PPO=0
 
 # Run the training script
 echo "Starting training..."
-srun python /data/stat-cadd/wolf7055/diffsbdd-ppo/train.py \
---config "/data/stat-cadd/wolf7055/diffsbdd-ppo/configs/ppo_config.yaml" \
---resume "/data/stat-cadd/wolf7055/diffsbdd-ppo/Log_Results/Crossdock_QED(1.0)_lr3e-5/checkpoints/ppo-epoch=37-train_reward_mean_epoch=0.00-v1.ckpt" \
+srun python scripts/train.py \
+--config "configs/ppo_config.yaml" \
+--warm_start_from_ddpm "checkpoints/crossdocked_fa_cond_temp.ckpt" \
 --seed $SEED
 # After training completes, stop the monitoring processes
 echo "Training completed, stopping resource monitoring..."

@@ -46,6 +46,10 @@ def main(args):
         config_dict = yaml.safe_load(f)
     config = dict_to_namespace(config_dict)
     
+    if args.seed is not None:
+        pl.seed_everything(args.seed, workers=True)
+        print(f"[SEED] Set random seed to {args.seed}")
+    
     # --- 2. Instantiate the DataModule ---
     # The DataModule handles all data-related setup.
     datamodule = LigandPocketDataModule(config)
@@ -64,17 +68,17 @@ def main(args):
     checkpoint_dir = Path(config.logdir, config.run_identifier, 'checkpoints')
     checkpoint_callback = ModelCheckpoint(
         dirpath=str(checkpoint_dir),
-        monitor='train/reward_mean', # Make sure your logs match this key
+        monitor='train/reward_mean', 
         mode='max',
         save_last=True,
     )
     
     wandb_logger = WandbLogger(
-        entity=config.wandb_entity,
-        project=config.wandb_project, 
+        entity=getattr(config.wandb_params, 'entity', None),
+        project=getattr(config.wandb_params, 'project', 'PRISM-Training'),
         name=config.run_identifier,
         config=config_dict,
-        )
+    )
 
 
     trainer = pl.Trainer(
@@ -97,7 +101,7 @@ if __name__ == "__main__":
     parser.add_argument('--config', type=str, required=True, help="Path to your config.yaml")
     parser.add_argument('--resume_from_checkpoint', type=str, default=None, help="Path to resume PPO training from.")
     parser.add_argument('--warm_start_from_ddpm', type=str, default=None, help="Path to pretrained DDPM checkpoint for warm start")
-
+    parser.add_argument('--seed', type=int, default=42, help="Random seed for reproducibility")
     
     args = parser.parse_args()
     main(args)
