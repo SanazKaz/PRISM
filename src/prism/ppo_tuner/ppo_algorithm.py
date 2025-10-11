@@ -19,7 +19,7 @@ class PPOAlgorithm:
         self.policy_network = policy_network
         self.config = config
         self.device = next(policy_network.parameters()).device
-        self.reward_function = DummyMedChemReward()
+        self.reward_function = DummyMedChemReward(dataset_info=dataset_info, ddpm_module=policy_network.ddpm)
 
         # Create the optimizer here, as it's tied to the algorithm
         self.optimizer = Adam(

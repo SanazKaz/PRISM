@@ -30,9 +30,6 @@ class RolloutBuffer:
     def load_rollout_data(self, rollout_data: dict):
         """
         Loads a complete dictionary of rollout data from the RolloutCollector.
-
-        Args:
-            rollout_data (dict): A dictionary containing all trajectory tensors.
         """
         if not rollout_data or rollout_data['rewards'].numel() == 0:
             print("WARNING: RolloutBuffer received empty data. Skipping.")
@@ -50,7 +47,22 @@ class RolloutBuffer:
         self.timesteps = rollout_data['timesteps']
         self.data_loaded = True
         
-        print(f"RolloutBuffer loaded with {self.rewards.shape[0]} samples.")
+        # === DEBUG INFO ===
+        xh_lig, xh_pocket = self.molecules
+        lig_mask, pocket_mask = self.masks
+        
+        print(f"[DEBUG] RolloutBuffer loaded:")
+        print(f"  - Molecules: {self.rewards.shape[0]} molecules")
+        print(f"  - xh_lig shape: {xh_lig.shape} (total ligand atoms)")
+        print(f"  - xh_pocket shape: {xh_pocket.shape} (total pocket atoms)")
+        print(f"  - lig_mask shape: {lig_mask.shape}, min={lig_mask.min()}, max={lig_mask.max()}")
+        print(f"  - pocket_mask shape: {pocket_mask.shape}, min={pocket_mask.min()}, max={pocket_mask.max()}")
+        print(f"  - unique molecule IDs in lig_mask: {torch.unique(lig_mask).shape[0]}")
+        print(f"  - unique molecule IDs in pocket_mask: {torch.unique(pocket_mask).shape[0]}")
+        
+        # Check if masks reference atoms that exist
+        print(f"  - Max lig_mask ID ({lig_mask.max()}) should match unique count - 1")
+        print(f"  - Max pocket_mask ID ({pocket_mask.max()}) should match unique count - 1")
 
     def compute_advantages(self):
         """
@@ -85,6 +97,7 @@ class RolloutBuffer:
 
         print("Advantages computed and stored in buffer.")
 
+
     def _apply_top_k_gating(self):
         """ Zeros out advantages for samples that are not in the top-k by reward. """
         KEEP_FRAC = 0.30
@@ -105,36 +118,47 @@ class RolloutBuffer:
         self.advantages = self.advantages * keep_mask.float()
         print(f"Top-K advantage gating applied. Kept {keep_mask.sum()}/{keep_mask.numel()} samples.")
 
+
     def get_minibatches(self):
         """
         A generator that yields shuffled minibatches of the stored data.
+        Matches the original training_step minibatching logic exactly.
         """
         if not self.data_loaded or self.advantages is None:
             raise ValueError("Must load data and compute advantages before creating minibatches.")
             
-        # NOTE: This shuffling is on a per-molecule basis
         num_molecules = self.rewards.shape[0]
         mol_indices = torch.randperm(num_molecules, device=self.rewards.device)
         
         ppo_batch_size = self.config.ppo_params.ppo_batch_size
         
+        xh_lig_full, xh_pocket_full = self.molecules
+        lig_mask_full, pocket_mask_full = self.masks
+        
         for start_idx in range(0, num_molecules, ppo_batch_size):
             end_idx = start_idx + ppo_batch_size
-            mb_mol_indices = mol_indices[start_idx:end_idx]
-
-            # Now, we need to gather the per-atom data corresponding to these molecules
-            lig_mask, pocket_mask = self.masks
+            mb_mol_indices = mol_indices[start_idx:end_idx]  # e.g., [15, 0, 7, 27, 23]
             
-            # Create atom-level masks for the minibatch
-            mb_lig_atom_mask = torch.isin(lig_mask, mb_mol_indices)
-            mb_pocket_atom_mask = torch.isin(pocket_mask, mb_mol_indices)
+            # Create boolean masks for atoms belonging to selected molecules
+            # This matches: lig_minibatch_mask |= (lig_mask == mol_id)
+            mb_lig_atom_mask = torch.isin(lig_mask_full, mb_mol_indices)
+            mb_pocket_atom_mask = torch.isin(pocket_mask_full, mb_mol_indices)
             
-            yield {
+            # SLICE all per-atom tensors to only include atoms from selected molecules
+            minibatch = {
+                # Per-atom tensors: SLICED
+                'molecules': (xh_lig_full[mb_lig_atom_mask], xh_pocket_full[mb_pocket_atom_mask]),
+                'masks': (lig_mask_full[mb_lig_atom_mask], pocket_mask_full[mb_pocket_atom_mask]),
+                'latents': self.latents[mb_lig_atom_mask],
+                'next_latents': self.next_latents[mb_lig_atom_mask],
+                
+                # Per-molecule tensors: SLICED by molecule indices
                 'advantages': self.advantages[mb_mol_indices],
                 'old_log_probs': self.old_log_probs[mb_mol_indices],
                 'timesteps': self.timesteps[mb_mol_indices],
-                'latents': self.latents[mb_mol_indices],
-                'next_latents': self.next_latents[mb_mol_indices],
-                'molecules': (self.molecules[0][mb_lig_atom_mask], self.molecules[1][mb_pocket_atom_mask]),
-                'masks': (lig_mask[mb_lig_atom_mask], pocket_mask[mb_pocket_atom_mask]),
+                'rewards': self.rewards[mb_mol_indices],
+                'raw_score': self.raw_scores[mb_mol_indices],
+                'pocket_indices': self.pocket_indices[mb_mol_indices],
             }
+            
+            yield minibatch

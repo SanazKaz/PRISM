@@ -3,7 +3,9 @@
 import sys
 import os
 from pathlib import Path
+
 # later add in wandb logging
+from pytorch_lightning.loggers import WandbLogger
 
 # Add project root to path
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -66,6 +68,14 @@ def main(args):
         mode='max',
         save_last=True,
     )
+    
+    wandb_logger = WandbLogger(
+        entity=config.wandb_entity,
+        project=config.wandb_project, 
+        name=config.run_identifier,
+        config=config_dict,
+        )
+
 
     trainer = pl.Trainer(
         max_epochs=config.ppo_params.num_outer_epochs,
@@ -74,6 +84,7 @@ def main(args):
         callbacks=[checkpoint_callback],
         enable_progress_bar=config.enable_progress_bar,
         num_sanity_val_steps=config.num_sanity_val_steps,
+        logger=wandb_logger,
         # Add any other trainer flags you need from your config
     )
 

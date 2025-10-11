@@ -43,11 +43,18 @@ def compute_ppo_loss(policy_network, minibatch, timestep_idx, config):
     
     surr1 = advantages * ratio
     surr2 = advantages * torch.clamp(ratio, 1.0 - clip_range, 1.0 + clip_range)
+    print(f"surr1: {surr1.shape}, surr2: {surr2.shape}")
+    print(f"advantages: {advantages.shape}, ratio: {ratio.shape}")
+    print(f"new_log_probs: {new_log_probs.shape}, old_log_probs: {old_log_probs.shape}")
+    print(f"entropy: {entropy.shape}")
+    print(f"clip_range: {clip_range}")
+    print(f"clipfrac: {clipfrac.shape}")
     
     policy_loss = -torch.min(surr1, surr2).mean()
     
     # Add entropy bonus
     policy_loss -= config.ppo_params.entropy_coef * entropy
+    print(f"policy_loss: {policy_loss.shape}")
     
     # --- KL Divergence for logging/diagnostics ---
     with torch.no_grad():
@@ -58,27 +65,46 @@ def compute_ppo_loss(policy_network, minibatch, timestep_idx, config):
 def _get_log_probs(policy_network, timestep_batch, total_timesteps):
     """
     Helper function to compute log π_θ(z_s | z_t, pocket).
+    
+    Re-indexes per-atom masks to run from 0…n_mol-1 to guarantee they are
+    in-range for the sliced tensors.
     """
+    
     z_t, z_s = timestep_batch["latents"], timestep_batch["next_latents"]
     xh_lig, xh_pock = timestep_batch["molecules"]
     lig_mask, poc_mask = timestep_batch["masks"]
     t_int = timestep_batch["timestep"].float()
     
-    # Re-index per-atom masks to be contiguous from 0..n_mol-1
     device = z_t.device
+    
+    # ------------------------------------------------------------------
+    # 1) Re-index the *per-atom* masks so they run from 0…n_mol-1.
+    #    That guarantees they are in-range for the sliced tensors.
+    # ------------------------------------------------------------------
     unique_ids, new_lig_mask = torch.unique(lig_mask, return_inverse=True)
     
-    # build pocket mask on the correct device
+    # Build pocket mask through the same mapping
     mapping = -torch.ones(int(poc_mask.max()) + 1, dtype=torch.long, device=device)
     mapping[unique_ids] = torch.arange(len(unique_ids), device=device)
     new_poc_mask = mapping[poc_mask]
 
-    # Normalize timesteps for the diffusion model
+    # Quick safety check – will raise before touching CUDA kernels
+    assert new_lig_mask.max() < xh_lig.size(0), \
+        f"lig_mask out of bounds ({new_lig_mask.max()} ≥ {xh_lig.size(0)})"
+    assert new_poc_mask.max() < xh_pock.size(0), \
+        f"poc_mask out of bounds ({new_poc_mask.max()} ≥ {xh_pock.size(0)})"
+
+    # ------------------------------------------------------------------
+    # 2) Normalise timestep and delegate to the DDPM policy network.
+    # ------------------------------------------------------------------
     s_int = torch.clamp(t_int - 1, min=0)
     t = (t_int / total_timesteps).unsqueeze(1)
     s = (s_int / total_timesteps).unsqueeze(1)
     
-    # The core call to the diffusion model
+    assert torch.all((t_int == s_int + 1) | (t_int == 0)), \
+        "timestep mismatch: t != s+1"
+
+    # All heavy lifting happens inside the policy network
     return policy_network.log_p_zs_given_zt(
         s, t,
         z_t, z_s,

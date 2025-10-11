@@ -57,6 +57,35 @@ class PPOFineTuner(pl.LightningModule):
             dataset_info=self.ddpm_model.dataset_info,
             run_root=self.config.logdir
         )
+        
+    def on_train_start(self):
+        """
+        Freezes everything except the last 2 EGNN blocks (e_block_3 and e_block_4)
+        """
+        print("[on_train_start] Applying EGNN freezing strategy...")
+        
+        frozen_count = 0
+        unfrozen_count = 0
+        
+        for name, param in self.ppo_algorithm.policy_network.named_parameters():
+            # Keep last 2 EGNN blocks trainable
+            if any(x in name for x in ['e_block_3', 'e_block_4']):
+                param.requires_grad = True
+                print(f"  KEEPING TRAINABLE: {name}")
+            else:
+                # Freeze everything else
+                param.requires_grad = False
+                frozen_count += 1
+        
+        # Count final trainable parameters
+        for param in self.ppo_algorithm.policy_network.parameters():
+            if param.requires_grad:
+                unfrozen_count += 1
+        
+        print(f"\n[FINAL STATUS] {frozen_count} frozen, {unfrozen_count} trainable parameters")
+        trainable_percent = (unfrozen_count / (frozen_count + unfrozen_count)) * 100
+        print(f"[TRAINING] {trainable_percent:.1f}% of parameters are trainable")
+                
 
     def training_step(self, batch, batch_idx):
         """

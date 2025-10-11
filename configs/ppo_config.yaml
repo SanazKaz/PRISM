@@ -3,6 +3,7 @@ logdir: 'Log_Results'
 wandb_params:
   mode: 'online' # seeing if it will reduce overhead 
   entity: 'sanazkazeminia97'
+  project: 'refactored_prism'
 dataset: 'crossdock'
 datadir: 'data'
 enable_progress_bar: False
