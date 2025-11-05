@@ -4,8 +4,8 @@ wandb_params:
   mode: 'online' # seeing if it will reduce overhead 
   entity: 'sanazkazeminia97'
   project: 'refactored_prism'
-dataset: 'crossdock'
-datadir: 'data'
+dataset: 'crossdock' #(refers to the model's dataset_info_key)
+datadir: 'data/3_40_710_10_20_data/03_final_dataset'
 enable_progress_bar: False
 num_sanity_val_steps: 0
 batch_size: 10 # number of pockets to sample for (60)
@@ -83,6 +83,6 @@ visualize_chain_epoch: 999999
 eval_params:
   n_eval_samples: 20
   eval_batch_size: 20
-  smiles_file: 'data/train_smiles.npy'
+  smiles_file: 'data/3_40_710_10_20_data/03_final_dataset/train_smiles.npy'
   n_visualize_samples: 10
   keep_frames: 5
