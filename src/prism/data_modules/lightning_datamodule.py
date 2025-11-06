@@ -5,7 +5,7 @@ import pytorch_lightning as pl
 from pathlib import Path
 from torch.utils.data import DataLoader
 
-from .dataset import ProcessedLigandPocketDataset # Assuming this is in your project's top-level
+from src.prism.data_modules.dataset import ProcessedLigandPocketDataset # Assuming this is in your project's top-level
 # import utils # For AppendVirtualNodes if you use it
 
 class LigandPocketDataModule(pl.LightningDataModule):
@@ -43,21 +43,32 @@ class LigandPocketDataModule(pl.LightningDataModule):
 
     def train_dataloader(self):
         """
-        Creates the training dataloader with your custom RollingWindowSampler.
+        Standard train DataLoader. For distributed training we use
+        torch.utils.data.distributed.DistributedSampler to shard the dataset
+        across ranks (no per-epoch cursor logic required).
         """
-        sampler = RollingWindowSampler(
-            dataset_size=len(self.train_dataset),
-            window=self.config.batch_size,
-            trainer=self.trainer # Pass the trainer to access epoch and rank
-        )
+        # Use a DistributedSampler when running under torch.distributed so
+        # each rank gets a disjoint slice of the dataset.
+        if torch.distributed.is_initialized():
+            sampler = torch.utils.data.distributed.DistributedSampler(
+                self.train_dataset,
+                shuffle=False
+            )
+            shuffle = False  # sampler handles sharding; keep order deterministic
+        else:
+            sampler = None
+            shuffle = False
+
         return DataLoader(
             self.train_dataset,
             batch_size=self.config.batch_size,
             sampler=sampler,
+            shuffle=shuffle,
             num_workers=self.config.num_workers,
             collate_fn=self.train_dataset.collate_fn,
             pin_memory=True
         )
+
 
     def val_dataloader(self):
         return DataLoader(
@@ -79,27 +90,27 @@ class LigandPocketDataModule(pl.LightningDataModule):
             pin_memory=True
         )
 
-class RollingWindowSampler(torch.utils.data.Sampler):
-    """
-    Your custom sampler. It now takes the trainer instance to get the
-    current epoch and rank, keeping it neatly inside the DataModule.
-    """
-    def __init__(self, dataset_size, window, trainer):
-        self.dataset_size = dataset_size
-        self.window = window
-        self.trainer = trainer
-        # NOTE: We no longer calculate the cursor here.
+# class RollingWindowSampler(torch.utils.data.Sampler):
+#     """
+#     Your custom sampler. It now takes the trainer instance to get the
+#     current epoch and rank, keeping it neatly inside the DataModule.
+#     """
+#     def __init__(self, dataset_size, window, trainer):
+#         self.dataset_size = dataset_size
+#         self.window = window
+#         self.trainer = trainer
+#         # NOTE: We no longer calculate the cursor here.
 
-    def __iter__(self):
-        # Calculate the start index for the CURRENT epoch. This is the only
-        # place this calculation is needed.
-        world_size = self.trainer.world_size
-        rank = self.trainer.global_rank
-        epoch = self.trainer.current_epoch
+#     def __iter__(self):
+#         # Calculate the start index for the CURRENT epoch. This is the only
+#         # place this calculation is needed.
+#         world_size = self.trainer.world_size
+#         rank = self.trainer.global_rank
+#         epoch = self.trainer.current_epoch
         
-        start = (rank * self.window + epoch * self.window * world_size) % self.dataset_size
-        end = min(start + self.window, self.dataset_size)
-        return iter(range(start, end))
+#         start = (rank * self.window + epoch * self.window * world_size) % self.dataset_size
+#         end = min(start + self.window, self.dataset_size)
+#         return iter(range(start, end))
 
-    def __len__(self):
-        return self.window
+#     def __len__(self):
+#         return self.window

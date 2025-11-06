@@ -3,11 +3,14 @@
 import pytorch_lightning as pl
 import torch
 from pathlib import Path
+from torch.utils.data import DataLoader
+
+
 
 # Import our new algorithm and the original model definition
 from src.prism.ppo_tuner.ppo_algorithm import PPOAlgorithm
 from src.models.diffsbdd.lightning_modules import LigandPocketDDPM
-from src.prism.data.datamodule import LigandPocketDataModule # You'll need to create this later
+from src.prism.data_modules.lightning_datamodule import LigandPocketDataModule # You'll need to create this later
 
 class PPOFineTuner(pl.LightningModule):
     """
@@ -39,7 +42,7 @@ class PPOFineTuner(pl.LightningModule):
         
         # Load pretrained weights if provided
         if warm_start_checkpoint is not None:
-            print(f"Loading pretrained DDPM weights from: {warm_start_checkpoint}")
+            # print(f"Loading pretrained DDPM weights from: {warm_start_checkpoint}")
             checkpoint = torch.load(warm_start_checkpoint, map_location='cpu')
             # Extract state dict - handle both direct state_dict and lightning checkpoint formats
             if 'state_dict' in checkpoint:
@@ -48,7 +51,7 @@ class PPOFineTuner(pl.LightningModule):
                 state_dict = checkpoint
             
             self.ddpm_model.load_state_dict(state_dict, strict=False)
-            print("Successfully loaded pretrained weights!")
+            # print("Successfully loaded pretrained weights!")
 
         # 2. Instantiate our self-contained PPOAlgorithm
         self.ppo_algorithm = PPOAlgorithm(
@@ -62,7 +65,7 @@ class PPOFineTuner(pl.LightningModule):
         """
         Freezes everything except the last 2 EGNN blocks (e_block_3 and e_block_4)
         """
-        print("[on_train_start] Applying EGNN freezing strategy...")
+        # print("[on_train_start] Applying EGNN freezing strategy...")
         
         frozen_count = 0
         unfrozen_count = 0
@@ -71,7 +74,7 @@ class PPOFineTuner(pl.LightningModule):
             # Keep last 2 EGNN blocks trainable
             if any(x in name for x in ['e_block_3', 'e_block_4']):
                 param.requires_grad = True
-                print(f"  KEEPING TRAINABLE: {name}")
+                # print(f"  KEEPING TRAINABLE: {name}")
             else:
                 # Freeze everything else
                 param.requires_grad = False
@@ -82,7 +85,6 @@ class PPOFineTuner(pl.LightningModule):
             if param.requires_grad:
                 unfrozen_count += 1
         
-        print(f"\n[FINAL STATUS] {frozen_count} frozen, {unfrozen_count} trainable parameters")
         trainable_percent = (unfrozen_count / (frozen_count + unfrozen_count)) * 100
         print(f"[TRAINING] {trainable_percent:.1f}% of parameters are trainable")
                 
@@ -111,15 +113,6 @@ class PPOFineTuner(pl.LightningModule):
         return self.ppo_algorithm.optimizer
 
     # --- Delegate other essential methods to the original model ---
-
-    def setup(self, stage=None):
-        return self.ddpm_model.setup(stage)
-
-    def train_dataloader(self):
-        return self.ddpm_model.train_dataloader() # will need to be changed
-
-    def val_dataloader(self):
-        return self.ddpm_model.val_dataloader() # will need to be changed
 
     def validation_step(self, batch, batch_idx):
         # For validation, we use the original model's logic

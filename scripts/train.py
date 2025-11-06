@@ -27,7 +27,7 @@ import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint
 
 # Import our new, clean components from the src library
-from src.prism.data.datamodule import LigandPocketDataModule
+from src.prism.data_modules.lightning_datamodule import LigandPocketDataModule
 from src.prism.ppo_tuner.lightning_module import PPOFineTuner
 
 def dict_to_namespace(d):

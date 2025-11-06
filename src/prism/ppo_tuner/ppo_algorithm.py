@@ -7,7 +7,7 @@ from torch.optim import Adam
 from .rollout_collector import RolloutCollector
 from .rollout_buffer import RolloutBuffer
 from .loss import compute_ppo_loss
-from src.models.diffsbdd.lightning_modules import LigandPocketDDPM # Assuming this will be the model's new home
+from src.models.diffsbdd.lightning_modules import LigandPocketDDPM 
 from src.prism.rewards.mol_properties import DummyMedChemReward
 from utils import permute_timesteps
 from tests.ppo_debug_utils import assert_same_ids, assert_latent_alignment, reset_seen_mb_ids
@@ -73,7 +73,6 @@ class PPOAlgorithm:
         
         # --- 2.6. DETERMINE CURRENT K (from original code) ---
         current_k = self.config.ppo_params.num_train_timesteps   # Default: 64 or whatever is in config
-        print(f"current_k: {current_k}")
         
         
         # --- 2.7. SLICE TO LAST K TIMESTEPS (from original: rollout_data[key] = rollout_data[key][:, -k:]) ---
@@ -84,7 +83,6 @@ class PPOAlgorithm:
         # --- 2.8. PERMUTE TIMESTEPS (from original) ---
         with torch.no_grad():
             rollout_data_for_permute = permute_timesteps(rollout_data_for_permute, self.device)
-            print("permute timesteps done")
             
         
         ######################### DEBUGGING #########################
@@ -116,7 +114,6 @@ class PPOAlgorithm:
         num_inner_epochs = self.config.ppo_params.num_inner_epochs
         for inner_epoch in range(num_inner_epochs):
             reset_seen_mb_ids() # reset the seen molecule ids for each inner epoch
-            print(f"called reset_seen_mb_ids")
             
             print(f"Outer epoch: {current_epoch}, Inner epoch: {inner_epoch}")
             
@@ -133,7 +130,6 @@ class PPOAlgorithm:
             for minibatch in self.buffer.get_minibatches():
                 # NOW USE current_k INSTEAD OF num_train_timesteps!
                 for t_idx in range(current_k):  # <-- THIS IS KEY
-                    print(f"t_idx: {t_idx}")
                     policy_loss, approx_kl, clipfrac, entropy = compute_ppo_loss(
                         policy_network=self.policy_network.ddpm,
                         minibatch=minibatch,
@@ -181,98 +177,6 @@ class PPOAlgorithm:
             "train/advantages_mean": self.buffer.advantages.mean().item(),
         }
         
-        # print(f"total_loss epoch: {epoch_total_loss / max(epoch_accumulation_steps, 1)}")
+        print(f"total_loss epoch: {epoch_total_loss / max(epoch_accumulation_steps, 1)}")
         
         return final_logs
-
-    # def train_step(self, pocket_batch, current_epoch):
-    #     """
-    #     Performs one full step of the PPO outer loop.
-    #     This includes collecting rollouts and running multiple inner training epochs.
-    #     """
-    #     # --- 1. Collect Experience ---
-    #     # NOTE: We pass the model's helper function for data processing
-    #     get_ligand_and_pocket_fn = self.policy_network.get_ligand_and_pocket
-        
-    #     # TODO: The reward function needs to be passed to the collector.
-    #     # For now, we assume the collector handles it.
-    #     # This will be the next refactoring step.
-    #     rollout_data = self.collector.collect(pocket_batch, current_epoch, get_ligand_and_pocket_fn)
-
-    #     # --- 2. Store Experience and Compute Advantages ---
-    #     self.buffer.load_rollout_data(rollout_data)
-        
-    #     if not self.buffer.data_loaded:
-    #         print("Skipping training step due to no valid rollouts.")
-    #         return {"train/policy_loss": 0} # Return a dummy log
-        
-
-    #     self.buffer.compute_advantages()
-        
-    #     with torch.no_grad():
-    #         self.buffer.permute_timesteps()
-    #         print("permute timesteps done")
-        
-    #     current_k = self.config.ppo_params.num_train_timesteps
-        
-        
-    #     # --- 3. Run PPO Inner Epochs ---
-    #     self.policy_network.ddpm.train()
-
-    #     # Initialize trackers for logs
-    #     total_loss, total_kl, total_clipfrac, total_entropy = 0, 0, 0, 0
-    #     update_count = 0
-
-    #     num_inner_epochs = self.config.ppo_params.num_inner_epochs
-    #     for inner_epoch in range(num_inner_epochs):
-    #         for minibatch in self.buffer.get_minibatches():
-                
-    #             num_train_timesteps = self.config.ppo_params.num_train_timesteps
-    #             for t_idx in range(num_train_timesteps):
-                
-    #                 policy_loss, approx_kl, clipfrac, entropy = compute_ppo_loss(
-    #                     policy_network=self.policy_network.ddpm,
-    #                     minibatch=minibatch,
-    #                     timestep_idx=t_idx,
-    #                     config=self.config
-    #                 )
-                    
-    #                 # --- Backpropagation and Optimization ---
-    #                 # This logic is moved from the old training_step
-    #                 # The LightningModule will call `backward` on the final loss
-    #                 # For now, let's just calculate the loss. The LightningModule will handle the rest.
-    #                 # Or, if we want this class to do it all...
-                    
-    #                 scaled_loss = policy_loss / self.config.ppo_params.gradient_accumulation_steps
-                    
-    #                 # We'll need the LightningModule to call backward, or we do it here.
-    #                 # For a truly standalone class, we do it here.
-    #                 scaled_loss.backward()
-
-    #                 update_count += 1
-    #                 if update_count % self.config.ppo_params.gradient_accumulation_steps == 0:
-    #                     torch.nn.utils.clip_grad_norm_(
-    #                         self.policy_network.ddpm.parameters(),
-    #                         self.config.ppo_params.max_grad_norm
-    #                     )
-    #                     self.optimizer.step()
-    #                     self.optimizer.zero_grad()
-
-    #                 # Accumulate logs
-    #                 total_loss += policy_loss.item()
-    #                 total_kl += approx_kl.item()
-    #                 total_clipfrac += clipfrac.item()
-    #                 total_entropy += entropy.item()
-
-    #     # Final logs for the entire outer step
-    #     num_loss_computations = max(1, update_count)
-    #     final_logs = {
-    #         "train/policy_loss": total_loss / num_loss_computations,
-    #         "train/approx_kl": total_kl / num_loss_computations,
-    #         "train/clipfrac": total_clipfrac / num_loss_computations,
-    #         "train/entropy": total_entropy / num_loss_computations,
-    #         "train/reward_mean": self.buffer.rewards.mean().item(),
-    #         "train/advantages_mean": self.buffer.advantages.mean().item(),
-    #     }
-        
-    #     return final_logs
