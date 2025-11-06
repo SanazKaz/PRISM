@@ -101,10 +101,6 @@ class PPOFineTuner(pl.LightningModule):
             current_epoch=self.current_epoch
         )
         
-        # Manually step the optimizer after the algorithm has done its backward passes
-        opt.step()
-        opt.zero_grad()
-
         # Log the metrics returned by the algorithm
         self.log_dict(logs, on_step=False, on_epoch=True, prog_bar=False)
         

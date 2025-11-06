@@ -10,7 +10,7 @@ enable_progress_bar: False
 num_sanity_val_steps: 0
 batch_size: 10 # number of pockets to sample for (60)
 lr: 1.0e-6 
-num_workers: 8 # suggested by terminal for better parallelisations ???
+num_workers: 1 # suggested by terminal for better parallelisations ???
 gpus: 1
 n_epochs: 1 # lightnings epoch which defines outer epochs using train_dataset size. Leave as 1
 

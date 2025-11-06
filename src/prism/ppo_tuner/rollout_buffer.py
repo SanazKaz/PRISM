@@ -3,6 +3,12 @@
 import torch
 from torch_scatter import scatter_mean
 import math
+import numpy as np
+from tests.ppo_debug_utils import validate_minibatch, reset_seen_mb_ids
+import hashlib  # local import keeps top-of-file changes minimal
+
+
+
 
 class RolloutBuffer:
     """
@@ -105,44 +111,91 @@ class RolloutBuffer:
 
     def get_minibatches(self):
         """
-        A generator that yields shuffled minibatches of the stored data.
-        Matches the original training_step minibatching logic exactly.
+        A generator that yields minibatches matching the original training_step logic:
+        - does NOT shuffle the molecule ID ordering here (positional slicing is preserved)
+        - builds atom masks from selected_ids
+        - slices per-molecule arrays positionally (start_idx:end_idx)
+        - includes a byte-level latents checksum 'lat_hash' for each molecule in the minibatch
         """
+
         if not self.data_loaded or self.advantages is None:
             raise ValueError("Must load data and compute advantages before creating minibatches.")
             
         num_molecules = self.rewards.shape[0]
-        mol_indices = torch.randperm(num_molecules, device=self.rewards.device)
-        
         ppo_batch_size = self.config.ppo_params.ppo_batch_size
         
         xh_lig_full, xh_pocket_full = self.molecules
         lig_mask_full, pocket_mask_full = self.masks
-        
-        for start_idx in range(0, num_molecules, ppo_batch_size):
-            end_idx = start_idx + ppo_batch_size
-            mb_mol_indices = mol_indices[start_idx:end_idx]  # e.g., [15, 0, 7, 27, 23]
+
+        # Get all unique molecule IDs from the mask — DO NOT shuffle here (matches old code)
+        all_mol_ids_np = np.unique(lig_mask_full.cpu().numpy())
+        print(f"All molecule IDs: {all_mol_ids_np}")
+
+        # Create minibatches by positional slices over the unique IDs
+        for i in range(0, num_molecules, ppo_batch_size):
+            start_idx = i
+            print(f"Start index: {start_idx}")
+            end_idx = min(i + ppo_batch_size, num_molecules)
+            print(f"End index: {end_idx}")
+            # Pick molecule IDs for this minibatch (positional selection)
+            selected_ids = all_mol_ids_np[start_idx:end_idx]
             
-            # Create boolean masks for atoms belonging to selected molecules
-            # This matches: lig_minibatch_mask |= (lig_mask == mol_id)
-            mb_lig_atom_mask = torch.isin(lig_mask_full, mb_mol_indices)
-            mb_pocket_atom_mask = torch.isin(pocket_mask_full, mb_mol_indices)
+            # Create atom-based masks for minibatch
+            lig_minibatch_mask = torch.zeros_like(lig_mask_full, dtype=torch.bool)
+            pocket_minibatch_mask = torch.zeros_like(pocket_mask_full, dtype=torch.bool)
+            for mol_id in selected_ids:
+                lig_minibatch_mask |= (lig_mask_full == mol_id)
+                pocket_minibatch_mask |= (pocket_mask_full == mol_id)
             
-            # SLICE all per-atom tensors to only include atoms from selected molecules
+            # Per-atom slices
+            mb_xh_lig = xh_lig_full[lig_minibatch_mask]
+            mb_xh_pocket = xh_pocket_full[pocket_minibatch_mask]
+            mb_latents = self.latents[lig_minibatch_mask]
+            mb_next_latents = self.next_latents[lig_minibatch_mask]
+            mb_lig_mask = lig_mask_full[lig_minibatch_mask]
+            
+            # Per-molecule (positional) slices
+            mb_advantages = self.advantages[start_idx:end_idx]
+            mb_old_log_probs = self.old_log_probs[start_idx:end_idx]
+            mb_timesteps = self.timesteps[start_idx:end_idx]
+            mb_rewards = self.rewards[start_idx:end_idx]
+            mb_raw_score = self.raw_scores[start_idx:end_idx]
+            mb_pocket_indices = self.pocket_indices[start_idx:end_idx]
+
+            # Build minibatch dict mirroring original structure
             minibatch = {
-                # Per-atom tensors: SLICED
-                'molecules': (xh_lig_full[mb_lig_atom_mask], xh_pocket_full[mb_pocket_atom_mask]),
-                'masks': (lig_mask_full[mb_lig_atom_mask], pocket_mask_full[mb_pocket_atom_mask]),
-                'latents': self.latents[mb_lig_atom_mask],
-                'next_latents': self.next_latents[mb_lig_atom_mask],
-                
-                # Per-molecule tensors: SLICED by molecule indices
-                'advantages': self.advantages[mb_mol_indices],
-                'old_log_probs': self.old_log_probs[mb_mol_indices],
-                'timesteps': self.timesteps[mb_mol_indices],
-                'rewards': self.rewards[mb_mol_indices],
-                'raw_score': self.raw_scores[mb_mol_indices],
-                'pocket_indices': self.pocket_indices[mb_mol_indices],
+                # Per-atom tensors: SLICED using boolean masks
+                'molecules': (mb_xh_lig, mb_xh_pocket),
+                'masks': (mb_lig_mask, pocket_mask_full[pocket_minibatch_mask]),
+                'latents': mb_latents,
+                'next_latents': mb_next_latents,
+
+                # Per-molecule tensors: positional slices
+                'advantages': mb_advantages,
+                'old_log_probs': mb_old_log_probs,
+                'timesteps': mb_timesteps,
+                'rewards': mb_rewards,
+                'raw_score': mb_raw_score,
+                'pocket_indices': mb_pocket_indices,
             }
-            
+
+            # Compute byte-level checksum for each molecule in the minibatch (lat_hash)
+            # This matches the old training-step checksum used for final integrity check.
+            lat_hash_list = []
+            for mol_id in selected_ids:
+                local_atom_mask = (mb_lig_mask == mol_id)
+                if not local_atom_mask.any():
+                    # keep same semantics as old code: skip if no atoms for this mol_id
+                    lat_hash_list.append(0)
+                    continue
+                # compute md5 of the latents bytes for this molecule and reduce to 32-bit int
+                arr_bytes = mb_latents[local_atom_mask].detach().cpu().numpy().tobytes()
+                hex8 = hashlib.md5(arr_bytes).hexdigest()[:8]
+                h = int(hex8, 16) & 0x7FFFFFFF
+                lat_hash_list.append(h)
+            minibatch['lat_hash'] = torch.tensor(lat_hash_list, dtype=torch.long, device=mb_latents.device)
+
+            # Validation 
+            validate_minibatch(minibatch, tag=f"epoch{self.config.current_epoch if hasattr(self.config, 'current_epoch') else 0}_mb{i}")
+
             yield minibatch

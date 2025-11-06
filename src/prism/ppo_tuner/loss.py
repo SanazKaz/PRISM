@@ -1,6 +1,7 @@
 # src/prism/ppo_tuner/loss.py
 
 import torch
+from tests.ppo_debug_utils import assert_same_ids, dbg_tensor
 
 def compute_ppo_loss(policy_network, minibatch, timestep_idx, config):
     """
@@ -28,6 +29,10 @@ def compute_ppo_loss(policy_network, minibatch, timestep_idx, config):
         "next_latents": minibatch["next_latents"][:, timestep_idx].detach(),
         "timestep": minibatch["timesteps"][:, timestep_idx]
     }
+    
+    assert_same_ids("compute_loss/masks", lig_mask, pocket_mask)
+    # dbg_tensor("compute_loss/old_log_probs", old_log_probs)
+    # dbg_tensor("compute_loss/advantages", minibatch['advantages'])
                         
     # Forward pass through the policy network to get new log probabilities
     new_log_probs = _get_log_probs(policy_network, timestep_batch, config.diffusion_params.diffusion_steps)
@@ -43,18 +48,12 @@ def compute_ppo_loss(policy_network, minibatch, timestep_idx, config):
     
     surr1 = advantages * ratio
     surr2 = advantages * torch.clamp(ratio, 1.0 - clip_range, 1.0 + clip_range)
-    print(f"surr1: {surr1.shape}, surr2: {surr2.shape}")
-    print(f"advantages: {advantages.shape}, ratio: {ratio.shape}")
-    print(f"new_log_probs: {new_log_probs.shape}, old_log_probs: {old_log_probs.shape}")
-    print(f"entropy: {entropy.shape}")
-    print(f"clip_range: {clip_range}")
-    print(f"clipfrac: {clipfrac.shape}")
     
     policy_loss = -torch.min(surr1, surr2).mean()
     
     # Add entropy bonus
     policy_loss -= config.ppo_params.entropy_coef * entropy
-    print(f"policy_loss: {policy_loss.shape}")
+    # print(f"policy_loss: {policy_loss.shape}")
     
     # --- KL Divergence for logging/diagnostics ---
     with torch.no_grad():
@@ -87,6 +86,8 @@ def _get_log_probs(policy_network, timestep_batch, total_timesteps):
     mapping = -torch.ones(int(poc_mask.max()) + 1, dtype=torch.long, device=device)
     mapping[unique_ids] = torch.arange(len(unique_ids), device=device)
     new_poc_mask = mapping[poc_mask]
+    
+    assert_same_ids("get_log_probs/reindexed", new_lig_mask, new_poc_mask)
 
     # Quick safety check – will raise before touching CUDA kernels
     assert new_lig_mask.max() < xh_lig.size(0), \

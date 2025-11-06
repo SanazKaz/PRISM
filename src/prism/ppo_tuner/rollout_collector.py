@@ -5,6 +5,8 @@ import math
 import traceback
 
 from src.prism.rewards.mol_properties import DummyMedChemReward
+from tests.ppo_debug_utils import assert_same_ids, dbg_tensor
+
 
 class RolloutCollector:
     """
@@ -34,8 +36,9 @@ class RolloutCollector:
         self.policy_network.eval()
         
         rollout_data = {
-            'molecules': ([], []), 'masks': ([], []), 'rewards': [], 'raw_score': [],
-            'old_log_probs': [], 'z_states': [], 'pocket_indices': []
+            'molecules': ([], []), 'masks': ([], []), 
+            'rewards': [], 'raw_score': [],'old_log_probs': [], 
+            'z_states': [], 'pocket_indices': []
         }
         
         # NOTE: The data processing function is now passed in as an argument.
@@ -120,6 +123,7 @@ class RolloutCollector:
         # Final Aggregation and Processing
         return self._aggregate_rollouts(rollout_data, valid_samples, rank)
 
+
     def _generate_and_evaluate_chunk(self, single_pocket_data, samples_in_chunk, chunk_mask_base, names, current_epoch):
         """
         Generates, remaps, and calculates rewards for a single chunk of molecules.
@@ -143,7 +147,6 @@ class RolloutCollector:
             )
         
         num_nodes_lig = num_nodes_lig.to(self.device)
-        
 
 
         local_mask_base = torch.arange(samples_in_chunk, device=self.device)
@@ -160,19 +163,31 @@ class RolloutCollector:
         sample_mask = torch.arange(samples_in_chunk, device=self.device) + chunk_mask_base
         global_lig_mask = sample_mask[lig_mask]
         global_pocket_mask = sample_mask[pocket_mask]
+        
+        ######################### DEBUGGING #########################
+        assert_same_ids("collect_rollouts/post_sample", global_lig_mask, global_pocket_mask)
+        dbg_tensor("collect_rollouts/global_lig_mask", global_lig_mask)
+        dbg_tensor("collect_rollouts/global_pocket_mask", global_pocket_mask)
+        ######################### DEBUGGING #########################
 
         rewards, raw_score = self.reward_function.composite_reward(
             xh_lig, xh_pocket, global_lig_mask, global_pocket_mask,
             current_epoch=current_epoch, names=names
         )
         
+        
+        
         return {
-            'xh_lig': xh_lig, 'xh_pocket': xh_pocket,
-            'global_lig_mask': global_lig_mask, 'global_pocket_mask': global_pocket_mask,
-            'rewards': rewards, 'raw_score': raw_score,
+            'xh_lig': xh_lig, 
+            'xh_pocket': xh_pocket,
+            'global_lig_mask': global_lig_mask, 
+            'global_pocket_mask': global_pocket_mask,
+            'rewards': rewards, 
+            'raw_score': raw_score,
             'old_log_probs': torch.stack(mol_log_probs, dim=1),
             'z_states': torch.stack(z_states, dim=1)
         }
+        
         
     def _aggregate_rollouts(self, rollout_data, valid_samples, rank):
         """
@@ -195,18 +210,24 @@ class RolloutCollector:
             num_molecules = rollout_data['rewards'].shape[0]
             seq_length_minus1 = rollout_data['z_states'].shape[1] - 1
 
-            timesteps_config = self.config.diffusion_params.diffusion_steps
-            timesteps_1d = torch.arange(
-                timesteps_config - 1, -1, -1, device=self.device
-            )[:seq_length_minus1]
+            # Determine timesteps
+            diffusion_steps_config = self.config.diffusion_params.diffusion_steps
+            
+            if isinstance(diffusion_steps_config, int):
+                diffusion_steps = diffusion_steps_config
+                timesteps_1d = torch.arange(
+                    diffusion_steps - 1, -1, -1, device=self.device
+                )[:seq_length_minus1]
+            else:
+                timesteps_1d = diffusion_steps_config.flip(0)[:seq_length_minus1]
 
             rollout_data['timesteps'] = timesteps_1d.unsqueeze(0).repeat(num_molecules, 1)
         else:
-            # Handle case with no valid samples
+            print(f"[DEBUG] Rank {rank} collected no valid samples, returning empty rollout_data.")
             empty_shape = (0, self.policy_network.atom_nf + self.policy_network.n_dims)
             rollout_data['molecules'] = (torch.empty(empty_shape, device=self.device), torch.empty(empty_shape, device=self.device))
             rollout_data['masks'] = (torch.empty(0, device=self.device, dtype=torch.long), torch.empty(0, device=self.device, dtype=torch.long))
-            for key in ['rewards', 'raw_score', 'old_log_probs', 'z_states', 'pocket_indices', 'latents', 'next_latents', 'timesteps']:
-                rollout_data[key] = torch.empty(0, device=self.device)
+            for key in ['rewards', 'raw_score', 'old_log_probs', 'z_states', 'pocket_indices']:
+                rollout_data[key] = torch.empty(0, device=self.device, dtype=torch.long)
         
         return rollout_data
