@@ -29,10 +29,10 @@ class PPOFineTuner(pl.LightningModule):
         # Filter out PPO-specific and Lightning-specific parameters
         ddpm_config = {k: v for k, v in vars(self.config).items() 
                     if k not in ['ppo_params', 'enable_progress_bar', 
-                                'num_sanity_val_steps', 'wandb_params', 'gpus', 'n_epochs', 'logdir', 'fp16']}
+                                'num_sanity_val_steps', 'wandb_params', 'gpus', 'n_epochs', 'logdir', 'fp16', 'run_identifier']}
 
         self.ddpm_model = LigandPocketDDPM(
-            outdir=Path(self.config.logdir, self.config.run_identifier),
+            outdir=Path(self.config.logdir),
             node_histogram=node_histogram,
             **ddpm_config
         )
@@ -110,6 +110,7 @@ class PPOFineTuner(pl.LightningModule):
 
     def configure_optimizers(self):
         # The optimizer is created and owned by the PPOAlgorithm
+        # This is because we step the opt for inner epochs and it confuses PL
         return self.ppo_algorithm.optimizer
 
     # --- Delegate other essential methods to the original model ---

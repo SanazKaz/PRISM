@@ -6,7 +6,7 @@ Main pipeline script to generate a complete dataset from a CATH FunFam ID.
 Orchestrates the 3-step process:
 1.  Downloads all PDBs from the FunFam ID.
 2.  Pre-processes PDBs to extract pockets and ligands.
-3.  Converts pocket/ligand pairs into a final .npz dataset.
+3.  Converts pocket/ligand pairs into a final .npz dataset for use with the model.
 """
 
 import argparse

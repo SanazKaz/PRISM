@@ -1,14 +1,14 @@
 #!/bin/bash
 #SBATCH --cpus-per-task=4
-#SBATCH --gres=gpu:h100:1
 #SBATCH --partition=short 
-#SBATCH --time 03:00:00
-#SBATCH --job-name=Crossdock_QED(1.0)_lr3e-5_generation
+#SBATCH --gres=gpu:h100:1
+#SBATCH --time 04:00:00
+#SBATCH --job-name=Diffsbdd_150x150_gen
 #SBATCH --mail-user=wolf7055@ox.ac.uk
-#SBATCH --output=jobs_files/generation_CD_qed_1.0.log
+#SBATCH --output=jobs_files/diffsbdd_150x150_gen.log
 # Redirect stderr to stdout
 exec 2>&1
-# Clear pre-loaded modules to ensure clean state // --constraint='gpu_mem:24GB'  #SBATCH --array=0-7--constraint=gpu_sku:H100
+# Clear pre-loaded modules to ensure clean state // --constraint='gpu_mem:24GB'#SBATCH --gres=gpu:h100:1#SBATCH --array=0-7--constraint=gpu_sku:H100
 
 
 module purge
@@ -27,24 +27,33 @@ echo "Initial GPU Usage:"
 nvidia-smi
 
 echo "Starting generation..."
-# python generate_ligands.py \
-#     Log_Results/brd4_SAS_QED_7mra_lr3e-5/checkpoints/ppo-epoch=68-train_reward_mean_epoch=0.00.ckpt \
-# --pdbfile data/brd_structures/test/processed_ligand_free_pockets_test/7t2i_F_E9F_pocket_only.pdb\
-# --outfile example/brd4_pdbs/brd4_sas_qed_e68_7t2i_F_E9F_25_nodes.sdf \
-# --ref_ligand data/brd_structures/7t2i_F_E9F.sdf \
-# --n_samples 50 \
-# --timesteps 500 \
-# --num_nodes_lig 25
 
+outer_batch_size=150
+inner_batch_size=3
 
-python test.py \
-    'Log_Results/Crossdock_QED(1.0)_lr3e-5/checkpoints/ppo-epoch=37-train_reward_mean_epoch=0.00-v1.ckpt' \
-    --test_dir /data/stat-cadd/wolf7055/diffsbdd-ppo/data/processed_crossdock_noH_full_temp/test \
-    --outdir Results/cd2020_sampling_results_no_relax_qed \
-    --n_samples 100 \
-    --batch_size 64 \
-    --sanitize \
-    --skip_existing
+for outer_idx in $(seq 1 $outer_batch_size); do
+    echo "Generating outer batch $outer_idx of $outer_batch_size..."
+    for inner_idx in $(seq 1 $inner_batch_size); do
+        echo "  Generating inner batch $inner_idx of $inner_batch_size (50 samples)..."
+        python src/models/diffsbdd/generate_ligands.py \
+            checkpoints/crossdocked_fa_cond_temp.ckpt \
+            --pdbfile src/models/diffsbdd/data/drd2_strucutres/7e2z.pdb \
+            --outfile results/diffsbdd_150x150_gen/7e2z_outer${outer_idx}_inner${inner_idx}_gen.sdf \
+            --ref_ligand src/models/diffsbdd/data/drd2_strucutres/7e2z_9sc.sdf \
+            --n_samples 50 \
+            --timesteps 500 \
+            --num_nodes_lig 32
+    done
+done
+
+# python test.py \
+#     'Log_Results/Crossdock_QED(1.0)_lr3e-5/checkpoints/ppo-epoch=37-train_reward_mean_epoch=0.00-v1.ckpt' \
+#     --test_dir /data/stat-cadd/wolf7055/diffsbdd-ppo/data/processed_crossdock_noH_full_temp/test \
+#     --outdir Results/cd2020_sampling_results_no_relax_qed \
+#     --n_samples 100 \
+#     --batch_size 64 \
+#     --sanitize \
+#     --skip_existing
 
 echo "Generation completed, stopping resource monitoring..."
 
