@@ -20,7 +20,9 @@ checkpoints/
 *.pdb
 *.sdf
 
-src/models
+src/models/diffsbdd/data/
+src/models/diffsbdd/bash
+
 
 # Job files and logs
 jobs_files/

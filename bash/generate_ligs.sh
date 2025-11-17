@@ -2,7 +2,7 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --partition=short 
 #SBATCH --gres=gpu:h100:1
-#SBATCH --time 04:00:00
+#SBATCH --time 6:00:00
 #SBATCH --job-name=Diffsbdd_150x150_gen
 #SBATCH --mail-user=wolf7055@ox.ac.uk
 #SBATCH --output=jobs_files/diffsbdd_150x150_gen.log
@@ -28,23 +28,16 @@ nvidia-smi
 
 echo "Starting generation..."
 
-outer_batch_size=150
-inner_batch_size=3
 
-for outer_idx in $(seq 1 $outer_batch_size); do
-    echo "Generating outer batch $outer_idx of $outer_batch_size..."
-    for inner_idx in $(seq 1 $inner_batch_size); do
-        echo "  Generating inner batch $inner_idx of $inner_batch_size (50 samples)..."
-        python src/models/diffsbdd/generate_ligands.py \
-            checkpoints/crossdocked_fa_cond_temp.ckpt \
-            --pdbfile src/models/diffsbdd/data/drd2_strucutres/7e2z.pdb \
-            --outfile results/diffsbdd_150x150_gen/7e2z_outer${outer_idx}_inner${inner_idx}_gen.sdf \
-            --ref_ligand src/models/diffsbdd/data/drd2_strucutres/7e2z_9sc.sdf \
-            --n_samples 50 \
-            --timesteps 500 \
-            --num_nodes_lig 32
-    done
-done
+python src/models/diffsbdd/generate_ligands.py \
+    checkpoints/crossdocked_fa_cond_temp.ckpt \
+    --pdbfile src/models/diffsbdd/data/drd2_strucutres/7e2z.pdb \
+    --outfile results/diffsbdd_150x150_gen/7e2z_gen_traj_diffsbdd.sdf \
+    --ref_ligand src/models/diffsbdd/data/drd2_strucutres/7e2z_9sc.sdf \
+    --n_samples 1 \
+    --timesteps 500 \
+    --num_nodes_lig 32 \
+    --save_traj \
 
 # python test.py \
 #     'Log_Results/Crossdock_QED(1.0)_lr3e-5/checkpoints/ppo-epoch=37-train_reward_mean_epoch=0.00-v1.ckpt' \

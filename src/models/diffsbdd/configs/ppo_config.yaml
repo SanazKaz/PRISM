@@ -1,0 +1,94 @@
+run_name: 'Crossdock_QED(1.0)_lr3e-5_resume_Epoch37'
+logdir: 'Log_Results'
+wandb_params:
+  mode: 'online' # seeing if it will reduce overhead 
+  entity: 'sanazkazeminia97'
+dataset: 'crossdock'
+datadir: 'data'
+enable_progress_bar: False
+num_sanity_val_steps: 0
+batch_size: 42 # number of pockets to sample for (60)
+lr: 1.0e-6 
+num_workers: 4 # suggested by terminal for better parallelisations ???
+gpus: 1
+n_epochs: 1 # lightnings epoch which defines outer epochs using train_dataset size. Leave as 1
+
+mode: 'pocket_conditioning'
+pocket_representation: 'full-atom'
+
+augment_noise: 0
+augment_rotation: False
+clip_grad: True
+auxiliary_loss: False
+loss_params:
+  max_weight: 0.001
+  schedule: 'linear'
+  clamp_lj: 3.0
+
+ppo_params:
+  num_outer_epochs: 120      # num of PPO cycles (outer epochs)
+  num_inner_epochs: 2        # Updates per rollout (inner epochs) (4) - SHOULD BE DYNAMICALLY CONTROLLED
+  n_steps: 168             # Rollout length (mols generated) (prev. gen batch size) (60)
+  ligand_chunk_size: 42
+  ppo_batch_size: 42       # Size of each PPO update batch (20)
+  clip_range: 0.2           # PPO clipping parameter temp 0.01
+  value_loss_coef: 0.0        # Weight for value loss
+  entropy_coef: 0.000           # Weight for entropy bonus not in use
+  max_grad_norm: 1.0             # Gradient clipping threshold
+  gradient_accumulation_steps: 126   # accumulate over train_timesteps
+  num_train_timesteps: 126
+  gae_lambda: 0.95            # GAE smoothing factor
+  gamma: 0.99                 # Discount factor
+  num_mini_batches: 1        # Mini-batches per update (3?) - dyanmic calc
+  target_kl: 0.03            # Early stopping KL divergence - no implemented yet
+  lr: 3.0e-5                 # Optimizer learning rate - changed from 3e-5 
+  mol_timeout_sec: 60
+  num_nodes_lig: 23 # fixed number of nodes for ligand
+  top_k: False
+  # backward progressive training https://arxiv.org/pdf/2503.11240  
+  # https://github.com/hu-zijing/B2-DiffuRL/blob/main/run_train.py
+  progressive_training: False
+  start_timesteps: 20
+  end_timesteps: 126
+  progressive_training_epochs: 100 # should be same as num_outer_epochs really
+  
+
+
+
+
+#  (from original config)
+egnn_params:
+  device: 'cuda'
+  edge_cutoff_ligand: null
+  edge_cutoff_pocket: 5.0
+  edge_cutoff_interaction: 5.0
+  reflection_equivariant: False
+  joint_nf: 32
+  hidden_nf: 128 # change back to 256
+  n_layers: 5
+  attention: True
+  tanh: True
+  norm_constant: 1
+  inv_sublayers: 1
+  sin_embedding: False
+  aggregation_method: 'sum'
+  normalization_factor: 100
+
+diffusion_params:
+  diffusion_steps: 500
+  diffusion_noise_schedule: 'polynomial_2'
+  diffusion_noise_precision: 5.0e-4
+  diffusion_loss_type: 'l2'
+  normalize_factors: [1, 4]
+
+fp16: False
+
+eval_epochs: 10
+visualize_sample_epoch: 99999
+visualize_chain_epoch: 999999
+eval_params:
+  n_eval_samples: 50
+  eval_batch_size: 50
+  smiles_file: 'data/train_smiles.npy'
+  n_visualize_samples: 10
+  keep_frames: 5

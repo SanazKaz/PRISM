@@ -1,0 +1,37 @@
+# sweep.yml - Optimized based on your good run
+program: train.py
+method: bayes
+metric:
+  goal: maximize
+  name: train/reward_mean_epoch
+
+parameters:
+  # Focused around your good run: n_steps=70
+  ppo_n_steps:
+    values: [60, 70, 75, 80, 90, 100]  # Centered around 70, narrower range
+  
+  # Focused around your good run: batch_size=35  
+  ppo_batch_size:
+    values: [25, 30, 35, 40, 45, 50]  # Centered around 35, narrower range
+  
+  # Focused around your good run: lr=3e-05
+  ppo_lr:
+    distribution: log_uniform_values
+    min: 1.0e-5   # Raised minimum (was 1e-6)
+    max: 5.0e-5   # Lowered maximum (was 1e-4)
+  
+  # FIXED: Include your good run value of 42!
+  ppo_gradient_accumulation_steps:
+    distribution: int_uniform
+    min: 35       # Lowered to include 42 (was 50)
+    max: 100       # Narrowed range around 42
+  
+  seed:
+    values: [42]
+
+command:
+  - ${env}
+  - python
+  - ${program}
+  - --config=/data/stat-cadd/wolf7055/diffsbdd-ppo/configs/ppo_config.yml
+  - --resume=/data/stat-cadd/wolf7055/diffsbdd-ppo/checkpoints/crossdocked_fa_cond_temp.ckpt

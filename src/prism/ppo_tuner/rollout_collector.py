@@ -4,7 +4,7 @@ import torch
 import math
 import traceback
 
-from src.prism.rewards.mol_properties import DummyMedChemReward
+from src.prism.reward.mol_properties import DummyMedChemReward
 from tests.ppo_debug_utils import assert_same_ids, dbg_tensor
 
 
