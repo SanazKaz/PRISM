@@ -1,10 +1,8 @@
-# src/prism/ppo_tuner/rollout_collector.py
-
 import torch
 import math
 import traceback
+from collections import defaultdict
 
-from src.prism.reward.mol_properties import DummyMedChemReward
 from tests.ppo_debug_utils import assert_same_ids, dbg_tensor
 
 
@@ -18,30 +16,24 @@ class RolloutCollector:
         self.reward_function = reward_function
         self.config = config
 
-        # NOTE: We get the device directly from the policy network, no more
-        #       dependency on a LightningModule.
+        # NOTE: We get the device directly from the policy network
         self.device = next(self.policy_network.parameters()).device
 
     @torch.no_grad()
     def collect(self, pocket_batch, current_epoch, get_ligand_and_pocket_fn):
         """
         Generates molecule rollouts for a batch of pockets.
-        
-        Args:
-            pocket_batch (dict): The batch of data from the dataloader.
-            current_epoch (int): The current outer training epoch.
-            get_ligand_and_pocket_fn (callable): A function that processes the raw
-                                                 batch into ligand and pocket dicts.
         """
         self.policy_network.eval()
         
         rollout_data = {
             'molecules': ([], []), 'masks': ([], []), 
             'rewards': [], 'raw_score': [],'old_log_probs': [], 
-            'z_states': [], 'pocket_indices': []
+            'z_states': [], 'pocket_indices': [],
+            'component_scores': defaultdict(list)
         }
         
-        # NOTE: The data processing function is now passed in as an argument.
+        # names is a list of IDs for the whole batch (e.g. ['1c3b...', '7e2z...'])
         _, pocket_data, names = get_ligand_and_pocket_fn(pocket_batch)
         
         local_batch_size = len(pocket_batch['num_pocket_nodes'])
@@ -62,7 +54,6 @@ class RolloutCollector:
         global_offset = rank * max_pockets_per_rank * samples_per_pocket
         
         # Main Loop: Process Pockets
-        # (This logic is identical to your original file)
         max_chunk_size = min(4, local_batch_size)
         for chunk_start_outer in range(0, local_batch_size, max_chunk_size):
             if total_samples >= total_target_samples:
@@ -82,6 +73,11 @@ class RolloutCollector:
             for pocket_idx, samples_to_generate in pocket_sample_counts:
                 pocket_mask_base = global_offset + (pocket_idx * samples_per_pocket)
                 ligand_chunk_size = self.config.ppo_params.ligand_chunk_size
+                
+                # --- FIX START: Identify the specific name for this pocket ---
+                current_name = names[pocket_idx]
+                # -------------------------------------------------------------
+
                 for lig_chunk_start in range(0, samples_to_generate, ligand_chunk_size):
                     try:
                         samples_in_chunk = min(ligand_chunk_size, samples_to_generate - lig_chunk_start)
@@ -95,9 +91,18 @@ class RolloutCollector:
                             'mask': torch.zeros_like(pocket_data['mask'][pocket_mask_idx])
                         }
 
+                        # --- FIX CONTINUE: Create corrected name list ---
+                        # We repeat the correct name for every sample in this chunk
+                        chunk_names = [current_name] * samples_in_chunk
+
                         chunk_results = self._generate_and_evaluate_chunk(
-                            single_pocket_data, samples_in_chunk, chunk_mask_base, names, current_epoch
+                            single_pocket_data, 
+                            samples_in_chunk, 
+                            chunk_mask_base, 
+                            chunk_names,  # <--- Pass the corrected list
+                            current_epoch
                         )
+                        # ------------------------------------------------
 
                         # Append results
                         rollout_data['molecules'][0].append(chunk_results['xh_lig'])
@@ -111,6 +116,9 @@ class RolloutCollector:
                         rollout_data['pocket_indices'].append(
                             torch.full((samples_in_chunk,), pocket_idx, device=self.device, dtype=torch.long)
                         )
+                        if 'component_scores' in chunk_results:
+                            for key, value in chunk_results['component_scores'].items():
+                                rollout_data['component_scores'][key].append(value)
                         
                         valid_samples += chunk_results['rewards'].shape[0]
                         total_samples += samples_in_chunk
@@ -131,7 +139,7 @@ class RolloutCollector:
     
         for key, tensor in single_pocket_data.items():
             if torch.is_tensor(tensor):
-                single_pocket_data[key] = tensor.to(self.device) # move to device
+                single_pocket_data[key] = tensor.to(self.device) 
                 
         num_nodes_lig_config = self.config.ppo_params.num_nodes_lig
         if num_nodes_lig_config is None:
@@ -166,16 +174,21 @@ class RolloutCollector:
         
         ######################### DEBUGGING #########################
         assert_same_ids("collect_rollouts/post_sample", global_lig_mask, global_pocket_mask)
-        dbg_tensor("collect_rollouts/global_lig_mask", global_lig_mask)
-        dbg_tensor("collect_rollouts/global_pocket_mask", global_pocket_mask)
+        # dbg_tensor("collect_rollouts/global_lig_mask", global_lig_mask)
+        # dbg_tensor("collect_rollouts/global_pocket_mask", global_pocket_mask)
         ######################### DEBUGGING #########################
 
-        rewards, raw_score = self.reward_function.composite_reward(
-            xh_lig, xh_pocket, global_lig_mask, global_pocket_mask,
-            current_epoch=current_epoch, names=names
+        rewards, component_scores = self.reward_function(
+            xh_lig, 
+            global_lig_mask,
+            current_epoch=current_epoch,
+            # kwargs:
+            xh_pocket=xh_pocket,
+            global_pocket_mask=global_pocket_mask,
+            names=names # Now receiving the correct list ['PocketA', 'PocketA', ...]
         )
-        
-        
+
+        raw_score = rewards.clone() 
         
         return {
             'xh_lig': xh_lig, 
@@ -185,7 +198,8 @@ class RolloutCollector:
             'rewards': rewards, 
             'raw_score': raw_score,
             'old_log_probs': torch.stack(mol_log_probs, dim=1),
-            'z_states': torch.stack(z_states, dim=1)
+            'z_states': torch.stack(z_states, dim=1),
+            'component_scores': component_scores
         }
         
         
@@ -203,6 +217,12 @@ class RolloutCollector:
             rollout_data['z_states'] = torch.cat(rollout_data['z_states'])
             rollout_data['pocket_indices'] = torch.cat(rollout_data['pocket_indices'])
             
+            final_component_scores = {}
+            for key, tensor_list in rollout_data['component_scores'].items():
+                if tensor_list:
+                    final_component_scores[key] = torch.cat(tensor_list)
+            rollout_data['component_scores'] = final_component_scores
+                
             z_states = rollout_data['z_states']
             rollout_data['latents'] = z_states[:, :-1]
             rollout_data['next_latents'] = z_states[:, 1:]

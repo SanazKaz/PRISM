@@ -599,11 +599,7 @@ class ConditionalDDPM(EnVariationalDiffusion):
         """Draw samples from the generative model."""
         
         self.eval()
-        
-        print(f"[DEBUG] Entered sample_given_pocket: pocket keys={pocket.keys()}, num_nodes_lig={num_nodes_lig}")
-        print(f"[DEBUG] [GRAD CHECK] sample_given_pocket: {torch.is_grad_enabled()}")  # Should be False
         timesteps = self.T if timesteps is None else timesteps
-        # print(f"[DEBUG] timesteps={timesteps}, return_frames={return_frames}")
         
         
         n_samples = len(pocket['size'])

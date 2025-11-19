@@ -1,15 +1,15 @@
 #!/bin/bash
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=64GB
-#SBATCH --gres=gpu:1
+#SBATCH --gres=gpu:h100:1
 #SBATCH --ntasks-per-node=1  # node is auto as 1, then n tasks per node should match num of gpus #SBATCH --constraint=gpu_sku:H100
-#SBATCH --partition=devel
-#SBATCH --time 00:10:00
-#SBATCH --job-name=Refactored_PPO
+#SBATCH --partition=short
+#SBATCH --time 08:00:00
+#SBATCH --job-name=QED_SA_PRISM_BETA_LACTAMASE
 #SBATCH --mail-user=wolf7055@ox.ac.uk
 #SBATCH --mail-type=END,FAIL
 #SBATCH --array=0-2
-#SBATCH --output=jobs_files/Refactored_PPO-%A_%a.log 
+#SBATCH --output=jobs_files/QED_SA_PRISM_BETA_LACTAMASE-%A_%a.log 
 # Redirect stderr to stdout
 exec 2>&1 
 

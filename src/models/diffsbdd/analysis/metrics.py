@@ -1,5 +1,4 @@
 import numpy as np
-from tqdm import tqdm
 from rdkit import Chem, DataStructs
 from rdkit.Chem import Descriptors, Crippen, Lipinski, QED
 from analysis.SA_Score.sascorer import calculateScore

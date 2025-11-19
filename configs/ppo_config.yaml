@@ -1,14 +1,14 @@
-run_identifier: 'practise_clip_lr_increase_2e-4_acc_flush_2'
+run_identifier: 'lr_4e-5'
 logdir: 'Log_Results'
 wandb_params:
   mode: 'online' # seeing if it will reduce overhead 
   entity: 'sanazkazeminia97'
-  project: 'refactored_prism'
+  project: 'qed_sascore_prism_beta_lactamase'
 dataset: 'crossdock' #(refers to the model's dataset_info_key)
-datadir: 'data/3_40_710_10_20_data/03_final_dataset'
+datadir: '/data/stat-cadd/wolf7055/PRISM/data/3_40_710_10_20_data/03_final_dataset'
 enable_progress_bar: False
 num_sanity_val_steps: 0
-batch_size: 10 # number of pockets to sample for (60)
+batch_size: 74 # number of pockets to sample for (60)
 lr: 1.0e-6 
 num_workers: 1 # suggested by terminal for better parallelisations ???
 gpus: 1
@@ -27,11 +27,11 @@ loss_params:
   clamp_lj: 3.0
 
 ppo_params:
-  num_outer_epochs: 100          # num of PPO cycles (outer epochs)
+  num_outer_epochs: 5          # num of PPO cycles (outer epochs)
   num_inner_epochs: 2            # Updates per rollout (inner epochs)
-  n_steps: 80                    # Rollout length (mols generated)
-  ligand_chunk_size: 40
-  ppo_batch_size: 42             # Size of each PPO update batch
+  n_steps: 74                    # Rollout length (mols generated)
+  ligand_chunk_size: 37
+  ppo_batch_size: 37             # Size of each PPO update batch
   clip_range: 0.1                # PPO clipping parameter
   value_loss_coef: 0.0           # Weight for value loss
   entropy_coef: 0.001            # Weight for entropy bonus
@@ -40,7 +40,7 @@ ppo_params:
   num_train_timesteps: 150
   num_mini_batches: 1            # Mini-batches per update
   target_kl: 0.03                # Early stopping KL divergence
-  lr: 1.0e-3                     # Optimizer learning rate (0.001)
+  lr: 4.0e-5                     # Optimizer learning rate (0.001)
   mol_timeout_sec: 60
   num_nodes_lig: 25              # fixed number of nodes for ligand
   top_k: False
@@ -51,6 +51,15 @@ ppo_params:
   progressive_training_epochs: 100
 
 
+reward_params:
+  # Map the reward name to its weight
+  # To disable a reward, simply remove it from this list or set weight to 0
+  rewards:
+    qed: 0.5
+    sa_score: 0.5
+    lipinski: 0.0
+    bertz: 0.0
+    sucos: 0.0
 
 #  (from diffsbdd original config)
 egnn_params:

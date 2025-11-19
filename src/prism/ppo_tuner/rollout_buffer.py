@@ -56,36 +56,69 @@ class RolloutBuffer:
 
     def compute_advantages(self):
         """
-        Computes advantages on a per-pocket basis. This is the method
-        from your original PPOTrainer, now living in its logical home.
+        Computes advantages using Global Normalization across the current batch.
+        This is robust against small batch sizes or single-sample-per-pocket scenarios.
         """
         if not self.data_loaded:
             raise ValueError("Cannot compute advantages before loading data.")
 
-        # Determine the number of unique pockets on this rank.
-        num_pockets = int(self.pocket_indices.max().item()) + 1
+        # 1. Calculate Global Statistics
+        # We look at the mean/std of ALL molecules generated in this PPO step,
+        # regardless of which pocket they belong to.
+        batch_mean = self.rewards.mean()
+        batch_std = self.rewards.std()
 
-        # Calculate mean reward per pocket
-        pocket_reward_mean = scatter_mean(self.rewards, self.pocket_indices, dim=0, dim_size=num_pockets)
+        # 2. Safe Normalization
+        # If batch size is small (e.g., < 2) or all rewards are identical (std=0),
+        # standard normalization crashes. We handle that here.
+        if self.rewards.numel() > 1 and batch_std > 1e-6:
+            # Standard case: Center and Scale
+            self.advantages = (self.rewards - batch_mean) / (batch_std + 1e-8)
+        else:
+            # Edge case: Just Center (Gradient will rely on raw magnitude differences)
+            self.advantages = self.rewards - batch_mean
 
-        # Calculate standard deviation per pocket
-        pocket_reward_mean_sq = scatter_mean(self.rewards.pow(2), self.pocket_indices, dim=0, dim_size=num_pockets)
-        pocket_reward_var = pocket_reward_mean_sq - pocket_reward_mean.pow(2)
-        pocket_reward_std = torch.sqrt(torch.clamp(pocket_reward_var, min=0)) + 1e-8
-
-        # Expand per-pocket stats back to the full rewards tensor
-        expanded_mean = pocket_reward_mean[self.pocket_indices]
-        expanded_std = pocket_reward_std[self.pocket_indices]
-
-        # Normalize rewards per-pocket to get advantages
-        advantages = (self.rewards - expanded_mean) / expanded_std
-        self.advantages = torch.clamp(advantages, min=-3, max=3)
+        # 3. Clip for Stability (prevents exploding gradients from outliers)
+        self.advantages = torch.clamp(self.advantages, min=-3.0, max=3.0)
         
-        # Optional gating/top-k logic
+        # 4. Optional Gating (Keep your existing logic)
         if self.config.ppo_params.top_k:
             self._apply_top_k_gating()
 
-        print("Advantages computed and stored in buffer.")
+        # print(f"[Buffer] Advantages computed. Mean: {self.advantages.mean():.3f}, Std: {self.advantages.std():.3f}")
+
+    # def compute_advantages(self):
+    #     """
+    #     Computes advantages on a per-pocket basis. This is the method
+    #     from your original PPOTrainer, now living in its logical home.
+    #     """
+    #     if not self.data_loaded:
+    #         raise ValueError("Cannot compute advantages before loading data.")
+
+    #     # Determine the number of unique pockets on this rank.
+    #     num_pockets = int(self.pocket_indices.max().item()) + 1
+
+    #     # Calculate mean reward per pocket
+    #     pocket_reward_mean = scatter_mean(self.rewards, self.pocket_indices, dim=0, dim_size=num_pockets)
+
+    #     # Calculate standard deviation per pocket
+    #     pocket_reward_mean_sq = scatter_mean(self.rewards.pow(2), self.pocket_indices, dim=0, dim_size=num_pockets)
+    #     pocket_reward_var = pocket_reward_mean_sq - pocket_reward_mean.pow(2)
+    #     pocket_reward_std = torch.sqrt(torch.clamp(pocket_reward_var, min=0)) + 1e-8
+
+    #     # Expand per-pocket stats back to the full rewards tensor
+    #     expanded_mean = pocket_reward_mean[self.pocket_indices]
+    #     expanded_std = pocket_reward_std[self.pocket_indices]
+
+    #     # Normalize rewards per-pocket to get advantages
+    #     advantages = (self.rewards - expanded_mean) / expanded_std
+    #     self.advantages = torch.clamp(advantages, min=-3, max=3)
+        
+    #     # Optional gating/top-k logic
+    #     if self.config.ppo_params.top_k:
+    #         self._apply_top_k_gating()
+
+    #     print("Advantages computed and stored in buffer.")
 
 
     def _apply_top_k_gating(self):

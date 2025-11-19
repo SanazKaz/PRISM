@@ -11,6 +11,8 @@ from torch.utils.data import DataLoader
 from src.prism.ppo_tuner.ppo_algorithm import PPOAlgorithm
 from src.models.diffsbdd.lightning_modules import LigandPocketDDPM
 from src.prism.data_modules.lightning_datamodule import LigandPocketDataModule # You'll need to create this later
+from src.prism.reward.factory import get_reward_manager
+
 
 class PPOFineTuner(pl.LightningModule):
     """
@@ -23,20 +25,22 @@ class PPOFineTuner(pl.LightningModule):
         self.config = config
         self.automatic_optimization = False # Crucial for PPO
         
+        
         device = torch.device("cuda" if self.config.gpus > 0 else "cpu")
-
 
         # Filter out PPO-specific and Lightning-specific parameters
         ddpm_config = {k: v for k, v in vars(self.config).items() 
                     if k not in ['ppo_params', 'enable_progress_bar', 
-                                'num_sanity_val_steps', 'wandb_params', 'gpus', 'n_epochs', 'logdir', 'fp16', 'run_identifier']}
+                                'num_sanity_val_steps', 'wandb_params',
+                                'gpus', 'n_epochs', 'logdir', 'fp16', 
+                                'run_identifier','reward_params'
+                                ]}
 
         self.ddpm_model = LigandPocketDDPM(
             outdir=Path(self.config.logdir),
             node_histogram=node_histogram,
             **ddpm_config
         )
-        
         self.ddpm_model.to(device)
 
         
@@ -52,14 +56,28 @@ class PPOFineTuner(pl.LightningModule):
             
             self.ddpm_model.load_state_dict(state_dict, strict=False)
             # print("Successfully loaded pretrained weights!")
+        
+        self.dataset_info = self.ddpm_model.dataset_info.copy()
+        self.dataset_info['datadir'] = self.config.datadir
+
+        
+        # 3. Instantiate the RewardManager
+        self.reward_manager = get_reward_manager(
+            config=self.config,
+            dataset_info=self.dataset_info,
+            ddpm_module=self.ddpm_model
+        )
 
         # 2. Instantiate our self-contained PPOAlgorithm
         self.ppo_algorithm = PPOAlgorithm(
             policy_network=self.ddpm_model,
+            reward_function=self.reward_manager,
             config=self.config,
-            dataset_info=self.ddpm_model.dataset_info,
+            dataset_info=self.dataset_info,
             run_root=self.config.logdir
         )
+        
+        
         
     def on_train_start(self):
         """

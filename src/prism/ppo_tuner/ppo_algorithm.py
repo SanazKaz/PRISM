@@ -8,7 +8,6 @@ from .rollout_collector import RolloutCollector
 from .rollout_buffer import RolloutBuffer
 from .loss import compute_ppo_loss
 from src.models.diffsbdd.lightning_modules import LigandPocketDDPM 
-from src.prism.rewards.mol_properties import DummyMedChemReward
 from utils import permute_timesteps
 from tests.ppo_debug_utils import assert_same_ids, assert_latent_alignment, reset_seen_mb_ids
 
@@ -17,11 +16,16 @@ class PPOAlgorithm:
     The main PPO algorithm class. It orchestrates the collector, buffer, and loss
     calculation to perform the PPO update. This is a framework-agnostic class.
     """
-    def __init__(self, policy_network: LigandPocketDDPM, config, dataset_info, run_root):
+    def __init__(self, 
+                 policy_network: LigandPocketDDPM, 
+                 reward_function,
+                 config, 
+                 dataset_info, 
+                 run_root):
         self.policy_network = policy_network
         self.config = config
         self.device = next(policy_network.parameters()).device
-        self.reward_function = DummyMedChemReward(dataset_info=dataset_info, ddpm_module=policy_network.ddpm)
+        self.reward_function = reward_function
 
         # Create the optimizer here, as it's tied to the algorithm
         self.optimizer = Adam(
@@ -175,8 +179,20 @@ class PPOAlgorithm:
             "train/entropy_epoch": epoch_total_entropy / max(epoch_accumulation_steps, 1),
             "train/reward_mean": self.buffer.rewards.mean().item(),
             "train/advantages_mean": self.buffer.advantages.mean().item(),
+            "train/advantages_std": self.buffer.advantages.std().item(),
+            "train/advantages_min": self.buffer.advantages.min().item(),
+            "train/advantages_max": self.buffer.advantages.max().item(),
         }
-        
+
+        # --- NEW: Log individual reward components (QED, SuCOS, etc.) ---
+        # We pull these directly from the rollout_data we collected earlier
+        if 'component_scores' in rollout_data:
+            for name, score_tensor in rollout_data['component_scores'].items():
+                if score_tensor.numel() > 0:
+                    # Log the mean of the raw scores
+                    final_logs[f"train/reward_{name}_mean"] = score_tensor.mean().item()
+        # ----------------------------------------------------------------
+
         print(f"total_loss epoch: {epoch_total_loss / max(epoch_accumulation_steps, 1)}")
         
         return final_logs

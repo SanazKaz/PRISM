@@ -4,6 +4,7 @@ Simple score transformations for molecular optimization.
 
 import math
 import numpy as np
+import torch
 
 
 def sigmoid(x: float, k: float = 1.0, center: float = 0.0) -> float:
@@ -71,3 +72,28 @@ def double_sigmoid(x: float,
     # Combine both sigmoids
     return left_sigmoid * right_sigmoid
 
+# =============================================================================
+# PART 2: BATCH TRANSFORMATIONS
+# Use this in scorer.py AFTER collecting the whole batch of scores.
+# =============================================================================
+
+def reshape_batch_rewards(rewards: torch.Tensor, valid_mask: torch.Tensor, config: dict) -> torch.Tensor:
+    """
+    Applies statistical transformations to the whole batch tensor.
+    """
+    shaped_rewards = rewards.clone()
+    
+    # 1. Centering (Subtract Batch Mean)
+    if config.get('center_mean', False) and valid_mask.any():
+        valid_scores = shaped_rewards[valid_mask]
+        mean = valid_scores.mean()
+        shaped_rewards[valid_mask] = valid_scores - mean
+
+    # 2. Normalization (Divide by Std)
+    if config.get('normalize_std', False) and valid_mask.any():
+        valid_scores = shaped_rewards[valid_mask]
+        std = valid_scores.std()
+        if std > 1e-8:
+            shaped_rewards[valid_mask] = valid_scores / std
+
+    return shaped_rewards
