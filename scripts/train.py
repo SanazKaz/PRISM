@@ -63,9 +63,10 @@ def main(args):
     
     model = PPOFineTuner(config=config, warm_start_checkpoint=args.warm_start_from_ddpm, node_histogram=node_histogram)
 
-    
+
     # --- 4. Setup Callbacks and Trainer ---
     checkpoint_dir = Path(config.logdir, config.run_identifier, 'checkpoints')
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)  # Ensure directory exists
     checkpoint_callback = ModelCheckpoint(
         dirpath=str(checkpoint_dir),
         monitor='train/reward_mean', 

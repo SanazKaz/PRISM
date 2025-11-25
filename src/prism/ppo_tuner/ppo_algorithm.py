@@ -56,7 +56,10 @@ class PPOAlgorithm:
         self.buffer.load_rollout_data(rollout_data)
         if not self.buffer.data_loaded:
             print("Skipping training step due to no valid rollouts.")
-            return {"train/policy_loss": 0}
+            return {
+                "train/policy_loss": 0,
+                "train/reward_mean": 0,  # Include monitored metric for checkpoint callback
+            }
 
         self.buffer.compute_advantages()
         
