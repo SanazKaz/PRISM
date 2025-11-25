@@ -59,7 +59,7 @@ class PPOFineTuner(pl.LightningModule):
         
         self.dataset_info = self.ddpm_model.dataset_info.copy()
         self.dataset_info['datadir'] = self.config.datadir
-
+    
         
         # 3. Instantiate the RewardManager
         self.reward_manager = get_reward_manager(
@@ -76,60 +76,92 @@ class PPOFineTuner(pl.LightningModule):
             dataset_info=self.dataset_info,
             run_root=self.config.logdir
         )
-        
-        
-        
-    def on_train_start(self):
-        """
-        Freezes everything except the last 2 EGNN blocks (e_block_3 and e_block_4)
-        """
-        # print("[on_train_start] Applying EGNN freezing strategy...")
-        
+        self.freeze_parameters()
+
+    def freeze_parameters(self):
+        print("[Init] Applying EGNN freezing strategy...")
         frozen_count = 0
         unfrozen_count = 0
         
         for name, param in self.ppo_algorithm.policy_network.named_parameters():
-            # Keep last 2 EGNN blocks trainable
             if any(x in name for x in ['e_block_3', 'e_block_4']):
                 param.requires_grad = True
-                # print(f"  KEEPING TRAINABLE: {name}")
             else:
-                # Freeze everything else
                 param.requires_grad = False
                 frozen_count += 1
         
-        # Count final trainable parameters
+        # Recount for verification
         for param in self.ppo_algorithm.policy_network.parameters():
             if param.requires_grad:
                 unfrozen_count += 1
         
-        trainable_percent = (unfrozen_count / (frozen_count + unfrozen_count)) * 100
-        print(f"[TRAINING] {trainable_percent:.1f}% of parameters are trainable")
+        print(f"[Init] {frozen_count} params frozen, {unfrozen_count} trainable.")
+        
+        
+    def configure_optimizers(self):
+        """
+        Define the optimizer here so Lightning can track it.
+        """
+        # We access the internal DDPM parameters just like you did in the algorithm
+        # Ensure we only optimize parameters that require grad (the freezing logic)
+        params_to_optimize = filter(lambda p: p.requires_grad, self.ddpm_model.ddpm.parameters())
+        
+        optimizer = torch.optim.Adam(
+            params_to_optimize,
+            lr=self.config.ppo_params.lr,
+            eps=1e-8,
+            weight_decay=1.0e-12,
+            betas=(0.9, 0.999)
+        )
+        return optimizer
+    
+    # def on_train_start(self):
+    #     """
+    #     Freezes everything except the last 2 EGNN blocks (e_block_3 and e_block_4)
+    #     """
+    #     # print("[on_train_start] Applying EGNN freezing strategy...")
+        
+    #     frozen_count = 0
+    #     unfrozen_count = 0
+        
+    #     for name, param in self.ppo_algorithm.policy_network.named_parameters():
+    #         # Keep last 2 EGNN blocks trainable
+    #         if any(x in name for x in ['e_block_3', 'e_block_4']):
+    #             param.requires_grad = True
+    #             # print(f"  KEEPING TRAINABLE: {name}")
+    #         else:
+    #             # Freeze everything else
+    #             param.requires_grad = False
+    #             frozen_count += 1
+        
+    #     # Count final trainable parameters
+    #     for param in self.ppo_algorithm.policy_network.parameters():
+    #         if param.requires_grad:
+    #             unfrozen_count += 1
+        
+    #     trainable_percent = (unfrozen_count / (frozen_count + unfrozen_count)) * 100
+    #     print(f"[TRAINING] {trainable_percent:.1f}% of parameters are trainable")
                 
 
     def training_step(self, batch, batch_idx):
         """
         The training step is now incredibly clean. It just calls the algorithm.
         """
+        opt = self.optimizers()
         # The PL Trainer handles the outer loop by calling this method repeatedly.
         # Our PPOAlgorithm handles the inner loops inside its train_step method.
-        
-        opt = self.optimizers()
+        print(f"[DEBUG] Global Step: {self.global_step} | Current Epoch: {self.current_epoch}")
         
         logs = self.ppo_algorithm.train_step(
             pocket_batch=batch,
-            current_epoch=self.current_epoch
+            current_epoch=self.current_epoch,
+            optimizer=opt
         )
-        
         # Log the metrics returned by the algorithm
-        self.log_dict(logs, on_step=False, on_epoch=True, prog_bar=False)
+        self.log_dict(logs, on_step=False, on_epoch=True, prog_bar=True)
         
         return logs
 
-    def configure_optimizers(self):
-        # The optimizer is created and owned by the PPOAlgorithm
-        # This is because we step the opt for inner epochs and it confuses PL
-        return self.ppo_algorithm.optimizer
 
     # --- Delegate other essential methods to the original model ---
 
