@@ -10,7 +10,7 @@ This script reads lists of file basenames from user-provided split files
 It includes an optional de-duplication step to process only one
 ligand instance per PDB/ligand combination.
 
-modified from 
+Adapted from DiffSBDD/process_crossdock.py
 """
 
 import os
@@ -536,10 +536,10 @@ if __name__ == '__main__':
     
     # --- De-duplication Flag ---
     parser.add_argument(
-        '--deduplicate',
-        type=bool,
-        default=True,
-        help='Process only one ligand instance per PDB-ligand ID pair.'
+        '--keep_duplicates',
+        action='store_false',
+        dest='deduplicate',
+        help='If set, keeps all ligand instances per PDB-ligand ID pair.'
     )
 
     # --- Processing Parameters ---
