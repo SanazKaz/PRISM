@@ -27,14 +27,14 @@ class PPOAlgorithm:
         self.device = next(policy_network.parameters()).device
         self.reward_function = reward_function
 
-        # Create the optimizer here, as it's tied to the algorithm
-        self.optimizer = Adam(
-            filter(lambda p: p.requires_grad, self.policy_network.ddpm.parameters()),
-            lr=self.config.ppo_params.lr,
-            eps=1e-8,
-            weight_decay=1.0e-12,
-            betas=(0.9, 0.999)
-        )
+        # # Create the optimizer here, as it's tied to the algorithm
+        # self.optimizer = Adam(
+        #     filter(lambda p: p.requires_grad, self.policy_network.ddpm.parameters()),
+        #     lr=self.config.ppo_params.lr,
+        #     eps=1e-8,
+        #     weight_decay=1.0e-12,
+        #     betas=(0.9, 0.999)
+        # )
 
         # NOTE: compose our clean components
         self.collector = RolloutCollector(
@@ -44,7 +44,7 @@ class PPOAlgorithm:
         )
         self.buffer = RolloutBuffer(config=config)
     
-    def train_step(self, pocket_batch, current_epoch):
+    def train_step(self, pocket_batch, current_epoch, optimizer):
         """
         Performs one full step of the PPO outer loop.
         """
@@ -152,8 +152,8 @@ class PPOAlgorithm:
                             self.policy_network.ddpm.parameters(),
                             self.config.ppo_params.max_grad_norm
                         )
-                        self.optimizer.step()
-                        self.optimizer.zero_grad(set_to_none=True)
+                        optimizer.step()
+                        optimizer.zero_grad(set_to_none=True)
                     
                     # Accumulate metrics
                     epoch_total_loss += policy_loss.detach().item()
@@ -168,8 +168,8 @@ class PPOAlgorithm:
                     self.policy_network.ddpm.parameters(),
                     self.config.ppo_params.max_grad_norm
                 )
-                self.optimizer.step()
-                self.optimizer.zero_grad(set_to_none=True)
+                optimizer.step()
+                optimizer.zero_grad(set_to_none=True)
 
         # Final logs for the entire outer step
         final_logs = {
@@ -184,8 +184,7 @@ class PPOAlgorithm:
             "train/advantages_max": self.buffer.advantages.max().item(),
         }
 
-        # --- NEW: Log individual reward components (QED, SuCOS, etc.) ---
-        # We pull these directly from the rollout_data we collected earlier
+        # --- Log individual reward components (QED, SuCOS, etc.) ---
         if 'component_scores' in rollout_data:
             for name, score_tensor in rollout_data['component_scores'].items():
                 if score_tensor.numel() > 0:

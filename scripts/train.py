@@ -66,12 +66,17 @@ def main(args):
     
     # --- 4. Setup Callbacks and Trainer ---
     checkpoint_dir = Path(config.logdir, config.run_identifier, 'checkpoints')
+    checkpoint_dir.mkdir(parents=True, exist_ok=True) # just in case the directory doesn't exist
+    print(f"[*********CHECKPOINT will save to**********] {checkpoint_dir}")
     checkpoint_callback = ModelCheckpoint(
         dirpath=str(checkpoint_dir),
         monitor='train/reward_mean', 
         mode='max',
         save_last=True,
-    )
+        filename=f"seed={args.seed}-epoch={epoch}-reward={train/reward_mean:.2f}",
+        save_top_k=3,
+        save_on_train_epoch_end=True,
+        )
     
     wandb_logger = WandbLogger(
         entity=getattr(config.wandb_params, 'entity', None),
@@ -88,8 +93,8 @@ def main(args):
         callbacks=[checkpoint_callback],
         enable_progress_bar=config.enable_progress_bar,
         num_sanity_val_steps=config.num_sanity_val_steps,
-        logger=wandb_logger,
-        # Add any other trainer flags you need from your config
+        logger=wandb_logger,        # Add any other trainer flags you need from your config
+        # limit_train_batches=1 # for quick debugging
     )
 
     # --- 5. Start Training ---
