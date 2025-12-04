@@ -5,6 +5,7 @@ PDB Downloader.
 
 1. Get PDBs from CATH FunFam ID.
 2. Get PDBs from UniProt Accession ID.
+3. Get PDBs from a local text file.
 """
 
 import requests
@@ -13,8 +14,6 @@ import sys
 import time
 from pathlib import Path
 from typing import Set, List
-
-#!/usr/bin/env python
 
 def download_pdbs(pdb_ids: Set[str], output_dir: Path):
     """
@@ -27,7 +26,12 @@ def download_pdbs(pdb_ids: Set[str], output_dir: Path):
     failed_count = 0
     
     for pdb_id in sorted(pdb_ids):
-        pdb_id = pdb_id.lower()
+        # Clean ID just in case (e.g. "1DMP " -> "1dmp")
+        pdb_id = pdb_id.strip().lower()
+        if len(pdb_id) != 4:
+            print(f"  [SKIP] Invalid PDB ID format: '{pdb_id}'")
+            continue
+
         try:
             pdb_url = f"https://files.rcsb.org/download/{pdb_id}.pdb"
             file_response = requests.get(pdb_url)
@@ -87,7 +91,6 @@ def get_pdbs_from_funfam(funfam_id: str, output_dir: str, version: str):
 
     print(f"Found {len(pdb_ids)} unique PDB IDs in CATH family.")
     
-    # --- CHANGED: Path naming logic ---
     save_path = Path(output_dir) / f"{funfam_id}_data"
     download_pdbs(pdb_ids, save_path)
 
@@ -96,7 +99,6 @@ def get_pdbs_from_funfam(funfam_id: str, output_dir: str, version: str):
 
 def get_pdbs_from_uniprot(uniprot_ids: List[str], output_dir: str):
     """Query UniProt, find linked PDBs, download them."""
-    
     base_url = "https://rest.uniprot.org/uniprotkb"
     
     for uid in uniprot_ids:
@@ -110,7 +112,6 @@ def get_pdbs_from_uniprot(uniprot_ids: List[str], output_dir: str):
             response.raise_for_status()
             data = response.json()
             
-            # Extract PDB references
             found_pdbs = set()
             for ref in data.get('uniProtKBCrossReferences', []):
                 if ref.get('database') == 'PDB':
@@ -122,7 +123,6 @@ def get_pdbs_from_uniprot(uniprot_ids: List[str], output_dir: str):
                 
             print(f"  Found {len(found_pdbs)} PDBs linked to {uid}.")
             
-            # --- CHANGED: Path naming logic ---
             save_path = Path(output_dir) / f"{uid}_data"
             download_pdbs(found_pdbs, save_path)
             
@@ -131,20 +131,45 @@ def get_pdbs_from_uniprot(uniprot_ids: List[str], output_dir: str):
         except Exception as e:
             print(f"  [FAIL] Error processing '{uid}': {e}")
 
+# --- Text File Logic (NEW) ---
+
+def get_pdbs_from_file(file_path: str, output_dir: str):
+    """Reads PDB IDs from a text file (comma or newline separated)."""
+    print(f"--- File: Reading PDBs from {file_path} ---")
+    
+    path = Path(file_path)
+    if not path.exists():
+        print(f"Error: File {file_path} not found.")
+        return
+
+    content = path.read_text()
+    
+    # Normalize: Replace newlines with commas, then split by comma
+    # This handles "ID,ID,ID" AND "ID\nID\nID" formats
+    raw_ids = content.replace('\n', ',').split(',')
+    
+    # Clean whitespace and empty strings
+    pdb_ids = {x.strip() for x in raw_ids if x.strip()}
+    
+    if not pdb_ids:
+        print("Warning: No PDB IDs found in file.")
+        return
+
+    save_path = Path(output_dir) / "custom_list_data"
+    download_pdbs(pdb_ids, save_path)
 
 # --- Main ---
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Download PDB structures via CATH FunFam OR UniProt ID."
+        description="Download PDB structures via CATH, UniProt, or Text File."
     )
     
-    parser.add_argument("--funfam_id", type=str, help="CATH FunFam ID (e.g., 3.40.710.10)")
+    parser.add_argument("--funfam_id", type=str, help="CATH FunFam ID")
+    parser.add_argument("--uniprot_ids", nargs='+', help="List of UniProt IDs")
+    parser.add_argument("--pdb_list", type=str, help="Path to text file containing PDB IDs")
+    
     parser.add_argument("--cath_version", type=str, default="v4_3_0", help="CATH version")
-    
-    parser.add_argument("--uniprot_ids", nargs='+', help="List of UniProt IDs (e.g. P12345)")
-    
-    # --- CHANGED: Default output is now just "data" ---
     parser.add_argument("-o", "--output_dir", type=str, default="data", help="Output directory root")
     
     args = parser.parse_args()
@@ -154,6 +179,9 @@ def main():
         
     if args.uniprot_ids:
         get_pdbs_from_uniprot(args.uniprot_ids, args.output_dir)
+
+    if args.pdb_list:
+        get_pdbs_from_file(args.pdb_list, args.output_dir)
 
 if __name__ == "__main__":
     main()

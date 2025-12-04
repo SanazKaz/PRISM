@@ -148,7 +148,7 @@ def process_ligand_and_pocket(pdbfile, sdffile,
     
     try:
         lig_atoms = [a.GetSymbol() for a in ligand.GetAtoms()
-                    if (a.GetSymbol().capitalize() in atom_dict or a.element != 'H')]
+                    if (a.GetSymbol().capitalize() in atom_dict or a.GetSymbol() != 'H')]
         if not lig_atoms:
             raise Exception("No valid atoms found in ligand")
         
@@ -211,16 +211,44 @@ def process_ligand_and_pocket(pdbfile, sdffile,
     
     return ligand_data, pocket_data
 
+# def compute_smiles(positions, one_hot, mask, dataset_info):
+#     """
+#     Computes SMILES for a given set of positions and one-hot encodings.
+#     Args:
+#         positions: numpy array of shape (n_atoms, 3)
+#         one_hot: numpy array of shape (n_atoms, n_atom_types)
+#         mask: numpy array of shape (n_atoms,)
+#         dataset_info: dictionary containing the dataset information
+#     Returns:
+#         list of SMILES strings
+#     """
+#     print("Computing SMILES ...")
+    
+#     atom_types = np.argmax(one_hot, axis=-1)
+#     sections = np.where(np.diff(mask))[0] + 1
+#     positions = [torch.from_numpy(x) for x in np.split(positions, sections)]
+#     atom_types = [torch.from_numpy(x) for x in np.split(atom_types, sections)]
+#     mols_smiles = []
+#     pbar = tqdm(enumerate(zip(positions, atom_types)), total=len(np.unique(mask)))
+#     for i, (pos, atom_type) in pbar:
+#         mol = build_molecule(pos, atom_type, dataset_info)
+        
+#         if mol is None: continue
+        
+#         try: 
+#             Chem.SanitizeMol(mol)
+#         except ValueError: 
+#             continue
+        
+#         mol = rdmol_to_smiles(mol)
+#         if mol is not None: 
+#             mols_smiles.append(mol)
+#         pbar.set_description(f'{len(mols_smiles)}/{i + 1} successful')
+    
+#     return mols_smiles
 def compute_smiles(positions, one_hot, mask, dataset_info):
     """
-    Computes SMILES for a given set of positions and one-hot encodings.
-    Args:
-        positions: numpy array of shape (n_atoms, 3)
-        one_hot: numpy array of shape (n_atoms, n_atom_types)
-        mask: numpy array of shape (n_atoms,)
-        dataset_info: dictionary containing the dataset information
-    Returns:
-        list of SMILES strings
+    Computes SMILES with robust error handling to prevent pipeline crashes.
     """
     print("Computing SMILES ...")
     
@@ -228,22 +256,34 @@ def compute_smiles(positions, one_hot, mask, dataset_info):
     sections = np.where(np.diff(mask))[0] + 1
     positions = [torch.from_numpy(x) for x in np.split(positions, sections)]
     atom_types = [torch.from_numpy(x) for x in np.split(atom_types, sections)]
+    
     mols_smiles = []
+    
+    # [FIX] Wrap iteration in try/except to catch bad molecules
     pbar = tqdm(enumerate(zip(positions, atom_types)), total=len(np.unique(mask)))
+    
     for i, (pos, atom_type) in pbar:
-        mol = build_molecule(pos, atom_type, dataset_info)
-        
-        if mol is None: continue
-        
-        try: 
-            Chem.SanitizeMol(mol)
-        except ValueError: 
-            continue
-        
-        mol = rdmol_to_smiles(mol)
-        if mol is not None: 
-            mols_smiles.append(mol)
-        pbar.set_description(f'{len(mols_smiles)}/{i + 1} successful')
+        try:
+            mol = build_molecule(pos, atom_type, dataset_info)
+            
+            if mol is None: 
+                continue
+            
+            try: 
+                Chem.SanitizeMol(mol)
+            except ValueError: 
+                continue
+            
+            mol = rdmol_to_smiles(mol)
+            if mol is not None: 
+                mols_smiles.append(mol)
+                
+            pbar.set_description(f'{len(mols_smiles)}/{i + 1} successful')
+            
+        except Exception as e:
+            # [FIX] Just log the error and skip this molecule, don't crash
+            # Use 'pass' or print if you want to see which ID failed
+            continue 
     
     return mols_smiles
 

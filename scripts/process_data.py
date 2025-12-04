@@ -4,7 +4,7 @@
 Main pipeline script to generate a complete dataset.
 
 Orchestrates the 3-step process:
-1.  Downloads PDBs (from CATH FunFam OR UniProt IDs).
+1.  Downloads PDBs (from CATH FunFam, UniProt IDs, OR a Text File).
 2.  Pre-processes PDBs to extract pockets and ligands.
 3.  Converts pocket/ligand pairs into a final .npz dataset.
 """
@@ -13,96 +13,45 @@ import argparse
 import sys
 from pathlib import Path
 
-# --- Import your 3 pipeline scripts ---
-# Ensure these match your actual filenames/folder structure!
 from data.preprocessing import (fetch_pdbs, preprocess_data, create_dataset)
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Full data pipeline from IDs to final dataset.",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter
-    )
+    parser = argparse.ArgumentParser(description="Full data pipeline.", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     
-    # --- Input Data Options (Mutually Exclusive) ---
+    # Inputs
     group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument(
-        "--cath_id",
-        type=str,
-        help="The full CATH FunFam ID to process (e.g., '3.40.710.10')."
-    )
-    group.add_argument(
-        "--uniprot_ids",
-        nargs='+',
-        help="List of UniProt Accession IDs (e.g. P12345 Q9JIAL)."
-    )
+    group.add_argument("--cath_id", help="CATH FunFam ID (e.g., '3.40.710.10')")
+    group.add_argument("--uniprot_ids", nargs='+', help="List of UniProt Accession IDs")
+    group.add_argument("--pdb_list", help="Path to text file with PDB IDs")
     
-    # --- Optional Pipeline Parameters ---
-    parser.add_argument(
-        "-o", "--output_dir",
-        type=str,
-        default=None,
-        help="Main root directory for outputs. If None, creates one based on input ID."
-    )
+    # Parameters
+    parser.add_argument("-o", "--output_dir", help="Main root directory for outputs")
+    parser.add_argument("--cath_version", default="v4_3_0", help="CATH database version")
+    parser.add_argument("--preprocess_distance", type=float, default=15.0, help="Raw pocket dist (A)")
+    parser.add_argument("--include_common", action="store_true", help="Include common additives")
+    parser.add_argument("--dataset_distance", type=float, default=5.0, help="Final pocket dist (A)")
+    parser.add_argument("--dataset_info_key", default="crossdock_full", help="Key for encoders")
     
-    # Step 1 Params
-    parser.add_argument(
-        "--cath_version",
-        type=str,
-        default="v4_3_0",
-        help="CATH database version (only used if --cath_id is provided)."
-    )
-    
-    # Step 2 Params
-    parser.add_argument(
-        "--preprocess_distance",
-        type=float,
-        default=15.0,
-        help="Distance (A) to extract raw pocket environment."
-    )
-    parser.add_argument(
-        "--include_common",
-        action="store_true",
-        help="Include common additives (e.g., EDO, SO4) in preprocessing."
-    )
-    
-    # Step 3 Params
-    parser.add_argument(
-        "--dataset_distance",
-        type=float,
-        default=5.0, 
-        help="Distance (A) to define final pocket residues for the model."
-    )
-    # Deduplication: Default ON (True), use flag to turn OFF (False)
-    parser.add_argument(
-        '--keep_duplicates',
-        action='store_false', 
-        dest='deduplicate',
-        help='Use this flag to keep all duplicate instances (disables deduplication).'
-    )
-    parser.set_defaults(deduplicate=True)
-    
-    parser.add_argument(
-        "--dataset_info_key",
-        type=str,
-        default="crossdock_full",
-        help="Key from constants.py to use for encoders."
-    )
-    
+    # Deduplication (Defaults to True; flag switches to False)
+    parser.add_argument('--keep_duplicates', action='store_false', dest='deduplicate', default=True, help='Disable deduplication')
+
     args = parser.parse_args()
 
     # --- 1. Setup Directory Structure & Naming ---
     
-    # Determine Job Name
+    # Determine Job Name based on input type
     if args.cath_id:
         job_name = f"cath_{args.cath_id.replace('.', '_')}"
-        target_id_list = [args.cath_id] # Just one ID for CATH
+    elif args.pdb_list:
+        # Use the filename of the list (e.g., 'hiv_targets.txt' -> 'custom_hiv_targets')
+        list_name = Path(args.pdb_list).stem
+        job_name = f"custom_{list_name}"
     else:
-        # For UniProt, if multiple IDs, name folder after the first one + count
+        # For UniProt
         if len(args.uniprot_ids) == 1:
             job_name = f"uniprot_{args.uniprot_ids[0]}"
         else:
             job_name = f"uniprot_batch_{args.uniprot_ids[0]}_plus_{len(args.uniprot_ids)-1}"
-        target_id_list = args.uniprot_ids
 
     # Set Output Directory
     if args.output_dir:
@@ -128,7 +77,7 @@ def main():
             # Call CATH function
             fetch_pdbs.get_pdbs_from_funfam(
                 funfam_id=args.cath_id,
-                output_dir=str(pdb_dir), # Note: fetch_pdbs creates a subfolder, check logic!
+                output_dir=str(pdb_dir), 
                 version=args.cath_version
             )
         elif args.uniprot_ids:
@@ -137,16 +86,25 @@ def main():
                 uniprot_ids=args.uniprot_ids,
                 output_dir=str(pdb_dir)
             )
+        elif args.pdb_list:
+            # Call Custom File function
+            fetch_pdbs.get_pdbs_from_file(
+                file_path=args.pdb_list,
+                output_dir=str(pdb_dir)
+            )
             
-        print("[STEP 1/3] ✔ PDB Download Complete.")
+        print("[STEP 1/3] PDB Download Complete.")
     except Exception as e:
-        print(f"[STEP 1/3] ✘ FAILED: {e}")
+        print(f"[STEP 1/3] FAILED: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)
 
+    # --- 3. Run STEP 2: Preprocess ---
     print("\n[STEP 2/3] Preprocessing PDBs (extracting pockets/ligands)...")
     try:
+        # Note: preprocess_data searches recursively using glob('**/*.pdb'), 
+        # so subfolders created by fetch_pdbs are fine.
         preprocess_args = argparse.Namespace(
             input_dir=str(pdb_dir),
             output_dir=str(preprocess_dir),
@@ -154,9 +112,9 @@ def main():
             include_common=args.include_common
         )
         preprocess_data.create_binding_pockets(preprocess_args)
-        print("[STEP 2/3] ✔ Preprocessing Complete.")
+        print("[STEP 2/3] Preprocessing Complete.")
     except Exception as e:
-        print(f"[STEP 2/3] ✘ FAILED: {e}")
+        print(f"[STEP 2/3] FAILED: {e}")
         sys.exit(1)
 
     # --- 4. Run STEP 3: Create Final Dataset ---
@@ -172,13 +130,13 @@ def main():
             dist_cutoff=args.dataset_distance
         )
         create_dataset.main(dataset_args)
-        print("[STEP 3/3] ✔ Final Dataset Created.")
+        print("[STEP 3/3] Final Dataset Created.")
     except Exception as e:
-        print(f"[STEP 3/3] ✘ FAILED: {e}")
+        print(f"[STEP 3/3] FAILED: {e}")
         sys.exit(1)
         
     print("\n" + "="*80)
-    print("✔ Pipeline Finished Successfully!")
+    print("Pipeline Finished Successfully!")
     print(f"Final dataset is located in: {final_dataset_dir.resolve()}")
     print("="*80)
 

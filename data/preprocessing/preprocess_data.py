@@ -6,6 +6,7 @@ Creates paired ligand-free binding pockets and ligand SDF files.
 This script iterates through PDB files in an input directory. For each PDB,
 it uses the RCSB API to identify all non-common, biological ligands.
 """
+# TODO: very new cif files from pdb not being processed. fix this.
 
 import os
 import glob
@@ -32,24 +33,27 @@ EXCLUDE_LIST = {
     # Water
     'HOH', 'WAT', 'H2O', 'DOD',
     # Glycols and PEGs
-    'EDO', 'PEG', 'PGE', 'PG4', 'PE8', 'PE7', '1PE', 'P6G', 'PEO',
-    # Glycerol
-    'GOL', 'GLY',
-    # Common ions
+    'EDO', 'PEG', 'PGE', 'PG4', 'PE8', 'PE7', '1PE', 'P6G', 'PEO', '2PE', 'P33', 'P40',
+    # Glycerol and Alcohols
+    'GOL', 'GLY', 'PE5', 'PE6', 'PGO', 'BME', 'EOH', 'MOH', 'ETL',
+    # Common ions (Metals & Halogens)
     'SO4', 'PO4', 'CL', 'BR', 'I', 'F',
     'NA', 'MG', 'CA', 'ZN', 'FE', 'MN', 'K', 'NI', 'CU', 'CO',
-    'CD', 'HG', 'SR', 'BA', 'CS', 'RB',
+    'CD', 'HG', 'SR', 'BA', 'CS', 'RB', 'LI', 'AL',
     # Solvents and reducing agents
-    'DMS', 'DMSO', 'ACT', 'ACE', 'BME', 'DTT', 'TRS', 'EOH', 'MeOH',
+    'DMS', 'DMSO', 'ACT', 'ACE', 'DTT', 'TRS', 'EOH', 'MeOH',
     # Buffers and crystallization agents
-    'CIT', 'TAR', 'MLI', 'TRS', 'EPE', 'BEZ', 'HEPES', 'MES',
+    'CIT', 'TAR', 'MLI', 'EPE', 'BEZ', 'HEPES', 'MES', 'FMT', 'IMD', 'POP', 'ACY',
     # Detergents
     'BOG', 'B3P', 'LDA', 'SDS', 'LMT', 'PLM',
     # Cryoprotectants
     'MPD', 'IPA', 'EGL',
-    # Other common artifacts
-    'ACY', 'NH2', 'CO3', 'NO3', 'OH', 'O', 'NO2',
-    'BCN', 'AZI', 'SCN', 'CYN', 'OCT', 'UNL', 'UNX', 'CLR', 'J40', 'NAG'
+    # Artifacts / Unknowns
+    'NH2', 'CO3', 'NO3', 'OH', 'O', 'NO2', 'NH4',
+    'BCN', 'AZI', 'SCN', 'CYN', 'OCT', 'UNL', 'UNX', 'CLR', 'J40', 'NAG',
+    # --- KINASE COFACTORS (Crucial for EGFR/PIM1) ---
+    'ATP', 'ADP', 'AMP',  # Standard nucleotides
+    'ANP', 'ACP', 'GNP', 'GSP', 'GTP', 'GDP' # Non-hydrolyzable analogs
 }
 
 class PocketSelect(Select):
@@ -261,39 +265,10 @@ def create_binding_pockets(args):
                 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(
-        description='Create paired ligand-free pocket PDBs and ligand SDFs.',
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter
-    )
+    p = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    p.add_argument("-i", "--input_dir", required=True, help="Input PDB directory")
+    p.add_argument("-o", "--output_dir", help="Output directory")
+    p.add_argument("-d", "--distance", type=float, default=15.0, help="Pocket cutoff distance")
+    p.add_argument("--include_common", action="store_true", help="Include common additives")
     
-    parser.add_argument(
-        "-i", "--input_dir", 
-        type=str, 
-        required=True, 
-        help="Directory containing the original PDB files."
-    )
-    
-    parser.add_argument(
-        "-o", "--output_dir", 
-        type=str, 
-        required=False, 
-        default=None,
-        help="Main directory to save all outputs."
-    )
-
-    parser.add_argument(
-        "-d", "--distance",
-        type=float,
-        default=15.0,
-        help="Distance (in Angstroms) from the ligand to define the binding pocket."
-    )
-
-    # --- FIX: Changed parser.add.argument to parser.add_argument ---
-    parser.add_argument(
-        "--include_common",
-        action="store_true",
-        help="Include pockets for common additives (e.g., EDO, SO4) that are normally excluded."
-    )
-    
-    args = parser.parse_args()
-    create_binding_pockets(args)
+    create_binding_pockets(p.parse_args())
