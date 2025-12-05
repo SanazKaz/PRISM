@@ -114,7 +114,7 @@ class RewardManager:
         total_rewards[valid_indices] = 0.0
 
         # [DEBUG] Log Valid Molecules
-        print(f"[RewardManager] Evaluating {len(molecules)} valid molecules (Epoch {current_epoch})")
+        # print(f"[RewardManager] Evaluating {len(molecules)} valid molecules (Epoch {current_epoch})")
 
         for reward_fn in self.reward_fns:
             try:

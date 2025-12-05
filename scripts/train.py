@@ -73,7 +73,7 @@ def main(args):
         monitor='train/reward_mean', 
         mode='max',
         save_last=True,
-        filename=f"seed={args.seed}-epoch={epoch}-reward={train/reward_mean:.2f}",
+        filename=f"seed={args.seed}-epoch={{epoch}}-reward={{train/reward_mean:.2f}}",
         save_top_k=3,
         save_on_train_epoch_end=True,
         )

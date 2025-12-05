@@ -4,13 +4,17 @@ import argparse
 from src.prism.reward.scorer import RewardManager
 from src.prism.reward.scoring.molecular_props import QEDReward, SAScoreReward, LipinskiReward, BertzReward
 from src.prism.reward.scoring.sucos import SuCOSReward
+from src.prism.reward.scoring.interaction_fingerprints import InteractionFingerprintsReward
 # 1. The Registry
+
 REWARD_REGISTRY = {
     "qed": QEDReward,
     "sa_score": SAScoreReward,
     "lipinski": LipinskiReward,
     "bertz": BertzReward,
     "sucos": SuCOSReward,
+    "interaction_fingerprints": InteractionFingerprintsReward,
+    
 }
 
 def get_reward_manager(config, dataset_info, ddpm_module=None):
@@ -64,8 +68,15 @@ def get_reward_manager(config, dataset_info, ddpm_module=None):
         
         # Instantiate the class
         reward_cls = REWARD_REGISTRY[name]
-        active_rewards.append(reward_cls())
+
+        # Only pass dataset_info to rewards that need it (like SuCOS)
+        if name == 'sucos' or name == 'interaction_fingerprints':
+            active_rewards.append(reward_cls(dataset_info))
+        else:
+            active_rewards.append(reward_cls())
+            
         weights[name] = float(weight)
+
 
     return RewardManager(
         reward_fns=active_rewards,
