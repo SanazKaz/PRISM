@@ -13,7 +13,6 @@ wandb/
 
 # Data and checkpoints
 data/3_40_710_10_20_data
-checkpoints/
 *.ckpt
 *.pth
 *.npz
