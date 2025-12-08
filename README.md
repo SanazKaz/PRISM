@@ -28,6 +28,15 @@ python scripts/process_data.py \
 
 ## Generating Ligands
 ### TODO:  ignore for now - still to decouple from diffsbdd as it is their script.
+
+obtain the diffusion model checkpoint from DiffSBDD using:
+```
+wget -P checkpoints/ https://zenodo.org/record/8183747/files/crossdocked_fullatom_cond.ckpt 
+```
+obtain our  model checkpoint from DiffSBDD using:
+
+some zenodo link here when models are done
+
 Generate molecules from a trained checkpoint using a protein structure:
 ```bash
 python src/models/diffsbdd/generate_ligands.py \
