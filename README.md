@@ -40,7 +40,6 @@ python src/models/diffsbdd/generate_ligands.py \
     --num_nodes_lig 32
 ```
 
-**Parameters:**
 ### Configuration
 
 Training is controlled through `configs/ppo_config.yaml`. Key parameters:
