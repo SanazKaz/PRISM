@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Tuple, Optional, List, Dict
 from Bio.PDB import PDBParser
 from rdkit import Chem
-
+from rdkit.Chem import SDMolSupplier
 # --- IMPORTS FOR MOLECULE BUILDING ---
 from src.models.diffsbdd.analysis.molecule_builder import build_molecule, process_molecule
 
@@ -102,6 +102,23 @@ def center_pocket_on_ligand_com(pocket_pdb_path: str, ref_ligand_sdf_path: str):
     new_com = np.mean(new_coords, axis=0)
 
     return pocket_structure, ref_mol
+
+
+def center_ligand_on_com(ligand_sdf_path: str):
+    """Just center the ligand, don't need pocket."""
+    mol = SDMolSupplier(ligand_sdf_path, removeHs=False)[0]
+    coords = mol.GetConformer(0).GetPositions()
+    com = np.mean(coords, axis=0)
+    
+    # Center conformer
+    centered_conf = Chem.Conformer(mol.GetNumAtoms())
+    for i in range(mol.GetNumAtoms()):
+        new_pos = coords[i] - com
+        centered_conf.SetAtomPosition(i, new_pos)
+    
+    mol.RemoveAllConformers()
+    mol.AddConformer(centered_conf)
+    return mol
 
 
 def batch_to_list(data, batch_mask):
