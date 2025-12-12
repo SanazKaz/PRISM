@@ -12,7 +12,15 @@ Log_Results/
 wandb/
 
 # Data and checkpoints
-data/3_40_710_10_20_data
+data/AMPC_beta_lactamase/
+data/Carb_Anh_II/
+data/EGFR/
+data/Estrogen_recep_alpha/
+data/HIV_1_Protease/
+data/covid19_main_protease/
+data/custom_pdb_list_data/
+data/pdb_list.txt
+
 *.ckpt
 *.pth
 *.npz
@@ -21,6 +29,7 @@ data/3_40_710_10_20_data
 
 src/models/diffsbdd/data/
 src/models/diffsbdd/bash
+
 
 
 # Job files and logs

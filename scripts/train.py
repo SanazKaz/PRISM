@@ -23,7 +23,9 @@ from pathlib import Path
 import yaml
 import numpy as np
 
+import torch
 import pytorch_lightning as pl
+from pytorch_lightning.callbacks import Callback
 from pytorch_lightning.callbacks import ModelCheckpoint
 
 # Import our new, clean components from the src library
@@ -40,6 +42,39 @@ def dict_to_namespace(d):
             setattr(namespace, key, value)
     return namespace
 
+
+class PTModelCheckpoint(ModelCheckpoint):
+    """
+    Custom Checkpoint class that saves a matching .pt file 
+    every time a .ckpt file is saved (and deletes it when the .ckpt is deleted).
+    """
+    def _save_checkpoint(self, trainer, filepath):
+        # 1. Save the standard .ckpt file
+        super()._save_checkpoint(trainer, filepath)
+        
+        # 2. Save the matching .pt file
+        if trainer.is_global_zero:
+            # Swap extension to .pt
+            pt_path = str(filepath).replace('.ckpt', '.pt')
+            
+            # Save the inner model only
+            # We access the trainer's model directly
+            if hasattr(trainer.lightning_module, 'ddpm_model'):
+                inner_model = trainer.lightning_module.ddpm_model
+                torch.save(inner_model.state_dict(), pt_path)
+                print(f"[PT Checkpoint] Saved matching .pt to {pt_path}")
+
+    def _remove_checkpoint(self, trainer, filepath):
+        # 1. Delete the standard .ckpt file
+        super()._remove_checkpoint(trainer, filepath)
+        
+        # 2. Delete the matching .pt file to keep folder clean
+        if trainer.is_global_zero:
+            pt_path = str(filepath).replace('.ckpt', '.pt')
+            if os.path.exists(pt_path):
+                os.remove(pt_path)
+                print(f"[PT Checkpoint] Removed old .pt file {pt_path}")
+
 def main(args):
     # --- 1. Load Configuration ---
     with open(args.config, 'r') as f:
@@ -51,32 +86,33 @@ def main(args):
         print(f"[SEED] Set random seed to {args.seed}")
     
     # --- 2. Instantiate the DataModule ---
-    # The DataModule handles all data-related setup.
     datamodule = LigandPocketDataModule(config)
 
     # --- 3. Instantiate the LightningModule ---
-    # The LightningModule handles the model and training logic.
     histogram_file = Path(config.datadir, 'size_distribution.npy')
     if not histogram_file.exists():
         raise FileNotFoundError(f"Histogram file not found at {histogram_file}")
     node_histogram = np.load(histogram_file).tolist()
     
     model = PPOFineTuner(config=config, warm_start_checkpoint=args.warm_start_from_ddpm, node_histogram=node_histogram)
-
     
     # --- 4. Setup Callbacks and Trainer ---
-    checkpoint_dir = Path(config.logdir, config.run_identifier, 'checkpoints')
-    checkpoint_dir.mkdir(parents=True, exist_ok=True) # just in case the directory doesn't exist
+    
+    checkpoint_dir = Path(config.logdir, config.run_identifier, 'checkpoints', f'seed={args.seed}')
+    
     print(f"[*********CHECKPOINT will save to**********] {checkpoint_dir}")
-    checkpoint_callback = ModelCheckpoint(
+
+    # CHANGE 2: Update the checkpoint callback arguments
+    checkpoint_callback = PTModelCheckpoint(
         dirpath=str(checkpoint_dir),
         monitor='train/reward_mean', 
         mode='max',
         save_last=True,
-        filename=f"seed={args.seed}-epoch={{epoch}}-reward={{train/reward_mean:.2f}}",
+        filename="epoch={epoch:02d}-reward={train/reward_mean:.2f}",
         save_top_k=3,
         save_on_train_epoch_end=True,
-        )
+        auto_insert_metric_name=False  # <--- CRITICAL: Prevents duplicate "epoch=epoch" and weird folder nesting
+    )
     
     wandb_logger = WandbLogger(
         entity=getattr(config.wandb_params, 'entity', None),
@@ -85,7 +121,6 @@ def main(args):
         config=config_dict,
     )
 
-
     trainer = pl.Trainer(
         max_epochs=config.ppo_params.num_outer_epochs,
         accelerator='gpu',
@@ -93,12 +128,11 @@ def main(args):
         callbacks=[checkpoint_callback],
         enable_progress_bar=config.enable_progress_bar,
         num_sanity_val_steps=config.num_sanity_val_steps,
-        logger=wandb_logger,        # Add any other trainer flags you need from your config
-        # limit_train_batches=1 # for quick debugging
+        logger=wandb_logger,
+        limit_train_batches=1, 
     )
 
     # --- 5. Start Training ---
-    # The trainer now gets both the model and the datamodule.
     trainer.fit(model, datamodule=datamodule, ckpt_path=args.resume_from_checkpoint)
 
 if __name__ == "__main__":

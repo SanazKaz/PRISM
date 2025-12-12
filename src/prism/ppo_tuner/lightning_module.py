@@ -12,14 +12,14 @@ from src.prism.ppo_tuner.ppo_algorithm import PPOAlgorithm
 from src.models.diffsbdd.lightning_modules import LigandPocketDDPM
 from src.prism.data_modules.lightning_datamodule import LigandPocketDataModule # You'll need to create this later
 from src.prism.reward.factory import get_reward_manager
-
+from src.prism.analysis.metrics import MoleculeProperties
 
 class PPOFineTuner(pl.LightningModule):
     """
     This is the main LightningModule for PPO fine-tuning.
     It acts as a lightweight wrapper around the core PPOAlgorithm.
     """
-    def __init__(self, config, node_histogram, warm_start_checkpoint=None):
+    def __init__(self, config, node_histogram=None, warm_start_checkpoint=None):
         super().__init__()
         self.save_hyperparameters(config)
         self.config = config
@@ -114,34 +114,6 @@ class PPOFineTuner(pl.LightningModule):
             betas=(0.9, 0.999)
         )
         return optimizer
-    
-    # def on_train_start(self):
-    #     """
-    #     Freezes everything except the last 2 EGNN blocks (e_block_3 and e_block_4)
-    #     """
-    #     # print("[on_train_start] Applying EGNN freezing strategy...")
-        
-    #     frozen_count = 0
-    #     unfrozen_count = 0
-        
-    #     for name, param in self.ppo_algorithm.policy_network.named_parameters():
-    #         # Keep last 2 EGNN blocks trainable
-    #         if any(x in name for x in ['e_block_3', 'e_block_4']):
-    #             param.requires_grad = True
-    #             # print(f"  KEEPING TRAINABLE: {name}")
-    #         else:
-    #             # Freeze everything else
-    #             param.requires_grad = False
-    #             frozen_count += 1
-        
-    #     # Count final trainable parameters
-    #     for param in self.ppo_algorithm.policy_network.parameters():
-    #         if param.requires_grad:
-    #             unfrozen_count += 1
-        
-    #     trainable_percent = (unfrozen_count / (frozen_count + unfrozen_count)) * 100
-    #     print(f"[TRAINING] {trainable_percent:.1f}% of parameters are trainable")
-                
 
     def training_step(self, batch, batch_idx):
         """

@@ -178,6 +178,7 @@ class PPOAlgorithm:
             "train/clipfrac_epoch": epoch_total_clipfrac / max(epoch_accumulation_steps, 1),
             "train/entropy_epoch": epoch_total_entropy / max(epoch_accumulation_steps, 1),
             "train/reward_mean": self.buffer.rewards.mean().item(),
+            "train/reward_max": self.buffer.rewards.max().item(),
             "train/advantages_mean": self.buffer.advantages.mean().item(),
             "train/advantages_std": self.buffer.advantages.std().item(),
             "train/advantages_min": self.buffer.advantages.min().item(),

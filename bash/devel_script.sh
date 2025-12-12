@@ -10,7 +10,7 @@
 # --- Environment Setup ---
 module purge
 module load Anaconda3
-source activate /data/stat-cadd/wolf7055/conda/envs/TEST_ENV
+source activate /data/stat-cadd/wolf7055/conda/envs/prism_backup
 echo "Python executable: $(which python)"
 
 # --- BEST PRACTICE: Define Project Root ---
@@ -32,7 +32,7 @@ nvidia-smi
 # --- Run the NEW Training Script ---
 echo "Starting PRISM training..."
 srun python "${PROJECT_ROOT}/scripts/train.py" \
-    --config "${PROJECT_ROOT}/configs/ppo_config.yaml" \
+    --config "${PROJECT_ROOT}/configs/ppo_devel.yaml" \
     --warm_start_from_ddpm "/data/stat-cadd/wolf7055/diffsbdd-ppo/checkpoints/crossdocked_fa_cond_temp.ckpt"
 
 # --- Final Diagnostics ---

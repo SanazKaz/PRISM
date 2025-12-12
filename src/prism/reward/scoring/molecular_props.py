@@ -24,7 +24,7 @@ class QEDReward(BaseReward):
 
     def __call__(self, molecules: List[Chem.Mol], **kwargs) -> torch.Tensor:
         # Custom weights: (MW, ALOGP, HBA, HBD, PSA, ROTB, AROM, ALERTS)
-        custom_weights = (0.66, 0.46, 0.05, 0.61, 0.06, 0.20, 0.48, 0.95)
+        custom_weights = (0.66, 0.46, 0.10, 0.61, 0.06, 0.40, 0.6, 0.95)
         scores = []
         
         for mol in molecules:

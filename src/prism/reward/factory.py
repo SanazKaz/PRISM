@@ -5,6 +5,7 @@ from src.prism.reward.scorer import RewardManager
 from src.prism.reward.scoring.molecular_props import QEDReward, SAScoreReward, LipinskiReward, BertzReward
 from src.prism.reward.scoring.sucos import SuCOSReward
 from src.prism.reward.scoring.interaction_fingerprints import InteractionFingerprintsReward
+from src.prism.reward.scoring.feature_density import FeatureDensityReward
 # 1. The Registry
 
 REWARD_REGISTRY = {
@@ -14,7 +15,7 @@ REWARD_REGISTRY = {
     "bertz": BertzReward,
     "sucos": SuCOSReward,
     "interaction_fingerprints": InteractionFingerprintsReward,
-    
+    "feature_density": FeatureDensityReward,
 }
 
 def get_reward_manager(config, dataset_info, ddpm_module=None):
@@ -56,7 +57,16 @@ def get_reward_manager(config, dataset_info, ddpm_module=None):
     else:
         raise TypeError(f"Unexpected type for config.reward_params.rewards: {type(rewards_ns)}")
 
+    reward_paths_ns = getattr(reward_params_ns, 'reward_paths', None)
+    if isinstance(reward_paths_ns, argparse.Namespace):
+        reward_paths = vars(reward_paths_ns)
+    elif isinstance(reward_paths_ns, dict):
+        reward_paths = reward_paths_ns
+    else:
+        reward_paths = {}
+        
     print(f"Initializing Rewards: {rewards_dict}")
+    print(f"Initializing Reward Paths: {reward_paths}")
 
     for name, weight in rewards_dict.items():
         # Skip zero-weighted rewards or internal keys
@@ -72,6 +82,8 @@ def get_reward_manager(config, dataset_info, ddpm_module=None):
         # Only pass dataset_info to rewards that need it (like SuCOS)
         if name == 'sucos' or name == 'interaction_fingerprints':
             active_rewards.append(reward_cls(dataset_info))
+        elif name == 'feature_density':
+            active_rewards.append(reward_cls(reward_paths['feature_density']))
         else:
             active_rewards.append(reward_cls())
             

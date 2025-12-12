@@ -32,7 +32,6 @@ from analysis.docking import smina_score
 class LigandPocketDDPM(pl.LightningModule):
     def __init__(
             self,
-            outdir,
             dataset,
             datadir,
             batch_size,
@@ -50,9 +49,10 @@ class LigandPocketDDPM(pl.LightningModule):
             auxiliary_loss,
             loss_params,
             mode,
-            node_histogram,
             pocket_representation='CA',
-            virtual_nodes=False            
+            virtual_nodes=False,            
+            node_histogram = None,
+            outdir = None,
     ):
         super(LigandPocketDDPM, self).__init__()
         self.save_hyperparameters()
@@ -66,8 +66,9 @@ class LigandPocketDDPM(pl.LightningModule):
 
         self.dataset_name = dataset
         self.datadir = datadir
-        self.outdir = Path(outdir)
-        self.outdir.mkdir(parents=True, exist_ok=True)
+        self.outdir = Path(outdir) if outdir is not None else None
+        if self.outdir is not None:
+            self.outdir.mkdir(parents=True, exist_ok=True)
         self.batch_size = batch_size
         self.eval_batch_size = eval_params.eval_batch_size \
             if 'eval_batch_size' in eval_params else batch_size

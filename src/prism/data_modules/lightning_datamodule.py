@@ -90,27 +90,3 @@ class LigandPocketDataModule(pl.LightningDataModule):
             pin_memory=True
         )
 
-# class RollingWindowSampler(torch.utils.data.Sampler):
-#     """
-#     Your custom sampler. It now takes the trainer instance to get the
-#     current epoch and rank, keeping it neatly inside the DataModule.
-#     """
-#     def __init__(self, dataset_size, window, trainer):
-#         self.dataset_size = dataset_size
-#         self.window = window
-#         self.trainer = trainer
-#         # NOTE: We no longer calculate the cursor here.
-
-#     def __iter__(self):
-#         # Calculate the start index for the CURRENT epoch. This is the only
-#         # place this calculation is needed.
-#         world_size = self.trainer.world_size
-#         rank = self.trainer.global_rank
-#         epoch = self.trainer.current_epoch
-        
-#         start = (rank * self.window + epoch * self.window * world_size) % self.dataset_size
-#         end = min(start + self.window, self.dataset_size)
-#         return iter(range(start, end))
-
-#     def __len__(self):
-#         return self.window

@@ -25,28 +25,37 @@ python scripts/process_data.py \
     --input_dir data/pdb_list.txt \
     --output_dir data/Carbonic_Anhydrase_II 
 ```
-
 ## Generating Ligands
-### TODO:  ignore for now - still to decouple from diffsbdd as it is their script.
 
-obtain the diffusion model checkpoint from DiffSBDD using:
-```
-wget -P checkpoints/ https://zenodo.org/record/8183747/files/crossdocked_fullatom_cond.ckpt 
+We provide a standalone generation script that decouples inference from the training logic. This script automatically detects and supports both:
+* **Lightning Checkpoints (`.ckpt`)**: Useful for evaluating models directly after training.
+* **Clean Weights (`.pt`)**: Lightweight files containing only the model state dictionary (no optimizer/scheduler states).
+
+### 1. Get Pre-trained Models
+
+Obtain the original diffusion model checkpoint from DiffSBDD:
+```bash
+wget -P checkpoints/ [https://zenodo.org/record/8183747/files/crossdocked_fullatom_cond.ckpt](https://zenodo.org/record/8183747/files/crossdocked_fullatom_cond.ckpt)
 ```
 obtain our  model checkpoint from DiffSBDD using:
 
-some zenodo link here when models are done
+    some zenodo link here when models are done
 
 Generate molecules from a trained checkpoint using a protein structure:
+
 ```bash
-python src/models/diffsbdd/generate_ligands.py \
-    checkpoints/your_checkpoint.ckpt \
-    --pdbfile path/to/protein.pdb \
+python scripts/generate_ligands.py \
+    checkpoints/seed=42_best_reward.pt \
+    --config configs/ppo_config.yaml \
+    --pdbfile data/pocket_files/protein.pdb \
     --outfile results/generated_ligands.sdf \
-    --ref_ligand path/to/reference_ligand.sdf \
+    --ref_ligand data/sdf_files/reference_ligand.sdf \
     --n_samples 100 \
+    --batch_size 25 \
     --timesteps 500 \
-    --num_nodes_lig 32
+    --num_nodes_lig 25
+    --sanitize 
+    --relax
 ```
 
 ### Configuration

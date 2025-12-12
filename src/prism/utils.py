@@ -214,3 +214,14 @@ def permute_timesteps(rollout_data, device):
 
     return rollout_data
 
+def write_sdf_file(sdf_path, molecules):
+    # NOTE Changed to be compatitble with more versions of rdkit
+    # with Chem.SDWriter(str(sdf_path)) as w:
+    #    for mol in molecules:
+    #        w.write(mol)
+
+    w = Chem.SDWriter(str(sdf_path))
+    w.SetKekulize(False)
+    for m in molecules:
+        if m is not None:
+            w.write(m)

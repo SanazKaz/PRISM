@@ -126,6 +126,7 @@ class RewardManager:
                     **kwargs
                 )
                 
+                
                 # [FIX] Enforce Tensor Type and Device
                 if not isinstance(raw_scores, torch.Tensor):
                     raw_scores = torch.tensor(raw_scores, device=device, dtype=torch.float32)
@@ -153,6 +154,19 @@ class RewardManager:
                 traceback.print_exc()
                 # If a specific reward fails, we leave the accumulator as is for that component
 
+        
+        print(f"\n[Epoch {current_epoch}] Molecule Rewards:")
+        print(f"{'SMILES':<60} {'Total':<10} {' | '.join([r.name for r in self.reward_fns])}")
+        print("-" * 100)
+        for local_idx, mol in enumerate(molecules):
+            batch_idx = mol_to_batch_idx[local_idx]
+            smiles = Chem.MolToSmiles(mol)
+            total = total_rewards[batch_idx].item()
+            components = " | ".join([f"{component_scores[r.name][batch_idx].item():.3f}" for r in self.reward_fns])
+            print(f"{smiles:<60} {total:<10.4f} {components}")
+            
+        
+        
         # [FIX] Sanitize final total rewards to prevent EGNN NaN crash
         total_rewards = torch.nan_to_num(total_rewards, nan=-0.1)
 

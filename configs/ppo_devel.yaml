@@ -1,16 +1,16 @@
-run_identifier: 'DBSCAN_eps_0.5_min_10_AMPC_centered'
+run_identifier: 'lr_4e-5'
 logdir: 'Log_Results'
 wandb_params:
   mode: 'online' # seeing if it will reduce overhead 
   entity: 'sanazkazeminia97'
-  project: 'DBSCAN_feature_density_reward'
+  project: 'qed_sascore_prism_beta_lactamase'
 dataset: 'crossdock' #(refers to the model's dataset_info_key)
 datadir: '/data/stat-cadd/wolf7055/PRISM/data/AMPC_beta_lactamase/03_final_dataset'
 enable_progress_bar: False
 num_sanity_val_steps: 0
-batch_size: 108 # number of pockets to sample for (60)
+batch_size: 1 # number of pockets to sample for (60)
 lr: 1.0e-6 
-num_workers: 4 # suggested by terminal for better parallelisations ???
+num_workers: 0 # suggested by terminal for better parallelisations ???
 gpus: 1
 n_epochs: 1 # lightnings epoch which defines outer epochs using train_dataset size. Leave as 1
 
@@ -27,11 +27,11 @@ loss_params:
   clamp_lj: 3.0
 
 ppo_params:
-  num_outer_epochs: 20          # num of PPO cycles (outer epochs)
+  num_outer_epochs: 5          # num of PPO cycles (outer epochs)
   num_inner_epochs: 2            # Updates per rollout (inner epochs)
-  n_steps: 216                    # Rollout length (mols generated)
-  ligand_chunk_size: 108
-  ppo_batch_size: 108             # Size of each PPO update batch
+  n_steps: 10                    # Rollout length (mols generated)
+  ligand_chunk_size: 10
+  ppo_batch_size: 10             # Size of each PPO update batch
   clip_range: 0.1                # PPO clipping parameter
   value_loss_coef: 0.0           # Weight for value loss
   entropy_coef: 0.001            # Weight for entropy bonus
@@ -40,11 +40,11 @@ ppo_params:
   num_train_timesteps: 150
   num_mini_batches: 1            # Mini-batches per update
   target_kl: 0.03                # Early stopping KL divergence
-  lr: 3.0e-5                     # Optimizer learning rate (0.001)
+  lr: 4.0e-5                     # Optimizer learning rate (0.001)
   mol_timeout_sec: 60
   num_nodes_lig: 25              # fixed number of nodes for ligand
   top_k: False
-  # backward progressive training remove later
+  # backward progressive training
   progressive_training: True
   start_timesteps: 50
   end_timesteps: 350

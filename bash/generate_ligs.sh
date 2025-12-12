@@ -29,24 +29,18 @@ nvidia-smi
 echo "Starting generation..."
 
 
-python src/models/diffsbdd/generate_ligands.py \
-    checkpoints/crossdocked_fa_cond_temp.ckpt \
-    --pdbfile src/models/diffsbdd/data/drd2_strucutres/7e2z.pdb \
-    --outfile results/diffsbdd_150x150_gen/7e2z_gen_traj_diffsbdd.sdf \
-    --ref_ligand src/models/diffsbdd/data/drd2_strucutres/7e2z_9sc.sdf \
-    --n_samples 1 \
-    --timesteps 500 \
-    --num_nodes_lig 32 \
-    --save_traj \
+python scripts/generate_ligands.py \
+'/data/stat-cadd/wolf7055/PRISM/Log_Results/QED_SA_rewards_AMPC/checkpoints/seed=42/epoch=19-reward=0.64.pt' \
+--config /data/stat-cadd/wolf7055/PRISM/configs/ppo_config.yaml \
+--pdbfile /data/stat-cadd/wolf7055/PRISM/data/AMPC_beta_lactamase/02_preprocessed/pocket_files/1c3b_BZB_C_362_pocket.pdb \
+--ref_ligand /data/stat-cadd/wolf7055/PRISM/data/AMPC_beta_lactamase/02_preprocessed/sdf_files/1c3b_BZB_C_362.sdf \
+--n_samples 100 \
+--num_nodes_lig 25 \
+--batch_size 50 \
+--sanitize \
+--outfile /data/stat-cadd/wolf7055/PRISM/Generated_Mols/ampc_1c3b_QED_SA_SCORE/QED_SA_SCORE.sdf
 
-# python test.py \
-#     'Log_Results/Crossdock_QED(1.0)_lr3e-5/checkpoints/ppo-epoch=37-train_reward_mean_epoch=0.00-v1.ckpt' \
-#     --test_dir /data/stat-cadd/wolf7055/diffsbdd-ppo/data/processed_crossdock_noH_full_temp/test \
-#     --outdir Results/cd2020_sampling_results_no_relax_qed \
-#     --n_samples 100 \
-#     --batch_size 64 \
-#     --sanitize \
-#     --skip_existing
+
 
 echo "Generation completed, stopping resource monitoring..."
 

@@ -1,0 +1,14 @@
+
+reward_params:
+  # Map the reward name to its weight
+  # To disable a reward, simply remove it from this list or set weight to 0
+  rewards:
+    qed: 0.0
+    sa_score: 0.0
+    lipinski: 0.0
+    bertz: 0.0
+    sucos: 0.0
+    interaction_fingerprints: 0.0
+    feature_density: 1.0
+  reward_paths:
+    feature_density: 'src/prism/reward/scoring/reward_data/ampc_hotspot_eps0.5_min10.pkl'

@@ -1,15 +1,15 @@
 #!/bin/bash
-#SBATCH --cpus-per-task=4
+#SBATCH --cpus-per-task=8
 #SBATCH --mem=64GB
 #SBATCH --gres=gpu:h100:1
 #SBATCH --ntasks-per-node=1  # node is auto as 1, then n tasks per node should match num of gpus #SBATCH --constraint=gpu_sku:H100
 #SBATCH --partition=short
-#SBATCH --time 08:00:00
-#SBATCH --job-name=QED_SA_PRISM_BETA_LACTAMASE
+#SBATCH --time 04:00:00
+#SBATCH --job-name=DBSCAN_eps_0.5_min_10_AMPC_centered
 #SBATCH --mail-user=wolf7055@ox.ac.uk
 #SBATCH --mail-type=END,FAIL
 #SBATCH --array=0-2
-#SBATCH --output=jobs_files/QED_SA_PRISM_BETA_LACTAMASE-%A_%a.log 
+#SBATCH --output=jobs_files/DBSCAN_eps_0.5_min_10_AMPC_centered-%A_%a.log 
 # Redirect stderr to stdout
 exec 2>&1 
 
@@ -18,7 +18,7 @@ exec 2>&1
 module purge
 module load Anaconda3
 # Load required module
-source activate /data/stat-cadd/wolf7055/conda/envs/TEST_ENV
+source activate /data/stat-cadd/wolf7055/conda/envs/prism_backup
 which python
 # chmod +x analysis/smina.static # make exc
 

@@ -153,7 +153,7 @@ class InteractionFingerprintsReward(BaseReward):
                 )
                 
                 # --- SANITY CHECK (Run 5 times) ---
-                if fp_centered and self.checks_done < 15:
+                if fp_centered and self.checks_done < 5:
                     self._run_sanity_check(pocket_path, sdf_path, fp_centered, base_name)
                     self.checks_done += 1
                 # ----------------------------------
@@ -211,6 +211,11 @@ class InteractionFingerprintsReward(BaseReward):
         return "interaction_fingerprints"
 
     def __call__(self, molecules: List[Chem.Mol], dataset_info=None, **kwargs) -> torch.Tensor:
+        print(f"[ProLIF DEBUG] __call__ invoked with {len(molecules)} molecules", flush=True)
+        if len(molecules) == 0:
+            print("[ProLIF DEBUG] EMPTY molecule list!", flush=True)
+            return torch.zeros(0, dtype=torch.float32)
+        
         scores = []
         names = kwargs.get('names', [])
         
@@ -250,6 +255,10 @@ class InteractionFingerprintsReward(BaseReward):
                     self.fp_generator, 
                     base_name
                 )
+                # Print interactions (compact)
+                print(f"[ProLIF] Mol {idx} ({base_name[:20]}): Tanimoto={tanimoto:.3f}")
+                print(f"  Gen: {gen_set}")
+                print(f"  Ref: {ref_set}")
                 
                 # Tanimoto
                 intersection = len(gen_set.intersection(ref_set))
