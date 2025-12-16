@@ -103,7 +103,7 @@ export DEBUG_PPO=0
 echo "Starting training..."
 srun python scripts/train.py \
 --config "configs/ppo_config.yaml" \
---resume_from_checkpoint "/data/stat-cadd/wolf7055/PRISM/checkpoints/crossdocked_fa_cond_temp.ckpt" \
+--warm_start_from_ddpm "/data/stat-cadd/wolf7055/PRISM/checkpoints/crossdocked_fa_cond_temp.ckpt" \
 --seed $SEED \
 --datadir "$SCRATCH_WORK_DIR" \
 --logdir "$BASE_LOG_DIR" \
