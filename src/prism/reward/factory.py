@@ -6,6 +6,8 @@ from src.prism.reward.scoring.molecular_props import QEDReward, SAScoreReward, L
 from src.prism.reward.scoring.sucos import SuCOSReward
 from src.prism.reward.scoring.interaction_fingerprints import InteractionFingerprintsReward
 from src.prism.reward.scoring.feature_density import FeatureDensityReward
+from src.prism.reward.scoring.geometry_checks import PoseBustersGeometryChecks
+from src.prism.reward.scoring.flatness_checks import PoseBustersFlatnessReward
 # 1. The Registry
 
 REWARD_REGISTRY = {
@@ -16,6 +18,8 @@ REWARD_REGISTRY = {
     "sucos": SuCOSReward,
     "interaction_fingerprints": InteractionFingerprintsReward,
     "feature_density": FeatureDensityReward,
+    "geometry_checks": PoseBustersGeometryChecks,
+    "flatness_checks": PoseBustersFlatnessReward,
 }
 
 def get_reward_manager(config, dataset_info, ddpm_module=None):

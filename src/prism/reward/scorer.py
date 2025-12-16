@@ -25,6 +25,21 @@ class BaseReward(ABC):
     def name(self) -> str:
         """Name of the reward for logging purposes."""
         pass
+    
+    @property
+    def increase_weight_after_epoch(self) -> Optional[int]:
+        """The epoch after which to increase the weight.
+        If None, the weight will not be increased.
+        """
+        return None
+    
+    @property
+    def increased_weight_multiplier(self) -> Optional[float]:
+        """Multiplier applied to the original weight after the epoch threshold.
+        If None, the weight will not be increased.
+        """
+        return 1.0
+        
 
 class RewardManager:
     """
@@ -58,6 +73,29 @@ class RewardManager:
             if reward.name not in self.weights:
                 raise ValueError(f"Weight for reward '{reward.name}' not found in reward_weights.")
 
+    def _get_effective_weight(self, reward_fn: BaseReward, current_epoch: int) -> float:
+        """
+        Calculate the effective weight for a reward function based on current epoch.
+        
+        Args:
+            reward_fn: The reward function instance.
+            current_epoch: Current training epoch.
+            
+        Returns:
+            Effective weight to use for this reward.
+        """
+        base_weight = self.base_weights[reward_fn.name]
+        
+        # Check if this reward has weight scheduling enabled
+        epoch_threshold = reward_fn.increase_weight_after_epoch
+        if epoch_threshold is not None and current_epoch >= epoch_threshold:
+            multiplier = reward_fn.increased_weight_multiplier
+            effective_weight = base_weight * multiplier
+            return effective_weight
+        
+        return base_weight
+    
+    
     def __call__(self, 
                  xh_lig: torch.Tensor, 
                  global_lig_mask: torch.Tensor, 
@@ -139,6 +177,10 @@ class RewardManager:
                 # [DEBUG] Log raw scores for this component
 
                 weight = self.weights[reward_fn.name]
+                
+                if current_epoch > 10:
+                    weight = 0.7
+                    
                 
                 # Map local list indices back to the original batch tensor
                 for local_idx, batch_idx in mol_to_batch_idx.items():

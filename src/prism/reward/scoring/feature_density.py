@@ -114,6 +114,7 @@ class FeatureDensityReward(BaseReward):
         
         placement_score = score / max_score if max_score > 0 else 0.0
         
+        print(f"Placement score: {placement_score}")
         # Calculate Profile Score (Count matching)
         profile_score = 0.0
         for feat_type, (ideal_count, tolerance) in self.target_profile.items():

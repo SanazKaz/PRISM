@@ -9,11 +9,11 @@ from pytorch_lightning.loggers import WandbLogger
 
 # Add project root to path
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.append(project_root)
+sys.path.insert(0, project_root)
 
 # Add diffsbdd directory to path so its old imports work unchanged
 diffsbdd_path = Path(project_root) / "src" / "models" / "diffsbdd"
-sys.path.insert(0, str(diffsbdd_path))
+sys.path.insert(1, str(diffsbdd_path))
 # later replace with toml
 
 
@@ -84,6 +84,23 @@ def main(args):
     if args.seed is not None:
         pl.seed_everything(args.seed, workers=True)
         print(f"[SEED] Set random seed to {args.seed}")
+        
+    if args.datadir is not None:
+        config.datadir = args.datadir
+        print(f"[DATADIR] Set datadir to {args.datadir}")
+
+    if args.logdir is not None:
+        config.logdir = args.logdir
+        print(f"[LOGDIR] Override logdir to {args.logdir}")
+        
+    
+    if hasattr(config, 'eval_params'):
+        # We assume the file is always named 'train_smiles.npy' and lives in the datadir
+        smiles_path = Path(config.datadir) / 'train_smiles.npy'
+        
+        # Overwrite the hardcoded path from YAML
+        config.eval_params.smiles_file = str(smiles_path)
+        print(f"[EVAL] Auto-updated smiles_file path to: {smiles_path}")
     
     # --- 2. Instantiate the DataModule ---
     datamodule = LigandPocketDataModule(config)
@@ -98,11 +115,22 @@ def main(args):
     
     # --- 4. Setup Callbacks and Trainer ---
     
-    checkpoint_dir = Path(config.logdir, config.run_identifier, 'checkpoints', f'seed={args.seed}')
-    
-    print(f"[*********CHECKPOINT will save to**********] {checkpoint_dir}")
+    # If passed explicitly, use it. Otherwise try to derive it (risky on scratch).
+    if args.dataset_name:
+        dataset_name = args.dataset_name
+    else:
+        # Fallback: risky if folder structure changes!
+        dataset_name = Path(config.datadir).parent.name 
 
-    # CHANGE 2: Update the checkpoint callback arguments
+    checkpoint_dir = Path(config.logdir, 
+                          config.run_identifier, 
+                          'checkpoints',
+                          dataset_name,
+                          f'seed={args.seed}',
+                          )
+    
+    print(f"[********* CHECKPOINT DIR **********] {checkpoint_dir}")
+
     checkpoint_callback = PTModelCheckpoint(
         dirpath=str(checkpoint_dir),
         monitor='train/reward_mean', 
@@ -111,13 +139,15 @@ def main(args):
         filename="epoch={epoch:02d}-reward={train/reward_mean:.2f}",
         save_top_k=3,
         save_on_train_epoch_end=True,
-        auto_insert_metric_name=False  # <--- CRITICAL: Prevents duplicate "epoch=epoch" and weird folder nesting
+        auto_insert_metric_name=False 
     )
     
+    run_name = f"{config.run_identifier}_{dataset_name}_seed{args.seed}"
+
     wandb_logger = WandbLogger(
         entity=getattr(config.wandb_params, 'entity', None),
         project=getattr(config.wandb_params, 'project', 'PRISM-Training'),
-        name=config.run_identifier,
+        name=run_name,
         config=config_dict,
     )
 
@@ -141,6 +171,11 @@ if __name__ == "__main__":
     parser.add_argument('--resume_from_checkpoint', type=str, default=None, help="Path to resume PPO training from.")
     parser.add_argument('--warm_start_from_ddpm', type=str, default=None, help="Path to pretrained DDPM checkpoint for warm start")
     parser.add_argument('--seed', type=int, default=42, help="Random seed for reproducibility")
+    parser.add_argument('--datadir', type=str, default=None, help="Path to the dataset")
+    
+    # [FIX 4] Added missing arguments to avoid crash
+    parser.add_argument('--logdir', type=str, default=None, help="Override log directory (Safe Scratch)")
+    parser.add_argument('--dataset_name', type=str, default=None, help="Explicit dataset name (fixes scratch naming bug)")
     
     args = parser.parse_args()
     main(args)

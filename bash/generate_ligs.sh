@@ -1,11 +1,11 @@
 #!/bin/bash
 #SBATCH --cpus-per-task=4
-#SBATCH --partition=short 
-#SBATCH --gres=gpu:h100:1
-#SBATCH --time 6:00:00
-#SBATCH --job-name=Diffsbdd_150x150_gen
+#SBATCH --partition=devel 
+#SBATCH --gres=gpu:1
+#SBATCH --time 00:10:00
+#SBATCH --job-name=ampc_1c3b_QED_SA_SCORE_gen
 #SBATCH --mail-user=wolf7055@ox.ac.uk
-#SBATCH --output=jobs_files/diffsbdd_150x150_gen.log
+#SBATCH --output=jobs_files/GEN_FILE.log
 # Redirect stderr to stdout
 exec 2>&1
 # Clear pre-loaded modules to ensure clean state // --constraint='gpu_mem:24GB'#SBATCH --gres=gpu:h100:1#SBATCH --array=0-7--constraint=gpu_sku:H100
@@ -16,7 +16,7 @@ module load Anaconda3
 # Load required module
 source activate /data/stat-cadd/wolf7055/conda/envs/TEST_ENV
 which python
-chmod +x analysis/smina.static # make exc # SBATCH --mem=GB
+chmod +x /data/stat-cadd/wolf7055/PRISM/val_analysis/smina.static # make exc # SBATCH --mem=GB
 
 
 
@@ -30,7 +30,7 @@ echo "Starting generation..."
 
 
 python scripts/generate_ligands.py \
-'/data/stat-cadd/wolf7055/PRISM/Log_Results/QED_SA_rewards_AMPC/checkpoints/seed=42/epoch=19-reward=0.64.pt' \
+'/data/stat-cadd/wolf7055/PRISM/Log_Results/PB_Geo_Flat_1.0_cont_0.8_0.2/checkpoints/seed=42/epoch=29-reward=0.87.pt' \
 --config /data/stat-cadd/wolf7055/PRISM/configs/ppo_config.yaml \
 --pdbfile /data/stat-cadd/wolf7055/PRISM/data/AMPC_beta_lactamase/02_preprocessed/pocket_files/1c3b_BZB_C_362_pocket.pdb \
 --ref_ligand /data/stat-cadd/wolf7055/PRISM/data/AMPC_beta_lactamase/02_preprocessed/sdf_files/1c3b_BZB_C_362.sdf \
@@ -38,7 +38,7 @@ python scripts/generate_ligands.py \
 --num_nodes_lig 25 \
 --batch_size 50 \
 --sanitize \
---outfile /data/stat-cadd/wolf7055/PRISM/Generated_Mols/ampc_1c3b_QED_SA_SCORE/QED_SA_SCORE.sdf
+--outfile /data/stat-cadd/wolf7055/PRISM/Generated_Mols/pb_valid_runs/PB_Geo_Flat_1.0_cont_0.8_0.2_Seed42.sdf
 
 
 

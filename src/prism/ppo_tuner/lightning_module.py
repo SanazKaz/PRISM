@@ -12,7 +12,11 @@ from src.prism.ppo_tuner.ppo_algorithm import PPOAlgorithm
 from src.models.diffsbdd.lightning_modules import LigandPocketDDPM
 from src.prism.data_modules.lightning_datamodule import LigandPocketDataModule # You'll need to create this later
 from src.prism.reward.factory import get_reward_manager
-from src.prism.analysis.metrics import MoleculeProperties
+from src.prism.utils import build_molecules_from_batch
+from val_analysis.smina_docking import SminaDocking
+from val_analysis.metrics import MoleculeMetrics
+
+
 
 class PPOFineTuner(pl.LightningModule):
     """
@@ -114,6 +118,7 @@ class PPOFineTuner(pl.LightningModule):
             betas=(0.9, 0.999)
         )
         return optimizer
+            
 
     def training_step(self, batch, batch_idx):
         """
@@ -141,6 +146,102 @@ class PPOFineTuner(pl.LightningModule):
         # For validation, we use the original model's logic
         return self.ddpm_model.validation_step(batch, batch_idx)
     
-    def on_validation_epoch_end(self):
-        return self.ddpm_model.on_validation_epoch_end()
+    def _run_validation(self):
+        """
+        Runs validation on the validation set of pockets (same as train)
+        Calculates metrics in analysis/metrics.py
+        """
+        
+        self.ddpm_model.eval()
+        
+        try:  # <--- MOVE THIS OUT, should wrap the entire block
+            with torch.no_grad():
+            
+                val_dataloader = self.trainer.datamodule.val_dataloader()
+                
+                n_eval_samples = self.config.eval_params.n_eval_samples  # 20 from config
+                eval_batch_size = self.config.eval_params.eval_batch_size  # 20 from config
+                
+                val_batch = next(iter(val_dataloader))
+                actual_batch_size = min(eval_batch_size, len(val_batch['num_pocket_nodes']))  # <--- FIX: min not len
+                
+                val_batch_subset = {
+                    key: value[:actual_batch_size] if torch.is_tensor(value) 
+                    else value[:actual_batch_size] if isinstance(value, list)
+                    else value
+                    for key, value in val_batch.items()
+                }
+                
+                print(f"[Validation] Generating molecules for {actual_batch_size} pockets...")
+                # We pass the validation batch through the collector
+                get_ligand_and_pocket_fn = self.ddpm_model.get_ligand_and_pocket
+                
+                rollout_data = self.ppo_algorithm.collector.collect(
+                    pocket_batch=val_batch_subset,
+                    current_epoch=self.current_epoch,
+                    get_ligand_and_pocket_fn=get_ligand_and_pocket_fn
+                )
+                
+                # 3. Extract molecules from rollout data
+                if rollout_data['rewards'].numel() == 0:
+                    print("[Validation] No valid molecules generated, skipping metrics.")
+                    return
+                
+                xh_lig = rollout_data['molecules'][0]  # ligand features
+                global_lig_mask = rollout_data['masks'][0]  # which atoms belong to which molecule
+                
+                print(f"[Validation] Generated {len(torch.unique(global_lig_mask))} molecules")
+                            
+                molecules, mol_to_batch_idx = build_molecules_from_batch(
+                    xh_lig,
+                    global_lig_mask,
+                    self.dataset_info,
+                    self.ddpm_model
+                )
+                
+                print(f"[Validation] Successfully built {len(molecules)} valid RDKit molecules")
+                
+                # 5. Calculate metrics using analysis module
+                names = val_batch_subset.get('names', None)
+                
+                metrics_calculator = MoleculeMetrics(dataset_info=self.dataset_info)
+                basic_metrics = metrics_calculator.evaluate_batch(molecules)
+                
+                docking_calculator = SminaDocking(dataset_info=self.dataset_info, local_opt=False, timeout=60)
+                docking_metrics = docking_calculator.dock_batch(molecules, names=names)
+                
+                
+                metrics = {**basic_metrics, **docking_metrics}
+                                
+                # 6. Log metrics to WandB
+                val_metrics = {f"val/{key}": value for key, value in metrics.items()}
+                self.log_dict(val_metrics, on_step=False, on_epoch=True)
+                
+                # Print summary
+                print(f"\n[Validation Results - Epoch {self.current_epoch + 1}]")
+                print("-" * 60)
+                for key, value in metrics.items():
+                    print(f"  {key}: {value:.4f}")
+                print("-" * 60 + "\n")
+                
+        except Exception as e:
+            print(f"[Validation] Error during validation: {e}")
+            import traceback
+            traceback.print_exc()
+        
+        finally:
+            # Always return to train mode
+            self.ddpm_model.train()    
+            
+    
+    def on_train_epoch_end(self):
+        """
+        called by lightning trainer after each training epoch.
+        Triggers validation at specific intervals.
+        """
+        if (self.current_epoch + 1) % self.config.eval_epochs == 0:
+            print(f"\n{'='*80}")
+            print(f"Running validation at epoch {self.current_epoch + 1}")
+            print(f"{'='*80}\n")
+            self._run_validation() # custom method to handle validation
     
