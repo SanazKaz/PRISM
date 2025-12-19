@@ -1,9 +1,9 @@
 #!/bin/bash
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=32GB
-#SBATCH --gres=gpu:1
-#SBATCH --partition=devel
-#SBATCH --time 00:10:00
+#SBATCH --gres=gpu:h100:1
+#SBATCH --partition=short
+#SBATCH --time 02:00:00
 #SBATCH --job-name=PRISM_scratch_test
 #SBATCH --output=jobs_files/PRISM_scratch_test.log
 
@@ -60,7 +60,7 @@ nvidia-smi
 echo "Starting PRISM training using Scratch Data..."
 
 srun python "${PROJECT_ROOT}/scripts/train.py" \
-    --config "${PROJECT_ROOT}/configs/ppo_devel.yaml" \
+    --config "${PROJECT_ROOT}/configs/ppo_config.yaml" \
     --resume_from_checkpoint "/data/stat-cadd/wolf7055/PRISM/Log_Results/PB_Geo_Flat_1.0/checkpoints/seed=789/epoch=09-reward=0.83.ckpt" \
     --datadir "${SCRATCH_DATASET_DIR}"
 
