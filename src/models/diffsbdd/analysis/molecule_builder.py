@@ -158,7 +158,6 @@ def build_molecule(positions, atom_types, dataset_info, add_coords=False,
         mol = make_mol_openbabel(positions, atom_types,
                                  dataset_info["atom_decoder"])
     else:
-        print(f"using RDKIT to build mol.")
         mol = make_mol_edm(positions, atom_types, dataset_info, add_coords)
 
     return mol
@@ -253,49 +252,3 @@ def filter_rd_mol(rdmol):
                 return False
 
     return True
-
-
-def center_pocket_on_ligand_com(pocket_pdb_path: str, ref_ligand_sdf_path: str):
-    """
-    Centers a protein pocket and a reference ligand based on the ligand's 
-    center of mass (CoM).
-
-    This function ensures that the pocket is positioned in the same reference 
-    frame that a diffusion model, trained on ligand-centered data, would expect.
-
-    Args:
-        pocket_pdb_path (str): The file path to the pocket's PDB file.
-        ref_ligand_sdf_path (str): The file path to the reference ligand's SDF file.
-
-    Returns:
-        tuple: A tuple containing:
-            - (Bio.PDB.Structure.Structure): The centered pocket structure object.
-            - (rdkit.Chem.rdchem.Mol): The centered RDKit molecule object for the reference ligand.
-    """
-    # 1. Load the reference ligand and pocket structure.
-    ref_mol_supplier = Chem.SDMolSupplier(ref_ligand_sdf_path, removeHs=False)
-    ref_mol = next((m for m in ref_mol_supplier if m is not None), None)
-    if ref_mol is None:
-        raise ValueError(f"Could not load a valid molecule from {ref_ligand_sdf_path}")
-
-    pocket_parser = PDBParser(QUIET=True)
-    pocket_structure = pocket_parser.get_structure("pocket", pocket_pdb_path)
-
-    # 2. Calculate the center of mass (CoM) of the reference ligand.
-    lig_coords = ref_mol.GetConformer(0).GetPositions()
-    lig_com = np.mean(lig_coords, axis=0)
-
-    # 3. Center the pocket by subtracting the ligand's CoM.
-    for atom in pocket_structure.get_atoms():
-        atom.set_coord(atom.get_coord() - lig_com)
-
-    # 4. Center the reference ligand by subtracting its own CoM.
-    centered_ref_conf = Chem.Conformer(ref_mol.GetNumAtoms())
-    for i in range(ref_mol.GetNumAtoms()):
-        new_pos = lig_coords[i] - lig_com
-        centered_ref_conf.SetAtomPosition(i, new_pos)
-    ref_mol.RemoveAllConformers()
-    ref_mol.AddConformer(centered_ref_conf)
-
-    return pocket_structure, ref_mol
-

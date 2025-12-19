@@ -22,12 +22,13 @@ from equivariant_diffusion.conditional_model import ConditionalDDPM, \
     SimpleConditionalDDPM
 from dataset import ProcessedLigandPocketDataset
 import utils
-from analysis.visualization import save_xyz_file, visualize, visualize_chain, visualize_ligand_only
+from analysis.visualization import save_xyz_file, visualize, visualize_chain
 from analysis.metrics import BasicMolecularMetrics, CategoricalDistribution, \
     MoleculeProperties
-from analysis.molecule_builder import build_molecule, process_molecule, center_pocket_on_ligand_com
+from analysis.molecule_builder import build_molecule, process_molecule
 from analysis.docking import smina_score
 
+# TODO Undo any changes  
 
 class LigandPocketDDPM(pl.LightningModule):
     def __init__(
@@ -479,81 +480,39 @@ class LigandPocketDDPM(pl.LightningModule):
        
  
     @torch.no_grad()
-    def sample_and_analyze_given_pocket(self, n_samples, dataset=None, batch_size=None):
-        # Skip computation on non-global-zero ranks in distributed settings
-        if torch.distributed.is_initialized() and not self.trainer.is_global_zero:
-            return {}  # Return empty dictionary to avoid errors
-
-        print(f'Analyzing sampled molecules given pockets at epoch {self.current_epoch}...')
+    def sample_and_analyze_given_pocket(self, n_samples, dataset=None,
+                                        batch_size=None):
+        print(f'Analyzing sampled molecules given pockets at epoch '
+              f'{self.current_epoch}...')
 
         batch_size = self.batch_size if batch_size is None else batch_size
         batch_size = min(batch_size, n_samples)
 
-        molecules, atom_types, aa_types = [], [], []
-        receptors = []  # This will now hold Bio.PDB objects
-        ref_ligands = []  # This will hold RDKit Mol objects for autobox
-
+        # each item in molecules is a tuple (position, atom_type_encoded)
+        molecules = []
+        atom_types = []
+        aa_types = []
+        receptors = []
         for i in range(math.ceil(n_samples / batch_size)):
+
             n_samples_batch = min(batch_size, n_samples - len(molecules))
 
             # Create a batch
             batch = dataset.collate_fn(
                 [dataset[(i * batch_size + j) % len(dataset)]
-                for j in range(n_samples_batch)]
+                 for j in range(n_samples_batch)]
             )
 
-            # For each item in the batch, load and center the pocket and ref ligand
-            for name in batch['names']:
-                try:
-                    # 1. Gracefully parse the messy name from the .npz file to get the base name.
-                    # e.g., 'data/.../7dfp_D_SIP_pocket_only.pdb_...' -> '7dfp_D_SIP'
-                    base_name = Path(name.split('_pocket_only.pdb')[0]).name
+            ligand, pocket = self.get_ligand_and_pocket(batch)
+            receptors.extend([self.get_full_path(x) for x in batch['receptors']])
 
-                    # 2. **FIX**: Construct paths directly within the main data directory.
-                    # This assumes your validation files are now in 'data/drd2_strucutres/'.
-                    # If you have a 'val' subfolder, use: gt_files_dir = Path(self.datadir) / 'val'
-                    gt_files_dir = Path(self.datadir)
-
-                    # 3. Construct the correct, full paths to the ground truth files.
-                    lig_sdf_path = gt_files_dir / f"{base_name}.sdf"
-                    poc_pdb_path = gt_files_dir / f"{base_name}_pocket_only.pdb" # Use the pocket-specific name
-
-                    # 4. Check that the files actually exist before proceeding.
-                    if not lig_sdf_path.exists():
-                        print(f"[WARN] Could not find original ligand SDF at: {lig_sdf_path}")
-                        receptors.append(None)
-                        ref_ligands.append(None)
-                        continue
-                    if not poc_pdb_path.exists():
-                        print(f"[WARN] Could not find original pocket PDB at: {poc_pdb_path}")
-                        receptors.append(None)
-                        ref_ligands.append(None)
-                        continue
-
-                    # Center the pocket on the ligand's COM using the correct files
-                    centered_pocket_obj, centered_ref_lig_obj = center_pocket_on_ligand_com(
-                        str(poc_pdb_path), str(lig_sdf_path)
-                    )
-                    
-                    # Append the IN-MEMORY OBJECTS to our lists
-                    receptors.append(centered_pocket_obj)
-                    ref_ligands.append(centered_ref_lig_obj)
-
-                except Exception as e:
-                    print(f"Could not process receptor for {name}: {e}")
-                    receptors.append(None) # Add a placeholder on failure
-                    ref_ligands.append(None)
-
-            # Generate molecules with the diffusion model
-            ligand, pocket, _ = self.get_ligand_and_pocket(batch)
-            
             if self.virtual_nodes:
                 num_nodes_lig = self.max_num_nodes
             else:
                 num_nodes_lig = self.ddpm.size_distribution.sample_conditional(
                     n1=None, n2=pocket['size'])
 
-            xh_lig, xh_pocket, lig_mask, _, _, _ = self.ddpm.sample_given_pocket(
+            xh_lig, xh_pocket, lig_mask, _ = self.ddpm.sample_given_pocket(
                 pocket, num_nodes_lig)
 
             x = xh_lig[:, :self.x_dims].detach().cpu()
@@ -576,30 +535,27 @@ class LigandPocketDDPM(pl.LightningModule):
             aa_types.extend(
                 xh_pocket[:, self.x_dims:].argmax(1).detach().cpu().tolist())
 
-        # Pass the lists of centered pocket objects and ref ligands to the analysis function
         return self.analyze_sample(molecules, atom_types, aa_types,
-                                receptors=receptors,
-                                ref_ligands_for_docking=ref_ligands)
+                                   receptors=receptors)
 
 
 
-
-
-    def analyze_sample(self, molecules, atom_types, aa_types, receptors=None, ref_ligands_for_docking=None):
-        # --- Other Metrics Calculation (No Change Here) ---
-        # This part is for logging other metrics and can use its own filtering
+    def analyze_sample(self, molecules, atom_types, aa_types, receptors=None):
+        # Distribution of node types
         kl_div_atom = self.ligand_type_distribution.kl_divergence(atom_types) \
             if self.ligand_type_distribution is not None else -1
         kl_div_aa = self.pocket_type_distribution.kl_divergence(aa_types) \
             if self.pocket_type_distribution is not None else -1
 
+        # Convert into rdmols
         rdmols = [build_molecule(*graph, self.dataset_info) for graph in molecules]
-        
-        (validity, connectivity, uniqueness, novelty), (_, connected_mols_for_metrics) = \
+
+        # Other basic metrics
+        (validity, connectivity, uniqueness, novelty), (_, connected_mols) = \
             self.ligand_metrics.evaluate_rdmols(rdmols)
-        
+
         qed, sa, logp, lipinski, diversity = \
-            self.molecule_properties.evaluate_mean(connected_mols_for_metrics)
+            self.molecule_properties.evaluate_mean(connected_mols)
 
         out = {
             'kl_div_atom_types': kl_div_atom,
@@ -615,76 +571,18 @@ class LigandPocketDDPM(pl.LightningModule):
             'Diversity': diversity
         }
 
-        # --- Docking Calculation (New, Robust Logic) ---
-        smina_scores = []
-        if receptors is not None and ref_ligands_for_docking is not None:
-            # We iterate through the original rdmols list to maintain index alignment
-            for i, mol in enumerate(rdmols):
-                # Ensure we don't go out of bounds if lists are somehow mismatched
-                if i >= len(receptors) or i >= len(ref_ligands_for_docking):
-                    continue
+        # Simple docking score
+        if receptors is not None:
+            # out['smina_score'] = np.mean(smina_score(rdmols, receptors))
+            out['smina_score'] = np.mean(smina_score(connected_mols, receptors))
 
-                receptor = receptors[i]
-                ref_ligand = ref_ligands_for_docking[i]
-
-                # Check if this specific molecule and its receptor are valid for docking
-                # A simple connectivity check is to see if it has at least 2 atoms.
-                if mol is None or mol.GetNumAtoms() < 2 or receptor is None or ref_ligand is None:
-                    smina_scores.append(0.0) # Assign a bad score for invalid/unconnected molecules
-                    continue
-
-                # Perform docking for the single valid molecule
-                # smina_score expects lists, so we wrap our single items in a list
-                score = smina_score(
-                    [mol],
-                    [receptor],
-                    ref_ligand_file=ref_ligand,
-                    local_opt=False
-                )
-                print(f"Smina score: {score}")
-                
-                # smina_score returns a list, e.g., [-7.5], or None on failure
-                if score and score[0] is not None:
-                    smina_scores.append(score[0])
-                else:
-                    smina_scores.append(0.0) # Assign bad score on docking failure
-
-            # Add the final averaged score to the output dictionary
-            if smina_scores:
-                # Filter out any potential placeholder values if needed
-                valid_scores = [s for s in smina_scores if s is not None and s < 0]
-                out['smina_score'] = np.mean(valid_scores) if valid_scores else 0.0
-            else:
-                out['smina_score'] = 0.0
-        
         return out
 
 
-
-
-    def get_full_path(self, receptor_name: str) -> Path:
-        """
-        Correctly parses the complex name from the batch to find the
-        actual pocket PDB file in the validation set.
-        """
-        try:
-            # First, split the string on the unique pocket identifier to isolate the first part.
-            # e.g., 'data/.../7dfp_D_SIP_pocket_only.pdb_...' -> 'data/.../7dfp_D_SIP_pocket_only'
-            base_name_with_suffix = receptor_name.split('.pdb_')[0]
-
-            # Then, get just the filename part, which strips away any directory path.
-            # e.g., 'data/.../7dfp_D_SIP_pocket_only' -> '7dfp_D_SIP_pocket_only'
-            clean_name = Path(base_name_with_suffix).stem
-
-            # Finally, construct the single, correct path to the file in the val directory.
-            # self.datadir should point to '.../processed_ligand_free_pockets_drd2'
-            return Path(self.datadir, 'val', f"{clean_name}.pdb")
-
-        except Exception:
-            # Fallback for any unexpected name format
-            print(f"[WARN] Could not parse receptor name: {receptor_name}")
-            # Return a path that will likely fail gracefully, preventing a crash.
-            return Path(self.datadir, 'val', receptor_name)
+    def get_full_path(self, receptor_name):
+        pdb, suffix = receptor_name.split('.')
+        receptor_name = f'{pdb.upper()}-{suffix}.pdb'
+        return Path(self.datadir, 'val', receptor_name)
 
 
 
@@ -711,21 +609,15 @@ class LigandPocketDDPM(pl.LightningModule):
                       name='molecule',
                       batch_mask=torch.cat((lig_mask, pocket_mask)))
         # visualize(str(outdir), dataset_info=self.dataset_info, wandb=wandb)
-        visualize(str(outdir), dataset_info=self.dataset_info, wandb=self.logger.experiment)
-    
+        visualize(str(outdir), dataset_info=self.dataset_info, wandb=None)
     
     
     def sample_and_save_given_pocket(self, n_samples):
-        # Skip computation on non-global-zero ranks in distributed settings
-        if not self.trainer.is_global_zero:
-            return
-
-
         batch = self.val_dataset.collate_fn(
             [self.val_dataset[i] for i in torch.randint(len(self.val_dataset),
                                                         size=(n_samples,))]
         )
-        ligand, pocket, _ = self.get_ligand_and_pocket(batch)
+        ligand, pocket = self.get_ligand_and_pocket(batch)
 
         if self.virtual_nodes:
             num_nodes_lig = self.max_num_nodes
@@ -733,7 +625,7 @@ class LigandPocketDDPM(pl.LightningModule):
             num_nodes_lig = self.ddpm.size_distribution.sample_conditional(
                 n1=None, n2=pocket['size'])
 
-        xh_lig, xh_pocket, lig_mask, pocket_mask, _, _ = \
+        xh_lig, xh_pocket, lig_mask, pocket_mask = \
             self.ddpm.sample_given_pocket(pocket, num_nodes_lig)
 
         if self.pocket_representation == 'CA':
@@ -748,29 +640,10 @@ class LigandPocketDDPM(pl.LightningModule):
 
         outdir = Path(self.outdir, f'epoch_{self.current_epoch}')
         save_xyz_file(str(outdir) + '/', one_hot, x, self.lig_type_decoder,
-                    name='molecule',
-                    batch_mask=torch.cat((lig_mask, pocket_mask)))
-        
-        # Save ligand-only visualization 
-        ligand_outdir = Path(self.outdir, f'epoch_{self.current_epoch}/ligand_only')
-        ligand_outdir.mkdir(parents=True, exist_ok=True)
-        
-        # Save ligand-only XYZ files
-        x_lig = xh_lig[:, :self.x_dims]
-        one_hot_lig = xh_lig[:, self.x_dims:]
-        save_xyz_file(str(ligand_outdir) + '/', one_hot_lig, x_lig, 
-                    self.lig_type_decoder, name='ligand', batch_mask=lig_mask)
-        
-        # Visualize only on the global rank 0
-        visualize(str(outdir), dataset_info=self.dataset_info, wandb=self.logger.experiment)
-        try:
-            visualize_ligand_only(str(ligand_outdir), dataset_info=self.dataset_info, 
-                            wandb=self.logger.experiment, spheres_3d=True)
-        except NameError:
-            # In case visualize_ligand_only is not defined
-            print("Warning: visualize_ligand_only function not found, skipping ligand-only visualization")
-
-
+                      name='molecule',
+                      batch_mask=torch.cat((lig_mask, pocket_mask)))
+        # visualize(str(outdir), dataset_info=self.dataset_info, wandb=wandb)
+        visualize(str(outdir), dataset_info=self.dataset_info, wandb=None)
 
     def sample_chain_and_save(self, keep_frames):
         n_samples = 1
@@ -822,17 +695,62 @@ class LigandPocketDDPM(pl.LightningModule):
         visualize_chain(str(outdir), self.dataset_info, wandb=self.logger.experiment)
         
 
+    def sample_chain_and_save(self, keep_frames):
+        n_samples = 1
+
+        num_nodes_lig, num_nodes_pocket = \
+            self.ddpm.size_distribution.sample(n_samples)
+
+        chain_lig, chain_pocket, _, _ = self.ddpm.sample(
+            n_samples, num_nodes_lig, num_nodes_pocket,
+            return_frames=keep_frames, device=self.device)
+
+        chain_lig = utils.reverse_tensor(chain_lig)
+        chain_pocket = utils.reverse_tensor(chain_pocket)
+
+        # Repeat last frame to see final sample better.
+        chain_lig = torch.cat([chain_lig, chain_lig[-1:].repeat(10, 1, 1)],
+                              dim=0)
+        chain_pocket = torch.cat(
+            [chain_pocket, chain_pocket[-1:].repeat(10, 1, 1)], dim=0)
+
+        # Prepare entire chain.
+        x_lig = chain_lig[:, :, :self.x_dims]
+        one_hot_lig = chain_lig[:, :, self.x_dims:]
+        one_hot_lig = F.one_hot(
+            torch.argmax(one_hot_lig, dim=2),
+            num_classes=len(self.lig_type_decoder))
+        x_pocket = chain_pocket[:, :, :self.x_dims]
+        one_hot_pocket = chain_pocket[:, :, self.x_dims:]
+        one_hot_pocket = F.one_hot(
+            torch.argmax(one_hot_pocket, dim=2),
+            num_classes=len(self.pocket_type_decoder))
+
+        if self.pocket_representation == 'CA':
+            # convert residues into atom representation for visualization
+            x_pocket, one_hot_pocket = utils.residues_to_atoms(
+                x_pocket, self.lig_type_encoder)
+
+        x = torch.cat((x_lig, x_pocket), dim=1)
+        one_hot = torch.cat((one_hot_lig, one_hot_pocket), dim=1)
+
+        # flatten (treat frame (chain dimension) as batch for visualization)
+        x_flat = x.view(-1, x.size(-1))
+        one_hot_flat = one_hot.view(-1, one_hot.size(-1))
+        mask_flat = torch.arange(x.size(0)).repeat_interleave(x.size(1))
+
+        outdir = Path(self.outdir, f'epoch_{self.current_epoch}', 'chain')
+        save_xyz_file(str(outdir), one_hot_flat, x_flat, self.lig_type_decoder,
+                      name='/chain', batch_mask=mask_flat)
+        visualize_chain(str(outdir), self.dataset_info, wandb=wandb)
+
     def sample_chain_and_save_given_pocket(self, keep_frames):
-        # Skip computation on non-global-zero ranks in distributed settings
-        if not self.trainer.is_global_zero:
-            return
-            
         n_samples = 1
 
         batch = self.val_dataset.collate_fn([
             self.val_dataset[torch.randint(len(self.val_dataset), size=(1,))]
         ])
-        ligand, pocket, _ = self.get_ligand_and_pocket(batch)
+        ligand, pocket = self.get_ligand_and_pocket(batch)
 
         if self.virtual_nodes:
             num_nodes_lig = self.max_num_nodes
@@ -840,7 +758,7 @@ class LigandPocketDDPM(pl.LightningModule):
             num_nodes_lig = self.ddpm.size_distribution.sample_conditional(
                 n1=None, n2=pocket['size'])
 
-        chain_lig, chain_pocket, _, _, _, _ = self.ddpm.sample_given_pocket(
+        chain_lig, chain_pocket, _, _ = self.ddpm.sample_given_pocket(
             pocket, num_nodes_lig, return_frames=keep_frames)
 
         chain_lig = utils.reverse_tensor(chain_lig)
@@ -848,7 +766,7 @@ class LigandPocketDDPM(pl.LightningModule):
 
         # Repeat last frame to see final sample better.
         chain_lig = torch.cat([chain_lig, chain_lig[-1:].repeat(10, 1, 1)],
-                            dim=0)
+                              dim=0)
         chain_pocket = torch.cat(
             [chain_pocket, chain_pocket[-1:].repeat(10, 1, 1)], dim=0)
 
@@ -879,9 +797,8 @@ class LigandPocketDDPM(pl.LightningModule):
 
         outdir = Path(self.outdir, f'epoch_{self.current_epoch}', 'chain')
         save_xyz_file(str(outdir), one_hot_flat, x_flat, self.lig_type_decoder,
-                    name='/chain', batch_mask=mask_flat)
-        visualize_chain(str(outdir), self.dataset_info, wandb=self.logger.experiment)
-        
+                      name='/chain', batch_mask=mask_flat)
+        visualize_chain(str(outdir), self.dataset_info, wandb=wandb)
     
 
     def prepare_pocket(self, biopython_residues, repeats=1):
