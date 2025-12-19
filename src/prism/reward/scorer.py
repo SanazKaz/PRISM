@@ -8,6 +8,39 @@ from src.prism.reward.scoring.transformations import reshape_batch_rewards
 # Import the utility we created previously
 from src.prism.utils import build_molecules_from_batch
 
+
+
+
+################################################ TEMPORARY FUNCTIONS ################################################
+def get_aromatic_bonus(mol: Chem.Mol) -> Tuple[float, int]:
+    """
+    Temporary function to encourage aromatic ring incorporation.
+    
+    Args:
+        mol: RDKit molecule object
+        
+    Returns:
+        Tuple of (bonus_score, aromatic_ring_count)
+    """
+    if mol is None:
+        return 0.0, 0
+    
+    ring_info = mol.GetRingInfo()
+    aromatic_count = 0
+    
+    for ring in ring_info.AtomRings():
+        if all(mol.GetAtomWithIdx(idx).GetIsAromatic() for idx in ring):
+            aromatic_count += 1
+    
+    if aromatic_count == 2:
+        return 1.0, aromatic_count
+    elif aromatic_count == 1:
+        return 0.5, aromatic_count
+    else:
+        return 0.0, aromatic_count
+
+################################################ TEMPORARY FUNCTIONS ################################################
+
 class BaseReward(ABC):
     """
     Interface that all specific reward classes (e.g., QED, Affinity) must implement.
@@ -122,17 +155,13 @@ class RewardManager:
 
         num_molecules = len(torch.unique(global_lig_mask))
         
-        # Initialize total rewards with a small penalty to handle sanitisation failures.
-        # Explicitly use float32 to prevent data type mismatch crashes in backward pass.
         total_rewards = torch.full((num_molecules,), -0.1, device=device, dtype=torch.float32)
         
-        # Dictionary to store breakdown of scores
         component_scores = {
             r.name: torch.zeros(num_molecules, device=device, dtype=torch.float32) 
             for r in self.reward_fns
         }
 
-        # 2. Reconstruct Molecules (Delegated to Utility)
         molecules, mol_to_batch_idx = build_molecules_from_batch(
             xh_lig, 
             global_lig_mask, 
@@ -141,23 +170,15 @@ class RewardManager:
         )
 
         if not molecules:
-            # No valid molecules built, return penalties
             return total_rewards, component_scores
 
-        # 3. Calculate and Aggregate Rewards
-        # We only calculate rewards for the indices that successfully built molecules
         valid_indices = list(mol_to_batch_idx.values())
         
         # Reset the valid slots to 0.0 before accumulating weighted sums
         total_rewards[valid_indices] = 0.0
-
-        # [DEBUG] Log Valid Molecules
-        # print(f"[RewardManager] Evaluating {len(molecules)} valid molecules (Epoch {current_epoch})")
-
         for reward_fn in self.reward_fns:
             try:
                 # Calculate raw scores for the list of RDKit objects.
-                # [FIX] Explicitly pass dataset_info to support file-based rewards (like SuCOS).
                 raw_scores = reward_fn(
                     molecules, 
                     dataset_info=self.dataset_info, 
@@ -165,17 +186,13 @@ class RewardManager:
                 )
                 
                 
-                # [FIX] Enforce Tensor Type and Device
                 if not isinstance(raw_scores, torch.Tensor):
                     raw_scores = torch.tensor(raw_scores, device=device, dtype=torch.float32)
                 else:
                     raw_scores = raw_scores.to(device).float()
                 
-                # [FIX] Sanitize NaNs in the specific reward output
                 raw_scores = torch.nan_to_num(raw_scores, nan=0.0)
                 
-                # [DEBUG] Log raw scores for this component
-
                 weight = self.weights[reward_fn.name]
                 
                 if current_epoch > 10:
@@ -194,24 +211,27 @@ class RewardManager:
 
             except Exception as e:
                 traceback.print_exc()
-                # If a specific reward fails, we leave the accumulator as is for that component
 
         
+        # Add aromatic bonus ONCE after all reward functions are done
+        aromatic_bonuses = {}
+        for local_idx, mol in enumerate(molecules):
+            batch_idx = mol_to_batch_idx[local_idx]
+            aro_bonus, aro_count = get_aromatic_bonus(mol)
+            total_rewards[batch_idx] += aro_bonus
+            aromatic_bonuses[local_idx] = (aro_bonus, aro_count)
+        
         print(f"\n[Epoch {current_epoch}] Molecule Rewards:")
-        print(f"{'SMILES':<60} {'Total':<10} {' | '.join([r.name for r in self.reward_fns])}")
-        print("-" * 100)
+        print(f"{'SMILES':<60} {'Total':<10} {'Aro#':<5} {'AroBon':<7} {' | '.join([r.name for r in self.reward_fns])}")
+        print("-" * 110)
         for local_idx, mol in enumerate(molecules):
             batch_idx = mol_to_batch_idx[local_idx]
             smiles = Chem.MolToSmiles(mol)
             total = total_rewards[batch_idx].item()
+            aro_bonus, aro_count = aromatic_bonuses[local_idx]
             components = " | ".join([f"{component_scores[r.name][batch_idx].item():.3f}" for r in self.reward_fns])
-            print(f"{smiles:<60} {total:<10.4f} {components}")
-            
+            print(f"{smiles:<60} {total:<10.4f} {aro_count:<5} {aro_bonus:<7.1f} {components}")
         
-        
-        # [FIX] Sanitize final total rewards to prevent EGNN NaN crash
         total_rewards = torch.nan_to_num(total_rewards, nan=-0.1)
-
-        # [DEBUG] Log final aggregated rewards
 
         return total_rewards, component_scores
