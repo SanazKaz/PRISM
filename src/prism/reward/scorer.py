@@ -8,39 +8,6 @@ from src.prism.reward.scoring.transformations import reshape_batch_rewards
 # Import the utility we created previously
 from src.prism.utils import build_molecules_from_batch
 
-
-
-
-################################################ TEMPORARY FUNCTIONS ################################################
-def get_aromatic_bonus(mol: Chem.Mol) -> Tuple[float, int]:
-    """
-    Temporary function to encourage aromatic ring incorporation.
-    
-    Args:
-        mol: RDKit molecule object
-        
-    Returns:
-        Tuple of (bonus_score, aromatic_ring_count)
-    """
-    if mol is None:
-        return 0.0, 0
-    
-    ring_info = mol.GetRingInfo()
-    aromatic_count = 0
-    
-    for ring in ring_info.AtomRings():
-        if all(mol.GetAtomWithIdx(idx).GetIsAromatic() for idx in ring):
-            aromatic_count += 1
-    
-    if aromatic_count == 2:
-        return 1.0, aromatic_count
-    elif aromatic_count == 1:
-        return 0.5, aromatic_count
-    else:
-        return 0.0, aromatic_count
-
-################################################ TEMPORARY FUNCTIONS ################################################
-
 class BaseReward(ABC):
     """
     Interface that all specific reward classes (e.g., QED, Affinity) must implement.
@@ -195,10 +162,6 @@ class RewardManager:
                 
                 weight = self.weights[reward_fn.name]
                 
-                if current_epoch > 10:
-                    weight = 0.7
-                    
-                
                 # Map local list indices back to the original batch tensor
                 for local_idx, batch_idx in mol_to_batch_idx.items():
                     score = raw_scores[local_idx]
@@ -213,24 +176,15 @@ class RewardManager:
                 traceback.print_exc()
 
         
-        # Add aromatic bonus ONCE after all reward functions are done
-        aromatic_bonuses = {}
-        for local_idx, mol in enumerate(molecules):
-            batch_idx = mol_to_batch_idx[local_idx]
-            aro_bonus, aro_count = get_aromatic_bonus(mol)
-            total_rewards[batch_idx] += aro_bonus
-            aromatic_bonuses[local_idx] = (aro_bonus, aro_count)
-        
         print(f"\n[Epoch {current_epoch}] Molecule Rewards:")
-        print(f"{'SMILES':<60} {'Total':<10} {'Aro#':<5} {'AroBon':<7} {' | '.join([r.name for r in self.reward_fns])}")
+        print(f"{'SMILES':<60} {'Total':<10} {' | '.join([r.name for r in self.reward_fns])}")
         print("-" * 110)
         for local_idx, mol in enumerate(molecules):
             batch_idx = mol_to_batch_idx[local_idx]
             smiles = Chem.MolToSmiles(mol)
             total = total_rewards[batch_idx].item()
-            aro_bonus, aro_count = aromatic_bonuses[local_idx]
             components = " | ".join([f"{component_scores[r.name][batch_idx].item():.3f}" for r in self.reward_fns])
-            print(f"{smiles:<60} {total:<10.4f} {aro_count:<5} {aro_bonus:<7.1f} {components}")
+            print(f"{smiles:<60} {total:<10.4f} {components}")
         
         total_rewards = torch.nan_to_num(total_rewards, nan=-0.1)
 

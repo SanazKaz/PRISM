@@ -3,9 +3,9 @@
 #SBATCH --mem=32GB
 #SBATCH --gres=gpu:h100:1
 #SBATCH --partition=short
-#SBATCH --time 02:00:00
-#SBATCH --job-name=PRISM_scratch_test
-#SBATCH --output=jobs_files/PRISM_scratch_test.log
+#SBATCH --time 04:00:00
+#SBATCH --job-name=PB_aromatic_bonus_DBSCAN_curriculum
+#SBATCH --output=jobs_files/PB_aromatic_bonus_DBSCAN_curriculum.log
 
 # --- Environment Setup ---
 module purge
@@ -61,7 +61,7 @@ echo "Starting PRISM training using Scratch Data..."
 
 srun python "${PROJECT_ROOT}/scripts/train.py" \
     --config "${PROJECT_ROOT}/configs/ppo_config.yaml" \
-    --resume_from_checkpoint "/data/stat-cadd/wolf7055/PRISM/Log_Results/PB_Geo_Flat_1.0/checkpoints/seed=789/epoch=09-reward=0.83.ckpt" \
+    --resume_from_checkpoint "/data/stat-cadd/wolf7055/PRISM/Log_Results/aromatic_bonus_trial_ampc_from_PB_Final_Run/checkpoints/tmp/seed=42/epoch=57-reward=0.43.ckpt" \
     --datadir "${SCRATCH_DATASET_DIR}"
 
 # --- CLEANUP ---

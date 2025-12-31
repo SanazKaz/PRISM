@@ -8,6 +8,7 @@ from src.prism.reward.scoring.interaction_fingerprints import InteractionFingerp
 from src.prism.reward.scoring.feature_density import FeatureDensityReward
 from src.prism.reward.scoring.geometry_checks import PoseBustersGeometryChecks
 from src.prism.reward.scoring.flatness_checks import PoseBustersFlatnessReward
+from src.prism.reward.scoring.aromatic_counter import AromaticBonus
 # 1. The Registry
 
 REWARD_REGISTRY = {
@@ -20,6 +21,7 @@ REWARD_REGISTRY = {
     "feature_density": FeatureDensityReward,
     "geometry_checks": PoseBustersGeometryChecks,
     "flatness_checks": PoseBustersFlatnessReward,
+    "aromatic_counter": AromaticBonus,
 }
 
 def get_reward_manager(config, dataset_info, ddpm_module=None):

@@ -47,15 +47,15 @@ class PoseBustersGeometryChecks(BaseReward):
     def name(self) -> str:
         return "geometry_checks"
 
-    @property
-    def increase_weight_after_epoch(self) -> Optional[int]:
-        """Enable weight increase after epoch 10."""
-        return 10
+    # @property
+    # def increase_weight_after_epoch(self) -> Optional[int]:
+    #     """Enable weight increase after epoch 10."""
+    #     return 10
     
-    @property
-    def increased_weight_multiplier(self) -> float:
-        """Increase weight from 0.5 to 0.7 (multiplier of 1.4)."""
-        return 1.4
+    # @property
+    # def increased_weight_multiplier(self) -> float:
+    #     """Increase weight from 0.5 to 0.7 (multiplier of 1.4)."""
+    #     return 1.4
 
     def score_mol(self, mol: Mol) -> float:
         if mol is None:

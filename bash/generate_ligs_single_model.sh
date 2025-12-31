@@ -3,7 +3,7 @@
 #SBATCH --partition=devel 
 #SBATCH --gres=gpu:1
 #SBATCH --time 00:10:00
-#SBATCH --job-name=ampc_1c3b_QED_SA_SCORE_gen
+#SBATCH --job-name=ampc_1c3b_PB_Final_Run_gen
 #SBATCH --mail-user=wolf7055@ox.ac.uk
 #SBATCH --output=jobs_files/GEN_FILE.log
 # Redirect stderr to stdout
@@ -30,7 +30,7 @@ echo "Starting generation..."
 
 
 python scripts/generate_ligands.py \
-'/data/stat-cadd/wolf7055/PRISM/Log_Results/dbscan_aromatic_bonus/checkpoints/tmp/seed=42/epoch=31-reward=0.27.pt' \
+'/data/stat-cadd/wolf7055/PRISM/Log_Results/aromatic_bonus_trial_ampc_from_PB_Final_Run/checkpoints/tmp/seed=42/epoch=57-reward=0.43.pt' \
 --config /data/stat-cadd/wolf7055/PRISM/configs/ppo_config.yaml \
 --pdbfile /data/stat-cadd/wolf7055/PRISM/data/AMPC_beta_lactamase/02_preprocessed/pocket_files/1c3b_BZB_C_362_pocket.pdb \
 --ref_ligand /data/stat-cadd/wolf7055/PRISM/data/AMPC_beta_lactamase/02_preprocessed/sdf_files/1c3b_BZB_C_362.sdf \
@@ -38,7 +38,7 @@ python scripts/generate_ligands.py \
 --num_nodes_lig 25 \
 --batch_size 50 \
 --sanitize \
---outfile /data/stat-cadd/wolf7055/PRISM/Generated_Mols/dbscan_aromatic_bonus_epoch31_reward0.27_ampcs/Seed42.sdf
+--outfile /data/stat-cadd/wolf7055/PRISM/Generated_Mols/aromatic_bonus_trial_after_seed42/PB_Final_Run_epoch57_reward0.43_ampcs.sdf
 
 
 
