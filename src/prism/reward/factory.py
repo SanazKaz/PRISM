@@ -9,6 +9,7 @@ from src.prism.reward.scoring.feature_density import FeatureDensityReward
 from src.prism.reward.scoring.geometry_checks import PoseBustersGeometryChecks
 from src.prism.reward.scoring.flatness_checks import PoseBustersFlatnessReward
 from src.prism.reward.scoring.aromatic_counter import AromaticBonus
+from src.prism.reward.scoring.aromatic_feature import AromaticFeatureReward
 # 1. The Registry
 
 REWARD_REGISTRY = {
@@ -22,6 +23,7 @@ REWARD_REGISTRY = {
     "geometry_checks": PoseBustersGeometryChecks,
     "flatness_checks": PoseBustersFlatnessReward,
     "aromatic_counter": AromaticBonus,
+    "aromatic_anchor": AromaticFeatureReward,
 }
 
 def get_reward_manager(config, dataset_info, ddpm_module=None):
@@ -90,6 +92,9 @@ def get_reward_manager(config, dataset_info, ddpm_module=None):
             active_rewards.append(reward_cls(dataset_info))
         elif name == 'feature_density':
             active_rewards.append(reward_cls(reward_paths['feature_density']))
+            ########## TODO: remove later:
+        elif name == 'aromatic_anchor':
+            active_rewards.append(reward_cls(reward_paths['aromatic_anchor']))
         else:
             active_rewards.append(reward_cls())
             
