@@ -11,14 +11,13 @@ from src.prism.reward.scorer import BaseReward
 
 class AromaticFeatureReward(BaseReward):
     """
-    Focused Reward targeting the 3 primary Aromatic Hotspots in the AmpC pocket.
-    Used as the first stage of a hierarchical alignment strategy.
+    Reward targeting the 3 primary Aromatic Hotspots in the AmpC pocket.
+    Normalized so that perfectly hitting ANY ONE hotspot yields a score of ~1.0.
     """
     def __init__(self, pkl_path: str, 
-                 sigma: float = 1.0, 
-                 cutoff: float = 3.5,
-                 n_aromatic_targets: int = 3,
-                 use_curriculum: bool = True):
+                 sigma: float = 0.8, 
+                 cutoff: float = 2.5,
+                 n_aromatic_targets: int = 3):
         super().__init__()
         
         with open(pkl_path, 'rb') as f:
@@ -31,54 +30,33 @@ class AromaticFeatureReward(BaseReward):
         
         # Filter for Aromatic clusters only and take top N
         aromatic_indices = [i for i, feat in enumerate(self.cluster_features) if feat == 'Aromatic']
-        
-        # Sort by cluster count descending to find the "loudest" hotspots
         sorted_aromatic = sorted(aromatic_indices, key=lambda i: self.cluster_counts[i], reverse=True)
         self.target_indices = sorted_aromatic[:n_aromatic_targets]
         
         self.target_centers = self.cluster_centers[self.target_indices]
         self.target_counts = [self.cluster_counts[i] for i in self.target_indices]
-        self.max_possible_score = sum(self.target_counts)
         
-        # Curriculum setup
-        self.use_curriculum = use_curriculum
-        self.curriculum_start_epoch = 58
-        self.curriculum_end_epoch = 158
+        # NEW LOGIC: Normalize by the SINGLE largest hotspot count
+        # This allows hitting just one hotspot to reach a score of 1.0.
+        self.norm_factor = max(self.target_counts)
         
-        # Parameters to be updated by curriculum
-        self.start_cutoff = 5.0
-        self.target_cutoff = 2.5
-        self.start_sigma = 1.5
-        self.target_sigma = 0.8
-        
-        self.sigma = self.start_sigma if use_curriculum else sigma
-        self.cutoff = self.start_cutoff if use_curriculum else cutoff
-        
+        self.sigma = sigma
+        self.cutoff = cutoff
         self.fdef = AllChem.BuildFeatureFactory(os.path.join(RDConfig.RDDataDir, 'BaseFeatures.fdef'))
         
-        print(f"AromaticAnchorReward initialized with {len(self.target_indices)} hotspots.")
-        print(f"Target Centers:\n{self.target_centers}")
+        print(f"AromaticFeatureReward (HIT-ANY) initialized.")
+        print(f"Parameters: sigma={self.sigma}, cutoff={self.cutoff}")
+        print(f"Normalization factor (Max single hotspot): {self.norm_factor}")
 
     @property
     def name(self) -> str:
         return "aromatic_anchor"
-
-    def update_epoch(self, epoch: int) -> None:
-        if not self.use_curriculum:
-            return
-        
-        progress = np.clip((epoch - self.curriculum_start_epoch) / 
-                           (self.curriculum_end_epoch - self.curriculum_start_epoch), 0, 1)
-        
-        self.cutoff = self.start_cutoff + progress * (self.target_cutoff - self.start_cutoff)
-        self.sigma = self.start_sigma + progress * (self.target_sigma - self.start_sigma)
 
     def score_mol(self, mol: Mol) -> float:
         if mol is None:
             return 0.0
         
         try:
-            # Only extract Aromatic features
             raw_feats = self.fdef.GetFeaturesForMol(mol)
             mol_aromatic_feats = [f for f in raw_feats if f.GetFamily() == 'Aromatic']
         except Exception:
@@ -87,7 +65,6 @@ class AromaticFeatureReward(BaseReward):
         if not mol_aromatic_feats:
             return 0.0
         
-        # Build cost matrix: Molecule features (rows) x Target hotspots (cols)
         n_mol = len(mol_aromatic_feats)
         n_target = len(self.target_centers)
         cost_matrix = np.zeros((n_mol, n_target))
@@ -98,20 +75,18 @@ class AromaticFeatureReward(BaseReward):
                 dist = np.linalg.norm(pos - self.target_centers[c])
                 if dist <= self.cutoff:
                     gaussian = np.exp(-0.5 * (dist / self.sigma) ** 2)
-                    # Minimize negative score
                     cost_matrix[r, c] = -(gaussian * self.target_counts[c])
         
-        # Hungarian matching for optimal alignment
+        # Optimal matching
         row_ind, col_ind = linear_sum_assignment(cost_matrix)
-        total_score = -cost_matrix[row_ind, col_ind].sum()
+        total_points = -cost_matrix[row_ind, col_ind].sum()
         
-        # Normalize by the max possible score (sum of counts of the 3 hotspots)
-        final_score = total_score / self.max_possible_score if self.max_possible_score > 0 else 0.0
+        # Scale score by the single best hotspot weight instead of the total sum
+        final_score = total_points / self.norm_factor if self.norm_factor > 0 else 0.0
         
-        return float(np.clip(final_score, 0.0, 1.0))
+        # Cap at 1.0 so the model doesn't over-optimize by trying to hit all 3
+        return float(min(1.0, final_score))
 
     def __call__(self, molecules: List[Mol], **kwargs) -> torch.Tensor:
-        scores = []
-        for mol in molecules:
-            scores.append(self.score_mol(mol))
+        scores = [self.score_mol(m) for m in molecules]
         return torch.tensor(scores, dtype=torch.float32)

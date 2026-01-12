@@ -1,0 +1,5 @@
+Model: /data/stat-cadd/wolf7055/PRISM/checkpoints/crossdocked_fa_cond_temp.ckpt
+Config: /data/stat-cadd/wolf7055/PRISM/configs/ppo_config.yaml
+N samples per target: 10000
+
+Carb_Anh_II: 10000 mols, 97.99% valid, 126.4 min

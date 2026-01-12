@@ -2,21 +2,37 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --partition=short
 #SBATCH --gres=gpu:h100:1
-#SBATCH --time 12:00:00
-#SBATCH --output=jobs_files/DiffSBDD/crossdocked_fa_cond_temp_%x_%j.log
+#SBATCH --time 03:00:00
+#SBATCH --output=jobs_files/DiffSBDD/Posebusters_Prism_%x_%j.log
 exec 2>&1
 
 # =============================================================================
 # PRISM Evaluation: Single target job (for parallel submission)
-# Usage: sbatch --job-name=TARGET_NAME run_single_target.sh TARGET_NAME
+# 
+# Arguments:
+#   $1 - Target name (e.g., AMPC_beta_lactamase)
+#   $2 - Path to model checkpoint
+#
+# Usage: sbatch run_single_target.sh TARGET_NAME MODEL_PATH
 # =============================================================================
 
-# Get target from command line argument
 TARGET=$1
+MODEL_PATH=$2
 
 if [ -z "${TARGET}" ]; then
     echo "[ERROR] No target specified!"
-    echo "Usage: sbatch run_single_target.sh TARGET_NAME"
+    echo "Usage: sbatch test_file.sh TARGET_NAME MODEL_PATH"
+    exit 1
+fi
+
+if [ -z "${MODEL_PATH}" ]; then
+    echo "[ERROR] No model path specified!"
+    echo "Usage: sbatch test_file.sh TARGET_NAME MODEL_PATH"
+    exit 1
+fi
+
+if [ ! -f "${MODEL_PATH}" ]; then
+    echo "[ERROR] Model file not found: ${MODEL_PATH}"
     exit 1
 fi
 
@@ -31,19 +47,15 @@ echo "Node: $(hostname)"
 echo "============================================="
 
 # -----------------------------------------------------------------------------
-# CONFIGURATION - Edit these paths
+# CONFIGURATION
 # -----------------------------------------------------------------------------
 
 PRISM_ROOT="/data/stat-cadd/wolf7055/PRISM"
 SCRIPT_PATH="${PRISM_ROOT}/scripts/test.py"
 CONFIG_PATH="${PRISM_ROOT}/configs/ppo_config.yaml"
 
-# Model checkpoint - UPDATE THIS
-MODEL_PATH="${PRISM_ROOT}/checkpoints/crossdocked_fa_cond_temp.ckpt"
-
-# Output directory
-RUN_NAME="crossdocked_fa_cond_temp_10k_Evaluation"
-OUTDIR="${PRISM_ROOT}/Generated_Mols/${RUN_NAME}"
+# Output directory for PRISM-trained models
+OUTDIR="/data/stat-cadd/wolf7055/PRISM/Generated_Mols/Posebusters_Prism"
 
 # Generation settings
 N_SAMPLES=10000
@@ -65,7 +77,6 @@ echo ""
 cd "${PRISM_ROOT}/src/models/diffsbdd"
 
 export PYTHONPATH="${PRISM_ROOT}/src/models/diffsbdd:${PYTHONPATH}" 
-
 
 python ${SCRIPT_PATH} "${MODEL_PATH}" \
     --config "${CONFIG_PATH}" \

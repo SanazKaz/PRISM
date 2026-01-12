@@ -1,0 +1,5 @@
+Model: /data/stat-cadd/wolf7055/PRISM/Log_Results/PB_aromatic_bonus_DBSCAN_AROMATIC_FEATURE/checkpoints/tmp/seed=42/epoch=77-reward=0.10.pt
+Config: /data/stat-cadd/wolf7055/PRISM/configs/ppo_config.yaml
+N samples per target: 10000
+
+AMPC_beta_lactamase: 10000 mols, 99.09% valid, 59.8 min

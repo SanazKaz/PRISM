@@ -1,4 +1,4 @@
-run_identifier: 'lr_4e-5'
+run_identifier: 'lr_4e-5_more_timesteps_2'
 logdir: 'Log_Results'
 wandb_params:
   mode: 'online' # seeing if it will reduce overhead 
@@ -27,7 +27,7 @@ loss_params:
   clamp_lj: 3.0
 
 ppo_params:
-  num_outer_epochs: 90         # num of PPO cycles (outer epochs)
+  num_outer_epochs: 130         # num of PPO cycles (outer epochs)
   num_inner_epochs: 2            # Updates per rollout (inner epochs)
   n_steps: 10                    # Rollout length (mols generated)
   ligand_chunk_size: 10
@@ -61,13 +61,22 @@ reward_params:
     bertz: 0.0
     sucos: 0.0
     interaction_fingerprints: 0.0
-    feature_density: 1.0
+    feature_density: 0.0
     geometry_checks: 0.0
     flatness_checks: 0.0
     aromatic_counter: 0.0
+    aromatic_anchor: 0.0
+    multi_features: 0.0
+    silly_walks: 0.0
+    silly_rings: 0.0
+    mmff_strain: 1.0
   reward_paths:
-    feature_density: '/data/stat-cadd/wolf7055/PRISM/src/prism/reward/scoring/reward_data/ampc_hotspot_global_centered_eps0.5_min10_aromatic5.pkl'
-
+    feature_density: 'src/prism/reward/scoring/reward_data/ampc_hotspot_global_centered_eps0.5_min10_aromatic5.pkl'
+    aromatic_anchor: 'src/prism/reward/scoring/reward_data/ampc_hotspot_global_centered_eps0.5_min10_aromatic5.pkl'
+    multi_features: 'src/prism/reward/scoring/reward_data/ampc_hotspot_global_centered_eps0.5_min10_aromatic5.pkl'
+    silly_walks: 'src/prism/reward/scoring/reward_data/chembl_drugs.smi'
+    silly_rings: 'src/prism/reward/scoring/reward_data/chembl_ring_systems.csv'
+    
 #  (from diffsbdd original config)
 egnn_params:
   device: 'cuda'

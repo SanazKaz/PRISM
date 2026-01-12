@@ -1,0 +1,5 @@
+Model: /data/stat-cadd/wolf7055/PRISM/Log_Results/linear_squared_feature_density_300_timesteps_lr_1e-5/checkpoints/tmp/seed=789/last.pt
+Config: /data/stat-cadd/wolf7055/PRISM/configs/ppo_config.yaml
+N samples per target: 10000
+
+AMPC_beta_lactamase: 10000 mols, 99.26% valid, 64.0 min

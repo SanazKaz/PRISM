@@ -27,16 +27,16 @@ class FeatureDensityReward(BaseReward):
     # Default weights - prioritise aromatics, downweight easy hydrophobes
     DEFAULT_FEATURE_WEIGHTS = {
         'Aromatic': 0.35,
-        'Acceptor': 0.20,
+        'Acceptor': 0.25,
         'Donor': 0.20,
-        'Hydrophobe': 0.10,
+        'Hydrophobe': 0.05,
         'NegIonizable': 0.05,
         'PosIonizable': 0.00,
         'LumpedHydrophobe': 0.05,
         'ZnBinder': 0.05,
     }
     
-    def __init__(self, pkl_path: str, sigma: float = 1.0, cutoff: float = 3.5,
+    def __init__(self, pkl_path: str, sigma: float = 1.0, cutoff: float = 3.0,
                  feature_weights: Dict[str, float] = None,
                  aromatic_gate_threshold: float = 0.1,
                  aromatic_gate_penalty: float = 0.6):
@@ -143,10 +143,11 @@ class FeatureDensityReward(BaseReward):
             pos = np.array([feat.GetPos().x, feat.GetPos().y, feat.GetPos().z])
             
             for c, (idx, center, count) in enumerate(type_clusters):
+                # New (Linear):
                 dist = np.linalg.norm(pos - center)
                 if dist <= self.cutoff:
-                    gaussian = np.exp(-0.5 * (dist / self.sigma) ** 2)
-                    cost_matrix[r, c] = -(gaussian * count)
+                    linear_score = 1 - (dist / self.cutoff) ** 2
+                    cost_matrix[r, c] = -(linear_score * count)
                 # else: leave as 0 (no contribution)
         
         # Hungarian matching

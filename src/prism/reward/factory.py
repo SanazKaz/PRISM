@@ -10,6 +10,11 @@ from src.prism.reward.scoring.geometry_checks import PoseBustersGeometryChecks
 from src.prism.reward.scoring.flatness_checks import PoseBustersFlatnessReward
 from src.prism.reward.scoring.aromatic_counter import AromaticBonus
 from src.prism.reward.scoring.aromatic_feature import AromaticFeatureReward
+from src.prism.reward.scoring.multi_features import MultiFeatureReward
+from src.prism.reward.scoring.silly_walks import SillyWalksReward, SillyRingsReward
+from src.prism.reward.scoring.strain_energy import MMFFStrainReward
+
+
 # 1. The Registry
 
 REWARD_REGISTRY = {
@@ -24,6 +29,10 @@ REWARD_REGISTRY = {
     "flatness_checks": PoseBustersFlatnessReward,
     "aromatic_counter": AromaticBonus,
     "aromatic_anchor": AromaticFeatureReward,
+    "multi_features": MultiFeatureReward,
+    "silly_walks": SillyWalksReward,
+    "silly_rings": SillyRingsReward,
+    "mmff_strain": MMFFStrainReward,
 }
 
 def get_reward_manager(config, dataset_info, ddpm_module=None):
@@ -95,6 +104,12 @@ def get_reward_manager(config, dataset_info, ddpm_module=None):
             ########## TODO: remove later:
         elif name == 'aromatic_anchor':
             active_rewards.append(reward_cls(reward_paths['aromatic_anchor']))
+        elif name == 'multi_features':
+            active_rewards.append(reward_cls(reward_paths['multi_features']))
+        elif name == 'silly_walks':
+            active_rewards.append(reward_cls(reward_paths['silly_walks']))
+        elif name == 'silly_rings':
+            active_rewards.append(reward_cls(reward_paths['silly_rings']))
         else:
             active_rewards.append(reward_cls())
             

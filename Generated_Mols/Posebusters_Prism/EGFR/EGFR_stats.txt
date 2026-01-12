@@ -1,0 +1,6 @@
+target: EGFR
+n_valid: 10000
+n_generated: 10125
+validity_rate: 0.9914074074074074
+time_seconds: 8826.08431506157
+time_per_mol: 0.882608431506157

@@ -1,0 +1,6 @@
+target: COVID19_main_protease
+n_valid: 10000
+n_generated: 10200
+validity_rate: 0.9847058823529412
+time_seconds: 5335.189057350159
+time_per_mol: 0.5335189057350158

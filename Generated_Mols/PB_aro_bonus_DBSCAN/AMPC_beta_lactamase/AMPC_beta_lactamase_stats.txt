@@ -1,0 +1,6 @@
+target: AMPC_beta_lactamase
+n_valid: 10000
+n_generated: 10050
+validity_rate: 0.9958208955223881
+time_seconds: 3550.7129757404327
+time_per_mol: 0.35507129757404327
