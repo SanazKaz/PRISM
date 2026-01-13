@@ -50,6 +50,50 @@ def load_block_list():
     
     return {c for c in compounds if c}
 
+
+# Allowed elements for drug-like small molecules
+ALLOWED_ELEMENTS = {'H', 'B', 'C', 'N', 'O', 'F', 'P', 'S', 'Cl', 'Br', 'I'}
+
+def is_valid_small_molecule(mol):
+    """
+    Validate that a molecule is a drug-like small molecule.
+    
+    Criteria:
+        - 3 to 55 non-hydrogen atoms
+        - At least one carbon atom
+        - Contains only allowed elements (H, B, C, N, O, F, P, S, Cl, Br, I)
+    
+    Args:
+        mol: RDKit Mol object
+        
+    Returns:
+        tuple: (is_valid, reason) where reason explains rejection if invalid
+    """
+    if mol is None:
+        return False, "RDKit could not parse molecule"
+    
+    # Count atoms
+    heavy_atoms = mol.GetNumHeavyAtoms()
+    
+    if heavy_atoms < 3:
+        return False, f"too few heavy atoms ({heavy_atoms})"
+    
+    if heavy_atoms > 55:
+        return False, f"too many heavy atoms ({heavy_atoms})"
+    
+    # Check for carbon
+    has_carbon = any(atom.GetSymbol() == 'C' for atom in mol.GetAtoms())
+    if not has_carbon:
+        return False, "no carbon atoms"
+    
+    # Check elements
+    for atom in mol.GetAtoms():
+        symbol = atom.GetSymbol()
+        if symbol not in ALLOWED_ELEMENTS:
+            return False, f"disallowed element ({symbol})"
+    
+    return True, None
+
 class PocketSelect(Select):
     def __init__(self, residues_to_keep):
         self.residues_to_keep = set(residues_to_keep)
@@ -211,13 +255,21 @@ def create_binding_pockets(args):
                         
                         base_name = f"{pdb_id}_{comp_id}_{chain}_{seq_id}"
 
-                        # --- 5. Download and Save Instance SDF ---
+                        # --- 5. Download and Validate SDF ---
                         ligand_url = f"https://models.rcsb.org/v1/{pdb_id}/ligand?auth_seq_id={seq_id}&label_asym_id={chain}&encoding=sdf"
                         response = requests.get(ligand_url)
                         response.raise_for_status()
 
                         if not response.content:
                             print(f"    [WARN] No SDF content for {base_name}. Skipping.")
+                            continue
+
+                        # Parse SDF in memory and validate before saving
+                        mol = Chem.MolFromMolBlock(response.content.decode('utf-8'), removeHs=False)
+                        is_valid, reason = is_valid_small_molecule(mol)
+                        
+                        if not is_valid:
+                            print(f"    [SKIP] {base_name}: {reason}")
                             continue
 
                         sdf_path = sdf_output_dir / f"{base_name}.sdf"
