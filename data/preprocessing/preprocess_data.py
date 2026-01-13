@@ -28,33 +28,27 @@ except ImportError:
     print("Please install them (e.g., 'pip install biopython rdkit numpy')")
     sys.exit(1)
 
-# List of common crystallographic additives and artifacts to exclude by default.
-EXCLUDE_LIST = {
-    # Water
-    'HOH', 'WAT', 'H2O', 'DOD',
-    # Glycols and PEGs
-    'EDO', 'PEG', 'PGE', 'PG4', 'PE8', 'PE7', '1PE', 'P6G', 'PEO', '2PE', 'P33', 'P40',
-    # Glycerol and Alcohols
-    'GOL', 'GLY', 'PE5', 'PE6', 'PGO', 'BME', 'EOH', 'MOH', 'ETL',
-    # Common ions (Metals & Halogens)
-    'SO4', 'PO4', 'CL', 'BR', 'I', 'F',
-    'NA', 'MG', 'CA', 'ZN', 'FE', 'MN', 'K', 'NI', 'CU', 'CO',
-    'CD', 'HG', 'SR', 'BA', 'CS', 'RB', 'LI', 'AL',
-    # Solvents and reducing agents
-    'DMS', 'DMSO', 'ACT', 'ACE', 'DTT', 'TRS', 'EOH', 'MeOH',
-    # Buffers and crystallization agents
-    'CIT', 'TAR', 'MLI', 'EPE', 'BEZ', 'HEPES', 'MES', 'FMT', 'IMD', 'POP', 'ACY',
-    # Detergents
-    'BOG', 'B3P', 'LDA', 'SDS', 'LMT', 'PLM',
-    # Cryoprotectants
-    'MPD', 'IPA', 'EGL',
-    # Artifacts / Unknowns
-    'NH2', 'CO3', 'NO3', 'OH', 'O', 'NO2', 'NH4',
-    'BCN', 'AZI', 'SCN', 'CYN', 'OCT', 'UNL', 'UNX', 'CLR', 'J40', 'NAG',
-    # --- KINASE COFACTORS (Crucial for EGFR/PIM1) ---
-    'ATP', 'ADP', 'AMP',  # Standard nucleotides
-    'ANP', 'ACP', 'GNP', 'GSP', 'GTP', 'GDP' # Non-hydrolyzable analogs
-}
+
+def load_block_list():
+    """
+    Load blocked compound IDs from an external file.
+    
+    The block list contains crystallographic additives, common ions, solvents,
+    and other non-drug-like molecules to exclude from ligand extraction.
+    
+    Returns:
+        set: Compound IDs to exclude during preprocessing.
+    """
+    block_list_path = Path(__file__).parent / "pdb_block_list.txt"
+    
+    if not block_list_path.exists():
+        print(f"Warning: Block list not found at {block_list_path}", file=sys.stderr)
+        return set()
+    
+    content = block_list_path.read_text()
+    compounds = [c.strip() for c in content.replace('\n', ',').split(',')]
+    
+    return {c for c in compounds if c}
 
 class PocketSelect(Select):
     def __init__(self, residues_to_keep):
@@ -127,6 +121,7 @@ def create_binding_pockets(args):
     """
     # --- 1. Setup Directories ---
     input_dir = Path(args.input_dir)
+    block_list = load_block_list()
     
     if args.output_dir:
         base_output_dir = Path(args.output_dir)
@@ -197,7 +192,7 @@ def create_binding_pockets(args):
                 
                 comp_id = entity_data["pdbx_entity_nonpoly"]["comp_id"]
                 
-                if (not args.include_common) and comp_id in EXCLUDE_LIST:
+                if (not args.include_common) and comp_id in block_list:
                     print(f"  Skipping {comp_id} (common additive)")
                     continue
                 
