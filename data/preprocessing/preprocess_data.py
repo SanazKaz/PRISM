@@ -28,71 +28,33 @@ except ImportError:
     print("Please install them (e.g., 'pip install biopython rdkit numpy')")
     sys.exit(1)
 
-
-def load_block_list():
-    """
-    Load blocked compound IDs from an external file.
-    
-    The block list contains crystallographic additives, common ions, solvents,
-    and other non-drug-like molecules to exclude from ligand extraction.
-    
-    Returns:
-        set: Compound IDs to exclude during preprocessing.
-    """
-    block_list_path = Path(__file__).parent / "pdb_block_list.txt"
-    
-    if not block_list_path.exists():
-        print(f"Warning: Block list not found at {block_list_path}", file=sys.stderr)
-        return set()
-    
-    content = block_list_path.read_text()
-    compounds = [c.strip() for c in content.replace('\n', ',').split(',')]
-    
-    return {c for c in compounds if c}
-
-
-# Allowed elements for drug-like small molecules
-ALLOWED_ELEMENTS = {'H', 'B', 'C', 'N', 'O', 'F', 'P', 'S', 'Cl', 'Br', 'I'}
-
-def is_valid_small_molecule(mol):
-    """
-    Validate that a molecule is a drug-like small molecule.
-    
-    Criteria:
-        - 3 to 55 non-hydrogen atoms
-        - At least one carbon atom
-        - Contains only allowed elements (H, B, C, N, O, F, P, S, Cl, Br, I)
-    
-    Args:
-        mol: RDKit Mol object
-        
-    Returns:
-        tuple: (is_valid, reason) where reason explains rejection if invalid
-    """
-    if mol is None:
-        return False, "RDKit could not parse molecule"
-    
-    # Count atoms
-    heavy_atoms = mol.GetNumHeavyAtoms()
-    
-    if heavy_atoms < 3:
-        return False, f"too few heavy atoms ({heavy_atoms})"
-    
-    if heavy_atoms > 55:
-        return False, f"too many heavy atoms ({heavy_atoms})"
-    
-    # Check for carbon
-    has_carbon = any(atom.GetSymbol() == 'C' for atom in mol.GetAtoms())
-    if not has_carbon:
-        return False, "no carbon atoms"
-    
-    # Check elements
-    for atom in mol.GetAtoms():
-        symbol = atom.GetSymbol()
-        if symbol not in ALLOWED_ELEMENTS:
-            return False, f"disallowed element ({symbol})"
-    
-    return True, None
+# List of common crystallographic additives and artifacts to exclude by default.
+EXCLUDE_LIST = {
+    # Water
+    'HOH', 'WAT', 'H2O', 'DOD',
+    # Glycols and PEGs
+    'EDO', 'PEG', 'PGE', 'PG4', 'PE8', 'PE7', '1PE', 'P6G', 'PEO', '2PE', 'P33', 'P40',
+    # Glycerol and Alcohols
+    'GOL', 'GLY', 'PE5', 'PE6', 'PGO', 'BME', 'EOH', 'MOH', 'ETL',
+    # Common ions (Metals & Halogens)
+    'SO4', 'PO4', 'CL', 'BR', 'I', 'F',
+    'NA', 'MG', 'CA', 'ZN', 'FE', 'MN', 'K', 'NI', 'CU', 'CO',
+    'CD', 'HG', 'SR', 'BA', 'CS', 'RB', 'LI', 'AL',
+    # Solvents and reducing agents
+    'DMS', 'DMSO', 'ACT', 'ACE', 'DTT', 'TRS', 'EOH', 'MeOH',
+    # Buffers and crystallization agents
+    'CIT', 'TAR', 'MLI', 'EPE', 'BEZ', 'HEPES', 'MES', 'FMT', 'IMD', 'POP', 'ACY',
+    # Detergents
+    'BOG', 'B3P', 'LDA', 'SDS', 'LMT', 'PLM',
+    # Cryoprotectants
+    'MPD', 'IPA', 'EGL',
+    # Artifacts / Unknowns
+    'NH2', 'CO3', 'NO3', 'OH', 'O', 'NO2', 'NH4',
+    'BCN', 'AZI', 'SCN', 'CYN', 'OCT', 'UNL', 'UNX', 'CLR', 'J40', 'NAG',
+    # --- KINASE COFACTORS (Crucial for EGFR/PIM1) ---
+    'ATP', 'ADP', 'AMP',  # Standard nucleotides
+    'ANP', 'ACP', 'GNP', 'GSP', 'GTP', 'GDP' # Non-hydrolyzable analogs
+}
 
 class PocketSelect(Select):
     def __init__(self, residues_to_keep):
@@ -165,7 +127,6 @@ def create_binding_pockets(args):
     """
     # --- 1. Setup Directories ---
     input_dir = Path(args.input_dir)
-    block_list = load_block_list()
     
     if args.output_dir:
         base_output_dir = Path(args.output_dir)
@@ -236,7 +197,7 @@ def create_binding_pockets(args):
                 
                 comp_id = entity_data["pdbx_entity_nonpoly"]["comp_id"]
                 
-                if (not args.include_common) and comp_id in block_list:
+                if (not args.include_common) and comp_id in EXCLUDE_LIST:
                     print(f"  Skipping {comp_id} (common additive)")
                     continue
                 
@@ -255,21 +216,13 @@ def create_binding_pockets(args):
                         
                         base_name = f"{pdb_id}_{comp_id}_{chain}_{seq_id}"
 
-                        # --- 5. Download and Validate SDF ---
+                        # --- 5. Download and Save Instance SDF ---
                         ligand_url = f"https://models.rcsb.org/v1/{pdb_id}/ligand?auth_seq_id={seq_id}&label_asym_id={chain}&encoding=sdf"
                         response = requests.get(ligand_url)
                         response.raise_for_status()
 
                         if not response.content:
                             print(f"    [WARN] No SDF content for {base_name}. Skipping.")
-                            continue
-
-                        # Parse SDF in memory and validate before saving
-                        mol = Chem.MolFromMolBlock(response.content.decode('utf-8'), removeHs=False)
-                        is_valid, reason = is_valid_small_molecule(mol)
-                        
-                        if not is_valid:
-                            print(f"    [SKIP] {base_name}: {reason}")
                             continue
 
                         sdf_path = sdf_output_dir / f"{base_name}.sdf"
