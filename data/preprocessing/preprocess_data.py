@@ -6,7 +6,6 @@ Creates paired ligand-free binding pockets and ligand SDF files.
 This script iterates through PDB files in an input directory. For each PDB,
 it uses the RCSB API to identify all non-common, biological ligands.
 """
-# TODO: very new cif files from pdb not being processed. fix this.
 
 import os
 import glob
@@ -15,13 +14,15 @@ import sys
 import requests
 from pathlib import Path
 from rdkit import RDLogger
+from collections import defaultdict
+
 # Suppress RDKit warnings
 RDLogger.DisableLog('rdApp.*')
 
 
 try:
     import numpy as np
-    from Bio.PDB import PDBParser, PDBIO, Select
+    from Bio.PDB import PDBParser, MMCIFParser, PDBIO, Select
     from rdkit import Chem
 except ImportError:
     print("Error: This script requires Biopython, RDKit, and NumPy.", file=sys.stderr)
@@ -53,6 +54,7 @@ def load_block_list():
 
 # Allowed elements for drug-like small molecules
 ALLOWED_ELEMENTS = {'H', 'B', 'C', 'N', 'O', 'F', 'P', 'S', 'Cl', 'Br', 'I'}
+
 
 def is_valid_small_molecule(mol):
     """
@@ -94,6 +96,7 @@ def is_valid_small_molecule(mol):
     
     return True, None
 
+
 class PocketSelect(Select):
     def __init__(self, residues_to_keep):
         self.residues_to_keep = set(residues_to_keep)
@@ -130,7 +133,6 @@ def extract_pocket_biopython(structure, sdf_path, distance_cutoff, output_pdb_pa
             
         try:
             # Get coordinates for all atoms in this residue
-            # Using list comprehension is slightly safer/faster than repeated appends
             atom_coords_list = [atom.get_coord() for atom in residue.get_atoms()]
             if not atom_coords_list:
                 continue
@@ -140,7 +142,6 @@ def extract_pocket_biopython(structure, sdf_path, distance_cutoff, output_pdb_pa
 
         # 3. Calculate minimum distance
         # Use NumPy broadcasting to find all pairwise distances
-        # (n_res_atoms, 1, 3) - (1, n_lig_atoms, 3) -> (n_res_atoms, n_lig_atoms, 3)
         diff = res_coords[:, np.newaxis, :] - lig_coords[np.newaxis, :, :]
         dist_sq = np.sum(diff**2, axis=2) # (n_res_atoms, n_lig_atoms)
         min_dist = np.sqrt(np.min(dist_sq))
@@ -156,7 +157,68 @@ def extract_pocket_biopython(structure, sdf_path, distance_cutoff, output_pdb_pa
     io = PDBIO()
     io.set_structure(structure) # Give it the full structure
     # Use our helper class to select only the pocket residues
+    # NOTE: Even if the source was a CIF file, PDBIO.save() will write it as a .pdb file.
     io.save(str(output_pdb_path), select=PocketSelect(pocket_residues))
+
+
+def refine_pocket_list(pocket_dir, sdf_dir, successful_basenames, tolerance=20):
+    """
+    Identifies and removes surface ligands due to symmetry/ crystallographic artifacts
+    by comparing residue counts of pockets.
+    Crude way to do this but works best across different datasets.
+    """
+    print(f"\n--- Refining Pockets (Tolerance: {tolerance} residues) ---")
+    
+    # Group basenames by PDB_ID + Ligand_ID (e.g., 8hv5_N7C)
+    groups = defaultdict(list)
+    for name in successful_basenames:
+        parts = name.split('_')
+        key = "_".join(parts[:2])
+        groups[key].append(name)
+    
+    refined_list = list(successful_basenames)
+    parser = PDBParser(QUIET=True)
+
+    for key, variants in groups.items():
+        if len(variants) <= 1:
+            continue
+            
+        # 1. Get counts for all variants in the group
+        counts = []
+        for name in variants:
+            pdb_path = pocket_dir / f"{name}_pocket.pdb"
+            try:
+                struct = parser.get_structure(name, str(pdb_path))
+                res_count = len(list(struct.get_residues()))
+                counts.append((name, res_count))
+            except Exception:
+                counts.append((name, 0))
+
+        # 2. Sort by residue count (descending) to find the largest (best) pocket
+        counts.sort(key=lambda x: x[1], reverse=True)
+        max_name, max_val = counts[0]
+        
+        # 3. Filter artifacts
+        for i in range(1, len(counts)):
+            current_name, current_val = counts[i]
+            diff = max_val - current_val
+            
+            # If the difference is greater than the threshold, the smaller one is an artifact
+            if diff > tolerance:
+                print(f"    [DISCARD] {current_name} ({current_val} res): Artifact of {max_name} ({max_val} res)")
+                
+                if current_name in refined_list:
+                    refined_list.remove(current_name)
+                
+                # Delete physical files
+                pdb_del = pocket_dir / f"{current_name}_pocket.pdb"
+                sdf_del = sdf_dir / f"{current_name}.sdf"
+                if pdb_del.exists(): pdb_del.unlink()
+                if sdf_del.exists(): sdf_del.unlink()
+            else:
+                print(f"    [KEEP] {current_name} ({current_val} res): Similar to {max_name} ({max_val} res)")
+
+    return refined_list
 
 
 def create_binding_pockets(args):
@@ -183,30 +245,36 @@ def create_binding_pockets(args):
     
     successful_basenames = []
     
-    print(f"\nInput PDBs will be read from: {input_dir.resolve()}")
+    print(f"\nInput files will be read from: {input_dir.resolve()}")
     print(f"Output SDFs will be saved to: {sdf_output_dir.resolve()}")
     print(f"Output Pockets will be saved to: {pocket_output_dir.resolve()}")
 
-    # --- 2. Find and Loop Over Input PDBs ---
-    pdb_files = list(input_dir.glob('**/*.pdb'))
+    # --- 2. Find and Loop Over Input PDBs/CIFs ---
+    # Updated to find both PDB and MMCIF files
+    pdb_files = list(input_dir.glob('**/*.pdb')) + list(input_dir.glob('**/*.cif'))
     if not pdb_files:
-        print(f"Warning: No PDB files found in '{input_dir}'.", file=sys.stderr)
+        print(f"Warning: No PDB/CIF files found in '{input_dir}'.", file=sys.stderr)
         return
 
-    print(f"\nFound {len(pdb_files)} PDB files to process...")
+    print(f"\nFound {len(pdb_files)} structural files to process...")
 
-    # Initialize parser once
+    # Initialize parsers once
     pdb_parser = PDBParser(QUIET=True)
+    cif_parser = MMCIFParser(QUIET=True)
 
     for pdb_path in pdb_files:
         pdb_id = pdb_path.stem.lower()
-        print(f"\n--- Processing {pdb_id} ---")
+        suffix = pdb_path.suffix.lower()
+        print(f"\n--- Processing {pdb_id} ({suffix.upper()}) ---")
 
         # --- OPTIMIZATION: Parse Protein Structure ONCE per file ---
         try:
-            structure = pdb_parser.get_structure(pdb_id, pdb_path)
+            if suffix == '.cif':
+                structure = cif_parser.get_structure(pdb_id, str(pdb_path))
+            else:
+                structure = pdb_parser.get_structure(pdb_id, str(pdb_path))
         except Exception as e:
-            print(f"  [FAIL] Could not parse PDB structure {pdb_id}: {e}")
+            print(f"  [FAIL] Could not parse structure {pdb_id}: {e}")
             continue
 
         # --- 3. Find Biological Ligands via RCSB API ---
@@ -276,10 +344,10 @@ def create_binding_pockets(args):
                         sdf_path.write_bytes(response.content)
 
                         # --- 6. Pocket Extraction ---
+                        # NOTE: Extraction will save as .pdb even if source was .cif
                         pocket_obj_name = f"{base_name}_pocket"
                         output_pdb_path = pocket_output_dir / f"{pocket_obj_name}.pdb"
                         
-                        # Pass the ALREADY PARSED structure object
                         extract_pocket_biopython(
                             structure=structure,
                             sdf_path=sdf_path,
@@ -296,15 +364,24 @@ def create_binding_pockets(args):
         except Exception as e:
             print(f"  [FAIL] Failed to process PDB {pdb_id} API data: {e}", file=sys.stderr)
 
-    print("\nDone! Pocket and ligand processing complete.")
+    print("\nDone! Extraction complete.")
     
+    # --- 7. Refinement (Artifact Removal) ---
+    if successful_basenames:
+        successful_basenames = refine_pocket_list(
+            pocket_output_dir, 
+            sdf_output_dir, 
+            successful_basenames, 
+            tolerance=20
+        )
+
     # --- Write split file ---
     if successful_basenames:
         try:
             with open(split_file_path, 'w') as f:
                 for name in successful_basenames:
                     f.write(name + '\n')
-            print(f"\nSuccessfully generated split file: {split_file_path.resolve()}")
+            print(f"\nSuccessfully generated refined split file: {split_file_path.resolve()}")
         except Exception as e:
             print(f"    [FAIL] Error saving split file: {e}", file=sys.stderr)
     else:
@@ -313,7 +390,7 @@ def create_binding_pockets(args):
 
 if __name__ == '__main__':
     p = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    p.add_argument("-i", "--input_dir", required=True, help="Input PDB directory")
+    p.add_argument("-i", "--input_dir", required=True, help="Input structural directory")
     p.add_argument("-o", "--output_dir", help="Output directory")
     p.add_argument("-d", "--distance", type=float, default=15.0, help="Pocket cutoff distance")
     p.add_argument("--include_common", action="store_true", help="Include common additives")

@@ -38,7 +38,7 @@ def main():
     
     # Deduplication
     parser.add_argument('--keep_duplicates', action='store_false', 
-                        dest='deduplicate', default=True, 
+                        dest='deduplicate', default=False, 
                         help='Disable deduplication')
 
     args = parser.parse_args()

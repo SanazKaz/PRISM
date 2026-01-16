@@ -4,8 +4,8 @@
 #SBATCH --gres=gpu:1
 #SBATCH --partition=devel
 #SBATCH --time 00:10:00
-#SBATCH --job-name=silly_walks_test2
-#SBATCH --output=jobs_files/silly_walks_test2.log
+#SBATCH --job-name=TEST_MOAD
+#SBATCH --output=jobs_files/TEST_MOAD.log
 
 
 # --- Environment Setup ---
@@ -63,8 +63,8 @@ nvidia-smi
 echo "Starting PRISM training using Scratch Data..."
 
 srun python "${PROJECT_ROOT}/scripts/train.py" \
-    --config "${PROJECT_ROOT}/configs/ppo_devel.yaml" \
-    --resume_from_checkpoint "${CHECKPOINT_PATH}" \
+    --config "${PROJECT_ROOT}/configs/binding_moad_fa_ppo.yaml" \
+    --warm_start_from_ddpm "/data/stat-cadd/wolf7055/PRISM/checkpoints/moad_fullatom_cond.ckpt" \
     --datadir "${SCRATCH_DATASET_DIR}" \
     --seed ${SEED}
 

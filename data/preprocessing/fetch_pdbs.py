@@ -15,43 +15,33 @@ from typing import Set
 
 def download_pdbs(pdb_ids: Set[str], output_dir: Path):
     """
-    Downloads a set of PDB IDs from RCSB to the specified directory.
+    Downloads PDB structures from RCSB given a list of PDB IDs.
+    
+    Args:
+        pdb_ids: Set of PDB IDs to download
+        output_dir: Path to output directory
     """
     output_dir.mkdir(parents=True, exist_ok=True)
-    print(f"Downloading {len(pdb_ids)} PDB files to: {output_dir.resolve()}")
-    
-    downloaded_count = 0
-    failed_count = 0
     
     for pdb_id in sorted(pdb_ids):
         pdb_id = pdb_id.strip().lower()
-        if len(pdb_id) != 4:
-            print(f"  [SKIP] Invalid PDB ID format: '{pdb_id}'")
-            continue
-
+        # Try PDB first
         try:
-            pdb_url = f"https://files.rcsb.org/download/{pdb_id}.pdb"
-            file_response = requests.get(pdb_url)
-            file_response.raise_for_status()
-            
-            filepath = output_dir / f"{pdb_id}.pdb"
-            filepath.write_text(file_response.text)
+            url = f"https://files.rcsb.org/download/{pdb_id}.pdb"
+            resp = requests.get(url)
+            resp.raise_for_status()
+            (output_dir / f"{pdb_id}.pdb").write_text(resp.text)
             print(f"  [OK] Downloaded: {pdb_id}.pdb")
-            downloaded_count += 1
-            
-            time.sleep(0.1)  # Be nice to RCSB server
-            
-        except requests.exceptions.HTTPError:
-            if file_response.status_code == 404:
-                print(f"  [SKIP] No PDB file found for '{pdb_id}' on RCSB.")
-            else:
-                print(f"  [FAIL] Failed {pdb_id}: HTTP Error")
-                failed_count += 1
-        except Exception as e:
-            print(f"  [FAIL] Failed {pdb_id}: {e}")
-            failed_count += 1
-
-    print(f"Batch Complete: {downloaded_count} downloaded, {failed_count} failed.\n")
+        except:
+            # Fallback to CIF
+            try:
+                url = f"https://files.rcsb.org/download/{pdb_id}.cif"
+                resp = requests.get(url)
+                resp.raise_for_status()
+                (output_dir / f"{pdb_id}.cif").write_text(resp.text)
+                print(f"  [CIF] Downloaded: {pdb_id}.cif (PDB not available)")
+            except Exception as e:
+                print(f"  [FAIL] {pdb_id}: No PDB or CIF found.")
 
 
 def get_pdbs_from_file(file_path: str, output_dir: str):

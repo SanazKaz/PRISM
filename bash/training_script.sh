@@ -5,7 +5,7 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --partition=short
 #SBATCH --time 08:00:00
-#SBATCH --job-name=silly_walks_Aro_bonus_Posebusters_PRISM
+#SBATCH --job-name=MOAD_Posebusters_Training
 #SBATCH --mail-user=wolf7055@ox.ac.uk
 #SBATCH --mail-type=END,FAIL
 #SBATCH --array=0-19
@@ -17,27 +17,22 @@ module load Anaconda3
 source activate /data/stat-cadd/wolf7055/conda/envs/prism_backup
 
 # --- 1. SETUP PATHS ---
+export PROJECT_ROOT="/data/stat-cadd/wolf7055/PRISM"
 SEEDS=(42 976 123 789)
 
-# Base path for trained model checkpoints
-CKPT_BASE="/data/stat-cadd/wolf7055/PRISM/Log_Results/PB_Final_Run_0.5_0.5_to_0.7_0.3/checkpoints"
+# Single warm-start model for all datasets
+WARM_START_CKPT="${PROJECT_ROOT}/checkpoints/moad_fullatom_cond.ckpt"
 
-# Parallel arrays: datasets and their corresponding best model checkpoints
+# Where checkpoints should be saved
+CHECKPOINT_OUTPUT_DIR="${PROJECT_ROOT}/Log_Results"
+
+# Datasets to train on
 DATASETS=(
-    "/data/stat-cadd/wolf7055/PRISM/data/AMPC_beta_lactamase/03_final_dataset"
-    "/data/stat-cadd/wolf7055/PRISM/data/Carb_Anh_II/03_final_dataset"
-    "/data/stat-cadd/wolf7055/PRISM/data/covid19_main_protease/03_final_dataset"
-    "/data/stat-cadd/wolf7055/PRISM/data/EGFR/03_final_dataset"
-    "/data/stat-cadd/wolf7055/PRISM/data/Estrogen_recep_alpha/03_final_dataset"
-)
-
-# Model paths with .ckpt extension (same structure as .pt but different extension)
-MODEL_CKPTS=(
-    "${CKPT_BASE}/AMPC_beta_lactamase/seed=42/epoch=33-reward=1.28.ckpt"
-    "${CKPT_BASE}/Carb_Anh_II/seed=42/epoch=33-reward=1.23.ckpt"
-    "${CKPT_BASE}/covid19_main_protease/seed=123/epoch=31-reward=1.18.ckpt"
-    "${CKPT_BASE}/EGFR/seed=42/epoch=34-reward=1.20.ckpt"
-    "${CKPT_BASE}/Estrogen_recep_alpha/seed=789/epoch=34-reward=1.23.ckpt"
+    "${PROJECT_ROOT}/data/Factor_Xa/03_final_dataset"
+    "${PROJECT_ROOT}/data/Carb_Anh_II/03_final_dataset"
+    "${PROJECT_ROOT}/data/EGFR/03_final_dataset"
+    "${PROJECT_ROOT}/data/Estrogen_recep_alpha/03_final_dataset"
+    "${PROJECT_ROOT}/data/HIV_1_Protease/03_final_dataset"
 )
 
 NUM_SEEDS=${#SEEDS[@]}
@@ -49,18 +44,16 @@ DATASET_IDX=$((SLURM_ARRAY_TASK_ID / NUM_SEEDS))
 
 SEED=${SEEDS[$SEED_IDX]}
 SOURCE_DATASET_PATH=${DATASETS[$DATASET_IDX]}
-MODEL_CKPT=${MODEL_CKPTS[$DATASET_IDX]}
 
 # Extract dataset name
 DATASET_NAME=$(basename $(dirname $SOURCE_DATASET_PATH))
 
-# --- 2. LOGGING SETUP (Permanent Storage) ---
-JOB_NAME="sw_aro_b_pb_prism"
-BASE_LOG_DIR="/data/stat-cadd/wolf7055/PRISM/jobs_files/silly_walks_Aro_bonus_Posebusters_PRISM" 
-LOG_DIR="${BASE_LOG_DIR}/${JOB_NAME}/${DATASET_NAME}"
-mkdir -p $LOG_DIR 
+# --- 2. LOGGING SETUP (for SLURM logs only) ---
+JOB_NAME="MOAD_Posebusters_Training"
+SLURM_LOG_DIR="${PROJECT_ROOT}/jobs_files/${JOB_NAME}/${DATASET_NAME}"
+mkdir -p $SLURM_LOG_DIR 
 
-LOG_FILE="${LOG_DIR}/seed_${SEED}_taskid_${SLURM_ARRAY_TASK_ID}.log"
+LOG_FILE="${SLURM_LOG_DIR}/seed_${SEED}_taskid_${SLURM_ARRAY_TASK_ID}.log"
 
 # Redirect all output to this log file
 exec 1>$LOG_FILE 2>&1
@@ -71,13 +64,16 @@ echo "Array Task ID: $SLURM_ARRAY_TASK_ID"
 echo "Using seed: $SEED"
 echo "Dataset: $DATASET_NAME"
 echo "Source Path: $SOURCE_DATASET_PATH"
-echo "Model checkpoint: $MODEL_CKPT"
+echo "Warm start checkpoint: $WARM_START_CKPT"
 echo "Log file: $LOG_FILE"
+echo "Checkpoint output: $CHECKPOINT_OUTPUT_DIR"
 echo "=========================================="
 
-# Validate model checkpoint exists
-if [ ! -f "${MODEL_CKPT}" ]; then
-    echo "[ERROR] Model checkpoint not found: ${MODEL_CKPT}"
+cd $PROJECT_ROOT
+
+# Validate warm start checkpoint exists
+if [ ! -f "${WARM_START_CKPT}" ]; then
+    echo "[ERROR] Warm start checkpoint not found: ${WARM_START_CKPT}"
     exit 1
 fi
 
@@ -106,18 +102,20 @@ if torch.cuda.is_available():
     print("name0", torch.cuda.get_device_name(0))
 PY
 
+nvidia-smi
+
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 export DEBUG_PPO=0
 
 # --- 5. RUN TRAINING ---
 echo "Starting training..."
-srun python scripts/train.py \
---config "configs/ppo_config.yaml" \
---resume_from_checkpoint "${MODEL_CKPT}" \
---seed $SEED \
---datadir "$SCRATCH_WORK_DIR" \
---logdir "$BASE_LOG_DIR" \
---dataset_name "$DATASET_NAME"
+srun python "${PROJECT_ROOT}/scripts/train.py" \
+    --config "${PROJECT_ROOT}/configs/binding_moad_fa_ppo.yaml" \
+    --warm_start_from_ddpm "${WARM_START_CKPT}" \
+    --seed $SEED \
+    --datadir "$SCRATCH_WORK_DIR" \
+    --logdir "$CHECKPOINT_OUTPUT_DIR" \
+    --dataset_name "$DATASET_NAME"
 
 echo "Training completed!"
 
