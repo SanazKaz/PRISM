@@ -1,155 +1,158 @@
-"""PoseBustersReward (Full Suite)
-- Checks Bond Lengths (1-2 interactions)
-- Checks Bond Angles (1-3 interactions via distance constraints)
-- Checks Steric Clashes (non-bonded interactions)
-- adapted  logic from PoseBusters (Buttenschoen et al.) for Reinforcement Learning: https://github.com/maabuu/posebusters
+"""PoseBustersGeometryReward
+
+Adapted from PoseBusters (Buttenschoen et al.) for Reinforcement Learning.
+Uses the original PoseBusters check_geometry function directly.
+
+Checks:
+    1. Bond lengths (1-2 interactions) - within expected bounds
+    2. Bond angles (1-3 interactions) - within expected bounds  
+    3. Steric clashes (non-bonded) - no VDW overlap
+
+Score = exp(-penalty) where penalty is based on violation counts.
+This provides smooth gradients - small improvements always help.
 """
 
 from __future__ import annotations
 from typing import List, Optional
 
-import torch
 import numpy as np
+import pandas as pd
+import torch
+
 from rdkit import Chem
-from rdkit.Chem import rdDistGeom, rdMolTransforms
 from rdkit.Chem.rdchem import Mol
 
+from posebusters.modules.distance_geometry import check_geometry
 from src.prism.reward.scorer import BaseReward
 
-class PoseBustersGeometryChecks(BaseReward):
-    def __init__(self, 
-                 bond_tol: float = 0.2, 
-                 angle_tol: float = 0.2, 
-                 clash_tol: float = 0.2,
-                 penalty_scale: float = 2.0):
+
+class PoseBustersGeometryReward(BaseReward):
+    """
+    Reward based on PoseBusters geometry checks.
+    
+    Uses exponential penalty approach for smooth gradients.
+    Each violation contributes to the penalty, so small improvements
+    always result in score improvements.
+    """
+    
+    def __init__(
+        self, 
+        threshold_bad_bond_length: float = 0.2,
+        threshold_bad_angle: float = 0.2,
+        threshold_clash: float = 0.2,
+        penalty_scale: float = 4.0
+    ):
         """
         Args:
-            bond_tol: Relative tolerance for bond lengths (default 0.2 = 20%)
-            angle_tol: Relative tolerance for 1-3 distances (angles)
-            clash_tol: Relative tolerance for steric clashes
-            penalty_scale: Sharpness of the penalty (higher = harsher)
+            threshold_bad_bond_length: Relative tolerance for bonds (0.2 = 20%)
+            threshold_bad_angle: Relative tolerance for angles (0.2 = 20%)
+            threshold_clash: Relative tolerance for clashes (0.2 = 20%)
+            penalty_scale: Controls harshness of penalty (higher = harsher)
         """
         super().__init__()
-        self.bond_tol = bond_tol
-        self.angle_tol = angle_tol
-        self.clash_tol = clash_tol
+        self.threshold_bond = threshold_bad_bond_length
+        self.threshold_angle = threshold_bad_angle
+        self.threshold_clash = threshold_clash
         self.scale = penalty_scale
-        
-        # Exact parameters used in PoseBusters check_geometry source
-        self.bounds_params = {
-            "set15bounds": True,
-            "scaleVDW": True,
-            "doTriangleSmoothing": True,
-            "useMacrocycle14config": False,
-        }
 
     @property
     def name(self) -> str:
         return "geometry_checks"
-
-    # @property
-    # def increase_weight_after_epoch(self) -> Optional[int]:
-    #     """Enable weight increase after epoch 10."""
-    #     return 10
     
-    # @property
-    # def increased_weight_multiplier(self) -> float:
-    #     """Increase weight from 0.5 to 0.7 (multiplier of 1.4)."""
-    #     return 1.4
+    @property
+    def increase_weight_after_epoch(self) -> Optional[int]:
+        return None
+
+    @property
+    def increased_weight_multiplier(self) -> float:
+        return None
+
+    def _safe_value(self, value) -> float:
+        """
+        Safely extract value, handling NaN.
+        
+        Returns 0 if NaN.
+        """
+        # NaN check (NaN != NaN)
+        if value != value:
+            return 0
+        return float(value)
 
     def score_mol(self, mol: Mol) -> float:
+        """
+        Score a single molecule based on geometry checks.
+        
+        Uses exponential penalty approach for smooth gradients.
+        Small improvements in geometry always improve the score.
+        
+        Returns:
+            exp(-penalty) where penalty scales with number of violations.
+            0.0 if molecule is invalid.
+        """
         if mol is None:
             return 0.0
-            
-        # --- 1. SANITIZATION (Required for Bounds Matrix) ---
-        try:
-            Chem.SanitizeMol(mol)
-        except Exception:
-            return 0.0 
-
-        # --- 2. SETUP MATRICES ---
-        try:
-            # Physics Bounds (Lower Triangle = Min, Upper Triangle = Max)
-            # This matrix contains the allowed distances for Bonds (1-2) and Angles (1-3)
-            # and the VDW limits for non-bonded atoms.
-            bounds = rdDistGeom.GetMoleculeBoundsMatrix(mol, **self.bounds_params)
-            
-            # Topological Distance (1=Bond, 2=Angle, 3+=Non-bonded)
-            topo_dist = Chem.GetDistanceMatrix(mol)
-            
-            conf = mol.GetConformer()
-            num_atoms = mol.GetNumAtoms()
-        except Exception:
-            return 0.0
-
+        
+        # Call Martin's check_geometry and get the results
+        results = check_geometry(
+            mol,
+            threshold_bad_bond_length=self.threshold_bond,
+            threshold_bad_angle=self.threshold_angle,
+            threshold_clash=self.threshold_clash
+        )
+        
+        r = results["results"]
+        # dict with keys: df_bonds, df_angles, df_clashes \
+        # and values are pandas DataFrames with columns:
+        details = results.get("details", {})
+        df_bonds = details.get("bonds", pd.DataFrame())
+        df_angles = details.get("angles", pd.DataFrame())
+        df_clashes = details.get("clash", pd.DataFrame())
+        
         total_penalty = 0.0
         
-        # --- 3. CHECK PAIRWISE GEOMETRY ---
-        # Iterate over unique pairs (i < j)
-        for i in range(num_atoms):
-            for j in range(i + 1, num_atoms):
+        # Sum bond deviations (percent_error is signed: negative = too short, positive = too long)
+        for _, row in df_bonds.iterrows():
+            bond_pen = abs(row["percent_error"])
+            if bond_pen > self.threshold_bond:
+                total_penalty += (bond_pen - self.threshold_bond) * 1.0 
                 
-                # Actual 3D distance between atoms i and j
-                dist = rdMolTransforms.GetBondLength(conf, i, j)
+        # Sum angle deviations (bound_absolute_percent_error is already absolute)
+        for _, row in df_angles.iterrows():
+            ba_pen = row["bound_absolute_percent_error"]
+            if ba_pen > self.threshold_angle:
+                total_penalty += (ba_pen - self.threshold_angle) * 1.0
+       
+        # Sum clash deviations (bound_percent_error is negative for violations)
+        for _, row in df_clashes.iterrows():
+            clash_pen = row["bound_percent_error"]
+            if clash_pen < -self.threshold_clash: # negative value means too close
+                total_penalty += (abs(clash_pen) - self.threshold_clash) * 1.5
                 
-                # Limits from RDKit Bounds Matrix
-                # bounds[j, i] is LOWER bound
-                # bounds[i, j] is UPPER bound
-                lower_limit = bounds[j, i]
-                upper_limit = bounds[i, j]
-                
-                # Number of bonds between atoms
-                hops = int(topo_dist[i, j])
-
-                violation = 0.0
-
-                # === CASE A: BOND LENGTHS (1-2) ===
-                if hops == 1:
-                    if dist < lower_limit:
-                        # Too Short
-                        error = (lower_limit - dist) / lower_limit
-                        if error > self.bond_tol: violation = error
-                    elif dist > upper_limit:
-                        # Too Long
-                        error = (dist - upper_limit) / upper_limit
-                        if error > self.bond_tol: violation = error
-                        
-                # === CASE B: BOND ANGLES (1-3) ===
-                # PoseBusters checks angles by measuring the distance between the two outer atoms.
-                elif hops == 2:
-                    if dist < lower_limit:
-                        # Angle too closed
-                        error = (lower_limit - dist) / lower_limit
-                        if error > self.angle_tol: violation = error * 0.5 
-                    elif dist > upper_limit:
-                        # Angle too open
-                        error = (dist - upper_limit) / upper_limit
-                        if error > self.angle_tol: violation = error * 0.5
-
-                # === CASE C: STERIC CLASHES (Non-bonded) ===
-                elif hops >= 3: 
-                    # For clashes, we ONLY check the LOWER bound. 
-                    # There is no upper limit on how far apart non-bonded atoms can be.
-                    if dist < lower_limit:
-                        error = (lower_limit - dist) / lower_limit
-                        if error > self.clash_tol: violation = error * 1.5
-
-                total_penalty += violation * self.scale
-
-        # Convert to Score [0.0 - 1.0]
-        # exp(-penalty) creates a smooth gradient: 0 penalty -> 1.0 score
-        score = np.exp(-total_penalty)
+        
+        score = np.exp(-total_penalty * self.scale)
+        
         
         return float(score)
 
     def __call__(self, molecules: List[Chem.Mol], dataset_info=None, **kwargs) -> torch.Tensor:
+        """
+        Calculate geometry scores for a batch of molecules.
+        
+        Args:
+            molecules: List of RDKit Mol objects
+            dataset_info: Optional dataset metadata (unused)
+            **kwargs: Additional arguments (unused)
+            
+        Returns:
+            Tensor of scores, shape (len(molecules),)
+        """
         scores = []
         for mol in molecules:
             try:
                 score = self.score_mol(mol)
                 scores.append(score)
-
             except Exception:
                 scores.append(0.0)
+                
         print(f"Geometry checks scores: {scores}")
         return torch.tensor(scores, dtype=torch.float32)

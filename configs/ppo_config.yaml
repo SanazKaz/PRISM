@@ -1,11 +1,11 @@
-run_identifier: 'CD_Posebusters_Training'
+run_identifier: 'geometry_1_1_1_5_CD_Posebusters_Training'
 logdir: 'Log_Results'
 wandb_params:
   mode: 'online' # seeing if it will reduce overhead 
   entity: 'sanazkazeminia97'
   project: 'Posebusters_Training'
 dataset: 'crossdock' #(refers to the model's dataset_info_key)
-datadir: '/data/stat-cadd/wolf7055/PRISM/data/AMPC_beta_lactamase/03_final_dataset'
+datadir: '/data/stat-cadd/wolf7055/PRISM/data/BRD4_BD1/03_final_dataset'
 enable_progress_bar: False
 num_sanity_val_steps: 0
 batch_size: 108 # number of pockets to sample for (60)
@@ -27,7 +27,7 @@ loss_params:
   clamp_lj: 3.0
 
 ppo_params:
-  num_outer_epochs: 30          # num of PPO cycles (outer epochs)
+  num_outer_epochs: 25          # num of PPO cycles (outer epochs)
   num_inner_epochs: 2            # Updates per rollout (inner epochs)
   n_steps: 216                    # Rollout length (mols generated)
   ligand_chunk_size: 108
@@ -62,8 +62,8 @@ reward_params:
     sucos: 0.0
     interaction_fingerprints: 0.0
     feature_density: 0.0
-    geometry_checks: 0.5
-    flatness_checks: 0.5
+    geometry_checks: 1.0
+    flatness_checks: 0.0
     aromatic_counter: 0.0
     aromatic_anchor: 0.0
     multi_features: 0.0
@@ -108,6 +108,6 @@ visualize_chain_epoch: 999999
 eval_params:
   n_eval_samples: 20
   eval_batch_size: 20
-  smiles_file: '/data/stat-cadd/wolf7055/PRISM/data/AMPC_beta_lactamase/03_final_dataset/train_smiles.npy'
+  smiles_file: '/data/stat-cadd/wolf7055/PRISM/data/BRD4_BD1/03_final_dataset/train_smiles.npy'
   n_visualize_samples: 0
   keep_frames: 0

@@ -6,7 +6,7 @@ from src.prism.reward.scoring.molecular_props import QEDReward, SAScoreReward, L
 from src.prism.reward.scoring.sucos import SuCOSReward
 from src.prism.reward.scoring.interaction_fingerprints import InteractionFingerprintsReward
 from src.prism.reward.scoring.feature_density import FeatureDensityReward
-from src.prism.reward.scoring.geometry_checks import PoseBustersGeometryChecks
+from src.prism.reward.scoring.geometry_checks import PoseBustersGeometryReward
 from src.prism.reward.scoring.flatness_checks import PoseBustersFlatnessReward
 from src.prism.reward.scoring.aromatic_counter import AromaticBonus
 from src.prism.reward.scoring.aromatic_feature import AromaticFeatureReward
@@ -25,7 +25,7 @@ REWARD_REGISTRY = {
     "sucos": SuCOSReward,
     "interaction_fingerprints": InteractionFingerprintsReward,
     "feature_density": FeatureDensityReward,
-    "geometry_checks": PoseBustersGeometryChecks,
+    "geometry_checks": PoseBustersGeometryReward,
     "flatness_checks": PoseBustersFlatnessReward,
     "aromatic_counter": AromaticBonus,
     "aromatic_anchor": AromaticFeatureReward,

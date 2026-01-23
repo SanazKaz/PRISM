@@ -29,9 +29,9 @@ loss_params:
 ppo_params:
   num_outer_epochs: 30          # num of PPO cycles (outer epochs)
   num_inner_epochs: 2            # Updates per rollout (inner epochs)
-  n_steps: 216                    # Rollout length (mols generated)
-  ligand_chunk_size: 108
-  ppo_batch_size: 108             # Size of each PPO update batch
+  n_steps: 20                    # Rollout length (mols generated)
+  ligand_chunk_size: 10
+  ppo_batch_size: 10             # Size of each PPO update batch
   clip_range: 0.1                # PPO clipping parameter
   value_loss_coef: 0.0           # Weight for value loss
   entropy_coef: 0.001            # Weight for entropy bonus

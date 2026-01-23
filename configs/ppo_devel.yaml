@@ -1,4 +1,4 @@
-run_identifier: 'lr_4e-5_more_timesteps_2'
+run_identifier: 'lr_4e-5_more_timesteps_2_silly'
 logdir: 'Log_Results'
 wandb_params:
   mode: 'online' # seeing if it will reduce overhead 
@@ -63,13 +63,13 @@ reward_params:
     interaction_fingerprints: 0.0
     feature_density: 0.0
     geometry_checks: 0.0
-    flatness_checks: 0.0
+    flatness_checks: 1.0
     aromatic_counter: 0.0
     aromatic_anchor: 0.0
     multi_features: 0.0
     silly_walks: 0.0
     silly_rings: 0.0
-    mmff_strain: 1.0
+    mmff_strain: 0.0
   reward_paths:
     feature_density: 'src/prism/reward/scoring/reward_data/ampc_hotspot_global_centered_eps0.5_min10_aromatic5.pkl'
     aromatic_anchor: 'src/prism/reward/scoring/reward_data/ampc_hotspot_global_centered_eps0.5_min10_aromatic5.pkl'

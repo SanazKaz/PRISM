@@ -1,11 +1,11 @@
 #!/bin/bash
 #SBATCH --cpus-per-task=4
 #SBATCH --partition=devel 
-#SBATCH --gres=gpu:h100:1
-#SBATCH --time 03:00:00
-#SBATCH --job-name=aromatic_bonus_mols
+#SBATCH --gres=gpu:1
+#SBATCH --time 00:10:00
+#SBATCH --job-name=cd_posebusters_mols
 #SBATCH --mail-user=wolf7055@ox.ac.uk
-#SBATCH --output=jobs_files/GEN_FILE_aromatic_bonus_mols.log
+#SBATCH --output=jobs_files/Single_Objective_updated_CD_Posebusters_Training.log
 # Redirect stderr to stdout
 exec 2>&1
 # Clear pre-loaded modules to ensure clean state // --constraint='gpu_mem:24GB'#SBATCH --gres=gpu:h100:1#SBATCH --array=0-7--constraint=gpu_sku:H100
@@ -30,15 +30,15 @@ echo "Starting generation..."
 
 
 python scripts/generate_ligands.py \
-'/data/stat-cadd/wolf7055/PRISM/Log_Results/aromatic_bonus_trial_ampc_from_PB_Final_Run/checkpoints/tmp/seed=42/epoch=60-reward=0.39.ckpt' \
+'/data/stat-cadd/wolf7055/PRISM/Log_Results/Single_Objective_updated_CD_Posebusters_Training/checkpoints/BRD4_BD1/seed=789/epoch=13-reward=0.81.pt' \
 --config /data/stat-cadd/wolf7055/PRISM/configs/ppo_config.yaml \
---pdbfile /data/stat-cadd/wolf7055/PRISM/data/AMPC_beta_lactamase/02_preprocessed/pocket_files/1pi4_SM3_E_401_pocket.pdb \
---ref_ligand /data/stat-cadd/wolf7055/PRISM/data/AMPC_beta_lactamase/02_preprocessed/sdf_files/1pi4_SM3_E_401.sdf \
---n_samples 10100 \
---num_nodes_lig 25 \
+--pdbfile /data/stat-cadd/wolf7055/PRISM/data/BRD4_BD1/02_preprocessed/pocket_files/6fo5_DZH_B_201_pocket.pdb \
+--ref_ligand /data/stat-cadd/wolf7055/PRISM/data/BRD4_BD1/02_preprocessed/sdf_files/6fo5_DZH_B_201.sdf \
+--n_samples 100 \
+--num_nodes_lig 30 \
 --batch_size 50 \
 --sanitize \
---outfile /data/stat-cadd/wolf7055/PRISM/Generated_Mols/Aromatic_Bonus_Mols.sdf
+--outfile /data/stat-cadd/wolf7055/PRISM/Generated_Mols/Single_Objective_updated_CD_Posebusters_Training_789.sdf
 
 echo "Generation completed, stopping resource monitoring..."
 

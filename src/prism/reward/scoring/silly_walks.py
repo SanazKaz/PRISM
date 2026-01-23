@@ -64,28 +64,62 @@ class RingSystemFinder:
 # --- Part 2: PRISM Reward Classes ---
 
 class SillyWalksReward(BaseReward):
-    """General Silliness (Morgan Fingerprint Novelty)"""
-    def __init__(self, reference_path: str, radius: int = 2):
+    """
+    Weighted Silliness Reward (Morgan Fingerprint Novelty)
+    
+    Uses frequency-weighted penalty with exponential scoring.
+    - Common bits (seen often in reference): low/no penalty
+    - Rare bits (seen few times): medium penalty  
+    - Novel bits (never seen): high penalty
+    
+    Penalty formula: max(0, 5 - log10(count + 1))
+    Score: exp(-total_penalty * scale)
+    """
+    def __init__(self, reference_path: str, radius: int = 2, penalty_scale: float = 2.0):
+        """
+        Args:
+            reference_path: Path to reference SMILES file (space-separated: SMILES Name)
+            radius: Morgan fingerprint radius (default 2)
+            penalty_scale: Controls harshness of penalty (higher = harsher)
+        """
         self.radius = radius
-        self.safe_bits = set()
+        self.scale = penalty_scale
+        self.bit_counts = {}  # Store frequency of each bit
         
         if not os.path.exists(reference_path):
             print(f"[!] SillyWalks data not found: {reference_path}")
             return
 
-        print(f"Loading SillyWalks (Bits) from {reference_path}")
-        # ChEMBL drugs usually Space-separated: SMILES Name
+        print(f"Loading SillyWalks (Bit Frequencies) from {reference_path}")
         df = pd.read_csv(reference_path, sep=" ", names=["SMILES", "Name"])
+        
+        # Count frequency of each bit across all reference molecules
         for smi in df["SMILES"]:
             mol = Chem.MolFromSmiles(smi)
             if mol:
                 fp = AllChem.GetMorganFingerprint(mol, self.radius)
-                for k in fp.GetNonzeroElements().keys():
-                    self.safe_bits.add(k)
+                for bit in fp.GetNonzeroElements().keys():
+                    self.bit_counts[bit] = self.bit_counts.get(bit, 0) + 1
+        
+        print(f"Loaded {len(self.bit_counts)} unique bits from {len(df)} molecules")
 
     @property
     def name(self) -> str:
         return "silly_walks"
+
+    def _bit_penalty(self, bit: int) -> float:
+        """
+        Calculate penalty for a single bit based on its frequency.
+        
+        - count = 100,000 -> penalty = 0.0 (very common)
+        - count = 10,000  -> penalty = 1.0
+        - count = 100     -> penalty = 3.0
+        - count = 5       -> penalty = 4.2
+        - count = 0       -> penalty = 5.0 (never seen)
+        """
+        count = self.bit_counts.get(bit, 0)
+        penalty = max(0.0, 5.0 - np.log10(count + 1))
+        return penalty
 
     def __call__(self, molecules: List[Chem.Mol], **kwargs) -> torch.Tensor:
         scores = []
@@ -101,10 +135,18 @@ class SillyWalksReward(BaseReward):
                 scores.append(0.0)
                 continue
             
-            silly_bits = [bit for bit in on_bits if bit not in self.safe_bits]
-            silliness_ratio = len(silly_bits) / len(on_bits)
-            scores.append(1.0 - silliness_ratio)
+            # Sum penalties for all bits
+            total_penalty = sum(self._bit_penalty(bit) for bit in on_bits)
+            print(f"Molecule has {len(on_bits)} bits, total penalty: {total_penalty:.1f}, avg per bit: {total_penalty/len(on_bits):.2f}")
+            avg_penalty = total_penalty / len(on_bits)
+            effective_penalty = max(0.0, avg_penalty - 2.5)
             
+            # Exponential decay: 0 penalty -> 1.0, more penalty -> lower score
+            score = np.exp(-effective_penalty * self.scale)
+            scores.append(float(score))
+            
+        
+        print(f"SillyWalks scores: {scores}")
         return torch.tensor(scores, dtype=torch.float32)
 
 
@@ -156,6 +198,7 @@ class SillyRingsReward(BaseReward):
         # 3. Frequency Scoring for the 'Weakest Link' (rarest ring system)
         counts = [self.ring_dict.get(r, 0) for r in rings]
         min_freq = min(counts)
+        
         
         # Clause C: Hard zero if the ring is entirely unknown (count of 0)
         if min_freq == 0:

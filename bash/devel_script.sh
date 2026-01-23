@@ -4,8 +4,8 @@
 #SBATCH --gres=gpu:1
 #SBATCH --partition=devel
 #SBATCH --time 00:10:00
-#SBATCH --job-name=TEST_MOAD
-#SBATCH --output=jobs_files/TEST_MOAD.log
+#SBATCH --job-name=PPO_DEVEL_SILLY
+#SBATCH --output=jobs_files/PPO_DEVEL_SILLY.log
 
 
 # --- Environment Setup ---
@@ -16,18 +16,18 @@ echo "Python executable: $(which python)"
 
 # --- DEFINITIONS ---
 export PROJECT_ROOT="/data/stat-cadd/wolf7055/PRISM"
-PERMANENT_DATA_DIR="${PROJECT_ROOT}/data/AMPC_beta_lactamase/03_final_dataset"
+PERMANENT_DATA_DIR="${PROJECT_ROOT}/data/BRD4_BD1/03_final_dataset"
 
 # Scratch location
 WORK_DIR="${TMPDIR}"
-SCRATCH_DATASET_DIR="${WORK_DIR}/AMPC_beta_lactamase_test"
+SCRATCH_DATASET_DIR="${WORK_DIR}/BRD4_BD1_test"
 
 # Seeds array
 SEEDS=(42 976 123 789)
 SEED=${SEEDS[$SLURM_ARRAY_TASK_ID]}
 
 # Checkpoint path for this seed
-CHECKPOINT_DIR="/data/stat-cadd/wolf7055/PRISM/Log_Results/linear_squared_feature_density_300_timesteps_lr_1e-5/checkpoints/tmp"
+CHECKPOINT_DIR="/data/stat-cadd/wolf7055/PRISM/Log_Results/geometry_checks_0.5_flatness_checks_0.5_BD1_BRD4/checkpoints/tmp"
 CHECKPOINT_PATH="${CHECKPOINT_DIR}/seed=${SEED}/last.ckpt"
 
 echo "=========================================="
@@ -63,8 +63,8 @@ nvidia-smi
 echo "Starting PRISM training using Scratch Data..."
 
 srun python "${PROJECT_ROOT}/scripts/train.py" \
-    --config "${PROJECT_ROOT}/configs/binding_moad_fa_ppo.yaml" \
-    --warm_start_from_ddpm "/data/stat-cadd/wolf7055/PRISM/checkpoints/moad_fullatom_cond.ckpt" \
+    --config "${PROJECT_ROOT}/configs/ppo_devel.yaml" \
+    --warm_start_from_ddpm "/data/stat-cadd/wolf7055/PRISM/checkpoints/crossdocked_fa_cond_temp.ckpt" \
     --datadir "${SCRATCH_DATASET_DIR}" \
     --seed ${SEED}
 

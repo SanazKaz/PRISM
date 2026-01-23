@@ -12,23 +12,27 @@ Log_Results/
 wandb/
 
 # Data and checkpoints
-data/AMPC_beta_lactamase/
-data/Carb_Anh_II/
-data/EGFR/
-data/Estrogen_recep_alpha/
-data/HIV_1_Protease/
-data/covid19_main_protease/
-data/custom_pdb_list_data/
-data/pdb_list.txt
+# data/AMPC_beta_lactamase/
+# data/Carb_Anh_II/
+# data/EGFR/
+# data/BRD4_BD1
+# data/Estrogen_recep_alpha/
+# data/HIV_1_Protease/
+# data/covid19_main_protease/ # abstract biophysics? and can you epxlain the slide after that? who is the end user
+# data/custom_pdb_list_data/
+# data/pdb_list.txt
 
 *.ckpt
 *.pth
 *.npz
 *.pdb
 *.sdf
+*.cif
 
 src/models/diffsbdd/data/
 src/models/diffsbdd/bash
+
+
 
 
 

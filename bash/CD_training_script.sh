@@ -4,11 +4,11 @@
 #SBATCH --gres=gpu:h100:1
 #SBATCH --ntasks-per-node=1
 #SBATCH --partition=short
-#SBATCH --time 08:00:00
-#SBATCH --job-name=MOAD_Posebusters_Training
+#SBATCH --time 03:00:00
+#SBATCH --job-name=CD_FA_Posebusters_Training
 #SBATCH --mail-user=wolf7055@ox.ac.uk
 #SBATCH --mail-type=END,FAIL
-#SBATCH --array=0-19
+#SBATCH --array=0-24
 #SBATCH --output=/dev/null 
 #SBATCH --error=/dev/null   
 
@@ -21,13 +21,14 @@ export PROJECT_ROOT="/data/stat-cadd/wolf7055/PRISM"
 SEEDS=(42 976 123 789)
 
 # Single warm-start model for all datasets
-WARM_START_CKPT="${PROJECT_ROOT}/checkpoints/moad_fullatom_cond.ckpt"
+WARM_START_CKPT="${PROJECT_ROOT}/checkpoints/crossdocked_fa_cond_temp.ckpt"
 
 # Where checkpoints should be saved
 CHECKPOINT_OUTPUT_DIR="${PROJECT_ROOT}/Log_Results"
 
 # Datasets to train on
 DATASETS=(
+    "${PROJECT_ROOT}/data/BRD4_BD1/03_final_dataset"
     "${PROJECT_ROOT}/data/Factor_Xa/03_final_dataset"
     "${PROJECT_ROOT}/data/Carb_Anh_II/03_final_dataset"
     "${PROJECT_ROOT}/data/EGFR/03_final_dataset"
@@ -49,7 +50,7 @@ SOURCE_DATASET_PATH=${DATASETS[$DATASET_IDX]}
 DATASET_NAME=$(basename $(dirname $SOURCE_DATASET_PATH))
 
 # --- 2. LOGGING SETUP (for SLURM logs only) ---
-JOB_NAME="MOAD_Posebusters_Training"
+JOB_NAME="geometry_1_1_1_5_CD_Posebusters_Training"
 SLURM_LOG_DIR="${PROJECT_ROOT}/jobs_files/${JOB_NAME}/${DATASET_NAME}"
 mkdir -p $SLURM_LOG_DIR 
 
@@ -110,7 +111,7 @@ export DEBUG_PPO=0
 # --- 5. RUN TRAINING ---
 echo "Starting training..."
 srun python "${PROJECT_ROOT}/scripts/train.py" \
-    --config "${PROJECT_ROOT}/configs/binding_moad_fa_ppo.yaml" \
+    --config "${PROJECT_ROOT}/configs/ppo_config.yaml" \
     --warm_start_from_ddpm "${WARM_START_CKPT}" \
     --seed $SEED \
     --datadir "$SCRATCH_WORK_DIR" \

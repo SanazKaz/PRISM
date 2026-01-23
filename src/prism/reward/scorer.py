@@ -65,6 +65,7 @@ class RewardManager:
         """
         self.reward_fns = reward_fns
         self.weights = reward_weights
+        self.base_weights = reward_weights.copy()
         self.dataset_info = dataset_info
         self.ddpm_module = ddpm_module
         
@@ -160,7 +161,7 @@ class RewardManager:
                 
                 raw_scores = torch.nan_to_num(raw_scores, nan=0.0)
                 
-                weight = self.weights[reward_fn.name]
+                weight = self._get_effective_weight(reward_fn, current_epoch)
                 
                 # Map local list indices back to the original batch tensor
                 for local_idx, batch_idx in mol_to_batch_idx.items():
