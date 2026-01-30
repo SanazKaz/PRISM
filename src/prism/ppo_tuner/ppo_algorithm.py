@@ -2,6 +2,9 @@
 
 import torch
 from torch.optim import Adam
+import csv
+import os
+from pathlib import Path  
 
 # Import the clean components we just built
 from .rollout_collector import RolloutCollector
@@ -26,23 +29,65 @@ class PPOAlgorithm:
         self.config = config
         self.device = next(policy_network.parameters()).device
         self.reward_function = reward_function
+        self.run_root = run_root
+        
+        # Initialize CSV logging
+        self.log_dir = Path(run_root) / "training_logs"
+        self.log_dir.mkdir(parents=True, exist_ok=True)
+        self.csv_path = self.log_dir / "training_metrics.csv"
+        self._initialize_csv()
 
-        # # Create the optimizer here, as it's tied to the algorithm
-        # self.optimizer = Adam(
-        #     filter(lambda p: p.requires_grad, self.policy_network.ddpm.parameters()),
-        #     lr=self.config.ppo_params.lr,
-        #     eps=1e-8,
-        #     weight_decay=1.0e-12,
-        #     betas=(0.9, 0.999)
-        # )
 
-        # NOTE: compose our clean components
         self.collector = RolloutCollector(
             policy_network=self.policy_network.ddpm,
-            reward_function=self.reward_function, # We'll need to refactor the reward function next
+            reward_function=self.reward_function, 
             config=config
         )
         self.buffer = RolloutBuffer(config=config)
+        
+    def _initialize_csv(self):
+        """Initialize the CSV file with headers."""
+        # Define all possible metric names
+        self.metric_headers = [
+            'train/total_loss_epoch',
+            'train/approx_kl_epoch',
+            'train/clipfrac_epoch',
+            'train/entropy_epoch',
+            'train/reward_mean',
+            'train/reward_max',
+            'train/reward_std',
+            'train/advantages_mean',
+            'train/advantages_std',
+            'train/advantages_min',
+            'train/advantages_max',
+        ]
+        
+        # Write header if file doesn't exist
+        if not self.csv_path.exists():
+            with open(self.csv_path, 'w', newline='') as f:
+                writer = csv.DictWriter(f, fieldnames=['epoch'] + self.metric_headers)
+                writer.writeheader()
+    
+    def _log_to_csv(self, epoch, metrics):
+        """
+        Append metrics for the current epoch to CSV.
+        
+        Args:
+            epoch: Current training epoch
+            metrics: Dictionary of metric names to values
+        """
+        row = {'epoch': epoch}
+        row.update(metrics)
+        
+        # Get dynamic headers (e.g., reward components), maintaining order
+        dynamic_headers = [k for k in metrics.keys() if k not in self.metric_headers]
+        
+        # Use consistent fieldnames: epoch + base metrics + dynamic metrics
+        all_fieldnames = ['epoch'] + self.metric_headers + dynamic_headers
+        
+        with open(self.csv_path, 'a', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=all_fieldnames)
+            writer.writerow(row)
     
     def train_step(self, pocket_batch, current_epoch, optimizer):
         """
@@ -179,6 +224,7 @@ class PPOAlgorithm:
             "train/entropy_epoch": epoch_total_entropy / max(epoch_accumulation_steps, 1),
             "train/reward_mean": self.buffer.rewards.mean().item(),
             "train/reward_max": self.buffer.rewards.max().item(),
+            "train/reward_std": self.buffer.rewards.std().item(),
             "train/advantages_mean": self.buffer.advantages.mean().item(),
             "train/advantages_std": self.buffer.advantages.std().item(),
             "train/advantages_min": self.buffer.advantages.min().item(),
@@ -194,5 +240,6 @@ class PPOAlgorithm:
         # ----------------------------------------------------------------
 
         print(f"total_loss epoch: {epoch_total_loss / max(epoch_accumulation_steps, 1)}")
+        self._log_to_csv(current_epoch, final_logs)
         
         return final_logs

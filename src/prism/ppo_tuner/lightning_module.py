@@ -51,7 +51,7 @@ class PPOFineTuner(pl.LightningModule):
         # Load pretrained weights if provided
         if warm_start_checkpoint is not None:
             # print(f"Loading pretrained DDPM weights from: {warm_start_checkpoint}")
-            checkpoint = torch.load(warm_start_checkpoint, map_location='cpu')
+            checkpoint = torch.load(warm_start_checkpoint, map_location='cpu', weights_only=False)
             # Extract state dict - handle both direct state_dict and lightning checkpoint formats
             if 'state_dict' in checkpoint:
                 state_dict = checkpoint['state_dict']
@@ -87,8 +87,12 @@ class PPOFineTuner(pl.LightningModule):
         frozen_count = 0
         unfrozen_count = 0
         
+        # Get trainable blocks from config, with a default fallback
+        trainable_layers = self.config.ppo_params.freeze_except
+        print(f"[Init] Trainable blocks: {trainable_layers}")
+        
         for name, param in self.ppo_algorithm.policy_network.named_parameters():
-            if any(x in name for x in ['e_block_3', 'e_block_4']):
+            if any(x in name for x in trainable_layers):
                 param.requires_grad = True
             else:
                 param.requires_grad = False
@@ -100,6 +104,7 @@ class PPOFineTuner(pl.LightningModule):
                 unfrozen_count += 1
         
         print(f"[Init] {frozen_count} params frozen, {unfrozen_count} trainable.")
+        
         
         
     def configure_optimizers(self):
@@ -154,7 +159,7 @@ class PPOFineTuner(pl.LightningModule):
         
         self.ddpm_model.eval()
         
-        try:  # <--- MOVE THIS OUT, should wrap the entire block
+        try:
             with torch.no_grad():
             
                 val_dataloader = self.trainer.datamodule.val_dataloader()
@@ -165,19 +170,19 @@ class PPOFineTuner(pl.LightningModule):
                 val_batch = next(iter(val_dataloader))
                 actual_batch_size = min(eval_batch_size, len(val_batch['num_pocket_nodes']))  # <--- FIX: min not len
                 
-                val_batch_subset = {
-                    key: value[:actual_batch_size] if torch.is_tensor(value) 
-                    else value[:actual_batch_size] if isinstance(value, list)
-                    else value
-                    for key, value in val_batch.items()
-                }
+                # val_batch_subset = {
+                #     key: value[:actual_batch_size] if torch.is_tensor(value) 
+                #     else value[:actual_batch_size] if isinstance(value, list)
+                #     else value
+                #     for key, value in val_batch.items()
+                # }
                 
                 print(f"[Validation] Generating molecules for {actual_batch_size} pockets...")
                 # We pass the validation batch through the collector
                 get_ligand_and_pocket_fn = self.ddpm_model.get_ligand_and_pocket
                 
                 rollout_data = self.ppo_algorithm.collector.collect(
-                    pocket_batch=val_batch_subset,
+                    pocket_batch=val_batch,
                     current_epoch=self.current_epoch,
                     get_ligand_and_pocket_fn=get_ligand_and_pocket_fn
                 )
@@ -202,7 +207,7 @@ class PPOFineTuner(pl.LightningModule):
                 print(f"[Validation] Successfully built {len(molecules)} valid RDKit molecules")
                 
                 # 5. Calculate metrics using analysis module
-                names = val_batch_subset.get('names', None)
+                names = val_batch.get('names', None)
                 
                 metrics_calculator = MoleculeMetrics(dataset_info=self.dataset_info)
                 basic_metrics = metrics_calculator.evaluate_batch(molecules)

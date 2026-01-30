@@ -11,7 +11,11 @@
 # --- Environment Setup ---
 module purge
 module load Anaconda3
-source activate /data/stat-cadd/wolf7055/conda/envs/prism_backup
+source activate /data/stat-cadd/wolf7055/conda/envs/PRISM_25
+export LD_LIBRARY_PATH=$CONDA_PREFIX/lib:$LD_LIBRARY_PATH
+
+
+
 echo "Python executable: $(which python)"
 
 # --- DEFINITIONS ---
@@ -21,6 +25,8 @@ PERMANENT_DATA_DIR="${PROJECT_ROOT}/data/BRD4_BD1/03_final_dataset"
 # Scratch location
 WORK_DIR="${TMPDIR}"
 SCRATCH_DATASET_DIR="${WORK_DIR}/BRD4_BD1_test"
+
+export DEBUG_PPO=0
 
 # Seeds array
 SEEDS=(42 976 123 789)
@@ -63,8 +69,8 @@ nvidia-smi
 echo "Starting PRISM training using Scratch Data..."
 
 srun python "${PROJECT_ROOT}/scripts/train.py" \
-    --config "${PROJECT_ROOT}/configs/ppo_devel.yaml" \
-    --warm_start_from_ddpm "/data/stat-cadd/wolf7055/PRISM/checkpoints/crossdocked_fa_cond_temp.ckpt" \
+    --config "${PROJECT_ROOT}/configs/binding_moad_fa_ppo.yaml" \
+    --warm_start_from_ddpm "/data/stat-cadd/wolf7055/PRISM/checkpoints/moad_fullatom_cond.ckpt" \
     --datadir "${SCRATCH_DATASET_DIR}" \
     --seed ${SEED}
 

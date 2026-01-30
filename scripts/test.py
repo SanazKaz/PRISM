@@ -53,30 +53,97 @@ MAXNTRIES = 5
 # =============================================================================
 BASE_PATH = Path("/data/stat-cadd/wolf7055/PRISM/data")
 
+
+# =============================================================================
+# TEST TARGETS - Edit paths here if needed
+# =============================================================================
+BASE_PATH = Path("/data/stat-cadd/wolf7055/PRISM/data")
+
 TEST_TARGETS = {
-    "AMPC_beta_lactamase": {
-        "pocket": BASE_PATH / "AMPC_beta_lactamase/02_preprocessed/pocket_files/1pi4_SM3_E_401_pocket.pdb",
-        "ligand": BASE_PATH / "AMPC_beta_lactamase/02_preprocessed/sdf_files/1pi4_SM3_E_401.sdf",
+    # BRD4_BD1 - 3 test structures
+    "BRD4_BD1_4whw": {
+        "pocket": BASE_PATH / "BRD4_BD1/02_preprocessed/pocket_files/4whw_3OT_B_201_pocket.pdb",
+        "ligand": BASE_PATH / "BRD4_BD1/02_preprocessed/sdf_files/4whw_3OT_B_201.sdf",
     },
-    "Carb_Anh_II": {
+    "BRD4_BD1_6fo5": {
+        "pocket": BASE_PATH / "BRD4_BD1/02_preprocessed/pocket_files/6fo5_DZH_B_201_pocket.pdb",
+        "ligand": BASE_PATH / "BRD4_BD1/02_preprocessed/sdf_files/6fo5_DZH_B_201.sdf",
+    },
+    "BRD4_BD1_6xvc": {
+        "pocket": BASE_PATH / "BRD4_BD1/02_preprocessed/pocket_files/6xvc_O32_D_203_pocket.pdb",
+        "ligand": BASE_PATH / "BRD4_BD1/02_preprocessed/sdf_files/6xvc_O32_D_203.sdf",
+    },
+    
+    # Carb_Anh_II - 3 test structures
+    "Carb_Anh_II_6rl9": {
         "pocket": BASE_PATH / "Carb_Anh_II/02_preprocessed/pocket_files/6rl9_SAN_E_304_pocket.pdb",
         "ligand": BASE_PATH / "Carb_Anh_II/02_preprocessed/sdf_files/6rl9_SAN_E_304.sdf",
     },
-    "COVID19_main_protease": {
-        "pocket": BASE_PATH / "covid19_main_protease/02_preprocessed/pocket_files/7aeh_R8H_F_405_pocket.pdb",
-        "ligand": BASE_PATH / "covid19_main_protease/02_preprocessed/sdf_files/7aeh_R8H_F_405.sdf",
+    "Carb_Anh_II_3k34": {
+        "pocket": BASE_PATH / "Carb_Anh_II/02_preprocessed/pocket_files/3k34_SUA_D_1003_pocket.pdb",
+        "ligand": BASE_PATH / "Carb_Anh_II/02_preprocessed/sdf_files/3k34_SUA_D_1003.sdf",
     },
-    "Estrogen_recep_alpha": {
-        "pocket": BASE_PATH / "Estrogen_recep_alpha/02_preprocessed/pocket_files/7ujo_QYM_E_601_pocket.pdb",
-        "ligand": BASE_PATH / "Estrogen_recep_alpha/02_preprocessed/sdf_files/7ujo_QYM_E_601.sdf",
+    "Carb_Anh_II_5n0d": {
+        "pocket": BASE_PATH / "Carb_Anh_II/02_preprocessed/pocket_files/5n0d_8F2_C_302_pocket.pdb",
+        "ligand": BASE_PATH / "Carb_Anh_II/02_preprocessed/sdf_files/5n0d_8F2_C_302.sdf",
     },
-    "EGFR": {
+    
+    # EGFR - 3 test structures
+    "EGFR_8a27": {
         "pocket": BASE_PATH / "EGFR/02_preprocessed/pocket_files/8a27_KY9_C_1102_pocket.pdb",
         "ligand": BASE_PATH / "EGFR/02_preprocessed/sdf_files/8a27_KY9_C_1102.sdf",
     },
-    "HIV_1_Protease": {
-        "pocket": BASE_PATH / "HIV_1_Protease/02_preprocessed/pocket_files/7leh_XW4_C_101_pocket.pdb",
-        "ligand": BASE_PATH / "HIV_1_Protease/02_preprocessed/sdf_files/7leh_XW4_C_101.sdf",
+    "EGFR_3poz": {
+        "pocket": BASE_PATH / "EGFR/02_preprocessed/pocket_files/3poz_03P_E_1023_pocket.pdb",
+        "ligand": BASE_PATH / "EGFR/02_preprocessed/sdf_files/3poz_03P_E_1023.sdf",
+    },
+    "EGFR_4wkq": {
+        "pocket": BASE_PATH / "EGFR/02_preprocessed/pocket_files/4wkq_IRE_B_1101_pocket.pdb",
+        "ligand": BASE_PATH / "EGFR/02_preprocessed/sdf_files/4wkq_IRE_B_1101.sdf",
+    },
+    
+    # Estrogen_recep_alpha - 3 test structures
+    
+    "Estrogen_recep_alpha_4ivy": {
+        "pocket": BASE_PATH / "Estrogen_recep_alpha/02_preprocessed/pocket_files/4ivy_1GT_E_601_pocket.pdb",
+        "ligand": BASE_PATH / "Estrogen_recep_alpha/02_preprocessed/sdf_files/4ivy_1GT_E_601.sdf",
+    },
+
+    "Estrogen_recep_alpha_5kct": {
+        "pocket": BASE_PATH / "Estrogen_recep_alpha/02_preprocessed/pocket_files/5kct_OB6_F_601_pocket.pdb",
+        "ligand": BASE_PATH / "Estrogen_recep_alpha/02_preprocessed/sdf_files/5kct_OB6_F_601.sdf",
+    },
+    "Estrogen_recep_alpha_2qzo": {
+        "pocket": BASE_PATH / "Estrogen_recep_alpha/02_preprocessed/pocket_files/2qzo_KN1_E_1_pocket.pdb",
+        "ligand": BASE_PATH / "Estrogen_recep_alpha/02_preprocessed/sdf_files/2qzo_KN1_E_1.sdf",
+    },
+    
+    # Factor_Xa - 3 test structures
+    "Factor_Xa_1ezq": {
+        "pocket": BASE_PATH / "Factor_Xa/02_preprocessed/pocket_files/1ezq_RPR_D_265_pocket.pdb",
+        "ligand": BASE_PATH / "Factor_Xa/02_preprocessed/sdf_files/1ezq_RPR_D_265.sdf",
+    },
+    "Factor_Xa_2p3t": {
+        "pocket": BASE_PATH / "Factor_Xa/02_preprocessed/pocket_files/2p3t_993_E_500_pocket.pdb",
+        "ligand": BASE_PATH / "Factor_Xa/02_preprocessed/sdf_files/2p3t_993_E_500.sdf",
+    },
+    "Factor_Xa_3kl6": {
+        "pocket": BASE_PATH / "Factor_Xa/02_preprocessed/pocket_files/3kl6_443_C_1_pocket.pdb",
+        "ligand": BASE_PATH / "Factor_Xa/02_preprocessed/sdf_files/3kl6_443_C_1.sdf",
+    },
+    
+    # HIV_1_Protease - 3 test structures
+    "HIV_1_Protease_2qnn": {
+        "pocket": BASE_PATH / "HIV_1_Protease/02_preprocessed/pocket_files/2qnn_QN1_F_2501_pocket.pdb",
+        "ligand": BASE_PATH / "HIV_1_Protease/02_preprocessed/sdf_files/2qnn_QN1_F_2501.sdf",
+    },
+    "HIV_1_Protease_3t11": {
+        "pocket": BASE_PATH / "HIV_1_Protease/02_preprocessed/pocket_files/3t11_3T1_C_101_pocket.pdb",
+        "ligand": BASE_PATH / "HIV_1_Protease/02_preprocessed/sdf_files/3t11_3T1_C_101.sdf",
+    },
+    "HIV_1_Protease_1hos": {
+        "pocket": BASE_PATH / "HIV_1_Protease/02_preprocessed/pocket_files/1hos_PHP_C_400_pocket.pdb",
+        "ligand": BASE_PATH / "HIV_1_Protease/02_preprocessed/sdf_files/1hos_PHP_C_400.sdf",
     },
 }
 # =============================================================================
@@ -229,7 +296,7 @@ def generate_for_target(
         suppl = Chem.SDMolSupplier(str(ligand_path), sanitize=False)
         if suppl[0] is None:
             raise ValueError(f"Could not read reference ligand: {ligand_path}")
-        num_nodes_lig = suppl[0].GetNumAtoms()
+        num_nodes_lig = suppl[0].GetNumHeavyAtoms()
         print(f"[INFO] Fixing atom count to {num_nodes_lig}")
     else:
         num_nodes_lig = None
@@ -254,10 +321,12 @@ def generate_for_target(
         if num_nodes_lig is not None:
             # Fixed size from reference ligand
             num_nodes_lig_inflated = torch.ones(batch_size, dtype=int) * num_nodes_lig
+            print(f"[INFO] ####################### num_nodes_lig_inflated: {num_nodes_lig_inflated}")
         else:
             # Random sampling from drug-like range
-            num_nodes_lig_inflated = torch.randint(low=18, high=31, size=(batch_size,))
-
+            num_nodes_lig_inflated = torch.randint(low=15, high=50, size=(batch_size,))
+            print(f"[INFO] ####################### random sampling from drug-like range")
+            print(f"[INFO] ####################### num_nodes_lig_inflated: {num_nodes_lig_inflated}")
         try:
             with torch.no_grad():
                 mols_batch = model.generate_ligands(

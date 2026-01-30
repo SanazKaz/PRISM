@@ -5,7 +5,7 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --partition=devel
 #SBATCH --time 00:10:00
-#SBATCH --job-name=new_size_distribution_training_cd
+#SBATCH --job-name=TESTING_TRAINING_BM
 #SBATCH --mail-user=wolf7055@ox.ac.uk
 #SBATCH --mail-type=END,FAIL
 #SBATCH --array=0-23
@@ -14,16 +14,16 @@
 
 module purge
 module load Anaconda3
-source activate /data/stat-cadd/wolf7055/conda/envs/TEST_ENV
-export LD_LIBRARY_PATH=$CONDA_PREFIX/lib:$LD_LIBRARY_PATH
+source activate /data/stat-cadd/wolf7055/conda/envs/PRISM_25
 
+export DEBUG_PPO=0
 
 # --- 1. SETUP PATHS ---
 export PROJECT_ROOT="/data/stat-cadd/wolf7055/PRISM"
 SEEDS=(42 976 123 789)
 
 # Single warm-start model for all datasets
-WARM_START_CKPT="${PROJECT_ROOT}/checkpoints/crossdocked_fa_cond_temp.ckpt"
+WARM_START_CKPT="${PROJECT_ROOT}/checkpoints/moad_fullatom_cond.ckpt"
 
 # Where checkpoints should be saved
 CHECKPOINT_OUTPUT_DIR="${PROJECT_ROOT}/Log_Results"
@@ -52,8 +52,8 @@ SOURCE_DATASET_PATH=${DATASETS[$DATASET_IDX]}
 DATASET_NAME=$(basename $(dirname $SOURCE_DATASET_PATH))
 
 # --- 2. LOGGING SETUP (for SLURM logs only) ---
-JOB_NAME="TESTING_TRAINING_CD"
-SLURM_LOG_DIR="${PROJECT_ROOT}/jobs_files/anomaly_detection_cd_size_distribution/${JOB_NAME}/${DATASET_NAME}"
+JOB_NAME="TESTING_TRAINING_BM"
+SLURM_LOG_DIR="${PROJECT_ROOT}/jobs_files/anamoly_training_detection_bm/${JOB_NAME}/${DATASET_NAME}"
 mkdir -p $SLURM_LOG_DIR 
 
 LOG_FILE="${SLURM_LOG_DIR}/seed_${SEED}_taskid_${SLURM_ARRAY_TASK_ID}.log"
@@ -82,8 +82,6 @@ fi
 
 # --- 3. STAGE IN (Copy to Scratch) ---
 SCRATCH_WORK_DIR="${TMPDIR}/${SLURM_JOB_ID}/${DATASET_NAME}"
-
-export DEBUG_PPO=0
 
 echo "Starting Data Stage-in..."
 echo "Copying from: $SOURCE_DATASET_PATH"
@@ -115,7 +113,7 @@ export DEBUG_PPO=0
 # --- 5. RUN TRAINING ---
 echo "Starting training..."
 srun python "${PROJECT_ROOT}/scripts/train.py" \
-    --config "${PROJECT_ROOT}/configs/ppo_config.yaml" \
+    --config "${PROJECT_ROOT}/configs/binding_moad_fa_ppo.yaml" \
     --warm_start_from_ddpm "${WARM_START_CKPT}" \
     --seed $SEED \
     --datadir "$SCRATCH_WORK_DIR" \

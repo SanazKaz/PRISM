@@ -2,18 +2,18 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --partition=short
 #SBATCH --gres=gpu:h100:1
-#SBATCH --time 03:00:00
-#SBATCH --output=jobs_files/DiffSBDD/Posebusters_Prism_%x_%j.log
+#SBATCH --time 07:00:00
+#SBATCH --output=bin_size_distribution_CD/CD_DiffSBDD/CD_DiffSBDD_baseline_%x_%j.log
 exec 2>&1
 
 # =============================================================================
-# PRISM Evaluation: Single target job (for parallel submission)
+# CD DiffSBDD Baseline Evaluation: Single target job (for parallel submission)
 # 
 # Arguments:
-#   $1 - Target name (e.g., AMPC_beta_lactamase)
+#   $1 - Target name (e.g., BRD4_BD1_4whw)
 #   $2 - Path to model checkpoint
 #
-# Usage: sbatch run_single_target.sh TARGET_NAME MODEL_PATH
+# Usage: sbatch CD_test_file.sh TARGET_NAME MODEL_PATH
 # =============================================================================
 
 TARGET=$1
@@ -21,13 +21,13 @@ MODEL_PATH=$2
 
 if [ -z "${TARGET}" ]; then
     echo "[ERROR] No target specified!"
-    echo "Usage: sbatch test_file.sh TARGET_NAME MODEL_PATH"
+    echo "Usage: sbatch CD_test_file.sh TARGET_NAME MODEL_PATH"
     exit 1
 fi
 
 if [ -z "${MODEL_PATH}" ]; then
     echo "[ERROR] No model path specified!"
-    echo "Usage: sbatch test_file.sh TARGET_NAME MODEL_PATH"
+    echo "Usage: sbatch CD_test_file.sh TARGET_NAME MODEL_PATH"
     exit 1
 fi
 
@@ -38,10 +38,10 @@ fi
 
 module purge
 module load Anaconda3
-source activate /data/stat-cadd/wolf7055/conda/envs/TEST_ENV
+source activate /data/stat-cadd/wolf7055/conda/envs/PRISM_25
 
 echo "============================================="
-echo "PRISM Evaluation: ${TARGET}"
+echo "DiffSBDD Baseline Evaluation: ${TARGET}"
 echo "Started at: $(date)"
 echo "Node: $(hostname)"
 echo "============================================="
@@ -54,8 +54,8 @@ PRISM_ROOT="/data/stat-cadd/wolf7055/PRISM"
 SCRIPT_PATH="${PRISM_ROOT}/scripts/test.py"
 CONFIG_PATH="${PRISM_ROOT}/configs/ppo_config.yaml"
 
-# Output directory for PRISM-trained models
-OUTDIR="/data/stat-cadd/wolf7055/PRISM/Generated_Mols/Posebusters_Prism"
+# Output directory for DiffSBDD baseline
+OUTDIR="/data/stat-cadd/wolf7055/PRISM/bin_size_distribution_CD/CD_DiffSBDD"
 
 # Generation settings
 N_SAMPLES=10000

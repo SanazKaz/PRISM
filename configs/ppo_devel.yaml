@@ -5,7 +5,7 @@ wandb_params:
   entity: 'sanazkazeminia97'
   project: 'qed_sascore_prism_beta_lactamase'
 dataset: 'crossdock' #(refers to the model's dataset_info_key)
-datadir: '/data/stat-cadd/wolf7055/PRISM/data/AMPC_beta_lactamase/03_final_dataset'
+datadir: '/data/stat-cadd/wolf7055/PRISM/data/BRD4_BD1/03_final_dataset'
 enable_progress_bar: False
 num_sanity_val_steps: 0
 batch_size: 1 # number of pockets to sample for (60)
@@ -49,6 +49,7 @@ ppo_params:
   start_timesteps: 50
   end_timesteps: 350
   progressive_training_epochs: 100
+  freeze_except: ['e_block_3','e_block_4'] # e_block_3 and e_block_4 are the last two layers of the EGNN
 
 
 reward_params:
@@ -108,6 +109,6 @@ visualize_chain_epoch: 999999
 eval_params:
   n_eval_samples: 20
   eval_batch_size: 20
-  smiles_file: 'data/AMPC_beta_lactamase/03_final_dataset/train_smiles.npy'
+  smiles_file: '/data/stat-cadd/wolf7055/PRISM/data/BRD4_BD1/03_final_dataset/train_smiles.npy'
   n_visualize_samples: 10
   keep_frames: 5

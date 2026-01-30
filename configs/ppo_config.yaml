@@ -42,13 +42,15 @@ ppo_params:
   target_kl: 0.03                # Early stopping KL divergence
   lr: 1.0e-5                     # Optimizer learning rate (0.001)
   mol_timeout_sec: 60
-  num_nodes_lig: 25              # fixed number of nodes for ligand
+  num_nodes_lig: null              # fixed number of nodes for ligand
   top_k: False
   # backward progressive training remove later
   progressive_training: True
   start_timesteps: 50
   end_timesteps: 350
   progressive_training_epochs: 100
+  freeze_except: ['e_block_3','e_block_4'] # e_block_3 and e_block_4 are the last two layers of the EGNN
+
 
 
 reward_params:

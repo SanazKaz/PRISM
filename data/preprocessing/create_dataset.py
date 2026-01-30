@@ -288,25 +288,38 @@ def compute_smiles(positions, one_hot, mask, dataset_info):
     return mols_smiles
 
 def get_n_nodes(lig_mask, pocket_mask, smooth_sigma=None):
-    # Joint distribution of ligand's and pocket's number of nodes
     """
+    Compute joint distribution of ligand and pocket node counts.
+    
     Args:
         lig_mask: numpy array of shape (n_atoms,)
         pocket_mask: numpy array of shape (n_atoms,)
-        smooth_sigma: float, optional
+        smooth_sigma: float, optional. If provided, applies Gaussian smoothing.
+    
     Returns:
-        numpy array of shape (n_nodes_lig, n_nodes_pocket)
+        numpy array of shape (max_n_nodes_lig+1, max_n_nodes_pocket+1)
     """
     idx_lig, n_nodes_lig = np.unique(lig_mask, return_counts=True)
     idx_pocket, n_nodes_pocket = np.unique(pocket_mask, return_counts=True)
     assert np.all(idx_lig == idx_pocket)
     
-    joint_histogram = np.zeros((np.max(n_nodes_lig) + 1, np.max(n_nodes_pocket) + 1))
+    joint_histogram = np.zeros((np.max(n_nodes_lig) + 1, 
+                                np.max(n_nodes_pocket) + 1))
     
     for nlig, npocket in zip(n_nodes_lig, n_nodes_pocket):
         joint_histogram[nlig, npocket] += 1
+    
+    print(f'Original histogram: {np.count_nonzero(joint_histogram)}/'
+          f'{joint_histogram.shape[0] * joint_histogram.shape[1]} bins filled')
+    
     if smooth_sigma is not None:
-        joint_histogram = gaussian_filter(joint_histogram, sigma=smooth_sigma)
+        joint_histogram = gaussian_filter(
+            joint_histogram, sigma=smooth_sigma, order=0, mode='constant',
+            cval=0.0, truncate=4.0)
+        
+        print(f'Smoothed histogram: {np.count_nonzero(joint_histogram)}/'
+              f'{joint_histogram.shape[0] * joint_histogram.shape[1]} bins filled')
+    
     return joint_histogram
 
 def get_type_histograms(lig_one_hot, pocket_one_hot, atom_encoder, aa_encoder):

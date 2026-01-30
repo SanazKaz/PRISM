@@ -83,6 +83,8 @@ def main(args):
     
     if args.seed is not None:
         pl.seed_everything(args.seed, workers=True)
+        # seeds everything including numpy and torch
+        # workers=True seeds the dataloader
         print(f"[SEED] Set random seed to {args.seed}")
         
     if args.datadir is not None:

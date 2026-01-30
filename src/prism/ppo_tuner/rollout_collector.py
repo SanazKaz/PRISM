@@ -35,7 +35,7 @@ class RolloutCollector:
         
         # names is a list of IDs for the whole batch (e.g. ['1c3b...', '7e2z...'])
         _, pocket_data, names = get_ligand_and_pocket_fn(pocket_batch)
-        
+
         local_batch_size = len(pocket_batch['num_pocket_nodes'])
         
         if torch.distributed.is_initialized():
@@ -44,7 +44,10 @@ class RolloutCollector:
             world_size, rank = 1, 0
 
         # Determine Sampling Strategy
+        # can add in a eval num steps instead but okay for now.
+        
         n_steps = self.config.ppo_params.n_steps
+        
         samples_per_rank = math.ceil(n_steps / world_size)
         samples_per_pocket = math.ceil(samples_per_rank / max(1, local_batch_size))
         total_target_samples = min(samples_per_rank, local_batch_size * samples_per_pocket)
@@ -64,6 +67,7 @@ class RolloutCollector:
             pocket_sample_counts = []
             remaining_to_gen = total_target_samples - total_samples
             for pocket_idx in range(chunk_start_outer, chunk_end_outer):
+                
                 samples_for_pocket = min(samples_per_pocket, remaining_to_gen)
                 if samples_for_pocket <= 0:
                     continue
@@ -76,14 +80,19 @@ class RolloutCollector:
                 
                 # --- FIX START: Identify the specific name for this pocket ---
                 current_name = names[pocket_idx]
-                # -------------------------------------------------------------
-
+                
+                pocket_mask_idx = (pocket_data['mask'] == pocket_idx)                
+                if pocket_mask_idx.sum() == 0:
+                    print(f"  WARNING: No atoms found for pocket_idx={pocket_idx}!")
+                    print(f"  Available mask values: {torch.unique(pocket_data['mask'])}")
+                    print(f"  Skipping this pocket...")
+                    continue  # Skip to next pocket instead of crashing
+                
                 for lig_chunk_start in range(0, samples_to_generate, ligand_chunk_size):
                     try:
                         samples_in_chunk = min(ligand_chunk_size, samples_to_generate - lig_chunk_start)
                         chunk_mask_base = pocket_mask_base + lig_chunk_start
-
-                        pocket_mask_idx = (pocket_data['mask'] == pocket_idx)
+                        
                         single_pocket_data = {
                             'x': pocket_data['x'][pocket_mask_idx],
                             'one_hot': pocket_data['one_hot'][pocket_mask_idx],
@@ -99,7 +108,7 @@ class RolloutCollector:
                             single_pocket_data, 
                             samples_in_chunk, 
                             chunk_mask_base, 
-                            chunk_names,  # <--- Pass the corrected list
+                            chunk_names,
                             current_epoch
                         )
                         # ------------------------------------------------
@@ -143,9 +152,12 @@ class RolloutCollector:
                 
         num_nodes_lig_config = self.config.ppo_params.num_nodes_lig
         if num_nodes_lig_config is None:
-            num_nodes_lig = self.policy_network.size_distribution.sample_conditional(
-                n1=None, n2=single_pocket_data['size']
-            ).repeat(samples_in_chunk)
+            # leads to instability for training with size distribution 
+            # num_nodes_lig = self.policy_network.size_distribution.sample_conditional(
+            #     n1=None, n2=single_pocket_data['size']
+            # ).repeat(samples_in_chunk)
+            num_nodes_lig = torch.randint(15, 56, (samples_in_chunk,), dtype=torch.long)
+            # print(f"num_nodes_lig sampled from range [15, 55]: {num_nodes_lig}")
         else:
             num_nodes_lig = torch.randint(
                 num_nodes_lig_config - 5,

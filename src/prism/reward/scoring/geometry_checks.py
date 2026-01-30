@@ -40,7 +40,7 @@ class PoseBustersGeometryReward(BaseReward):
         threshold_bad_bond_length: float = 0.2,
         threshold_bad_angle: float = 0.2,
         threshold_clash: float = 0.2,
-        penalty_scale: float = 4.0
+        penalty_scale: float = 2.0 # previously 2.0
     ):
         """
         Args:
@@ -114,19 +114,19 @@ class PoseBustersGeometryReward(BaseReward):
         for _, row in df_bonds.iterrows():
             bond_pen = abs(row["percent_error"])
             if bond_pen > self.threshold_bond:
-                total_penalty += (bond_pen - self.threshold_bond) * 1.0 
+                total_penalty += bond_pen * 1.0 # same as before - harsher worked better than allowing for the threshold
                 
         # Sum angle deviations (bound_absolute_percent_error is already absolute)
         for _, row in df_angles.iterrows():
             ba_pen = row["bound_absolute_percent_error"]
             if ba_pen > self.threshold_angle:
-                total_penalty += (ba_pen - self.threshold_angle) * 1.0
+                total_penalty += ba_pen * 0.5 # same as before - harsher worked better than allowing for the threshold
        
         # Sum clash deviations (bound_percent_error is negative for violations)
         for _, row in df_clashes.iterrows():
             clash_pen = row["bound_percent_error"]
             if clash_pen < -self.threshold_clash: # negative value means too close
-                total_penalty += (abs(clash_pen) - self.threshold_clash) * 1.5
+                total_penalty += abs(clash_pen) * 1.5 # same as before - harsher worked better than allowing for the threshold
                 
         
         score = np.exp(-total_penalty * self.scale)

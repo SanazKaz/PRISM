@@ -71,9 +71,11 @@ class LigandPocketDataModule(pl.LightningDataModule):
 
 
     def val_dataloader(self):
+        val_batch_size = getattr(self.config.eval_params, 'eval_batch_size', self.config.batch_size)
+
         return DataLoader(
             self.val_dataset,
-            batch_size=self.config.batch_size,
+            batch_size=val_batch_size,
             shuffle=False,
             num_workers=self.config.num_workers,
             collate_fn=self.val_dataset.collate_fn,
