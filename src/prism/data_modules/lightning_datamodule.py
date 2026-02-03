@@ -57,7 +57,7 @@ class LigandPocketDataModule(pl.LightningDataModule):
             shuffle = False  # sampler handles sharding; keep order deterministic
         else:
             sampler = None
-            shuffle = False
+            shuffle = True # careful in distributed training
 
         return DataLoader(
             self.train_dataset,
