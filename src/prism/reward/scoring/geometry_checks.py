@@ -64,7 +64,7 @@ class PoseBustersGeometryReward(BaseReward):
         return None
 
     @property
-    def increased_weight_multiplier(self) -> float:
+    def increased_weight_multiplier(self) -> float:    
         return None
 
     def _safe_value(self, value) -> float:

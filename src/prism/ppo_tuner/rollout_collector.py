@@ -27,9 +27,13 @@ class RolloutCollector:
         self.policy_network.eval()
         
         rollout_data = {
-            'molecules': ([], []), 'masks': ([], []), 
-            'rewards': [], 'raw_score': [],'old_log_probs': [], 
-            'z_states': [], 'pocket_indices': [],
+            'molecules': ([], []), 
+            'masks': ([], []), 
+            'rewards': [], 
+            'raw_score': [],
+            'old_log_probs': [], 
+            'z_states': [], 
+            'pocket_indices': [],
             'component_scores': defaultdict(list)
         }
         
@@ -156,17 +160,18 @@ class RolloutCollector:
             # num_nodes_lig = self.policy_network.size_distribution.sample_conditional(
             #     n1=None, n2=single_pocket_data['size']
             # ).repeat(samples_in_chunk)
-            num_nodes_lig = torch.randint(15, 56, (samples_in_chunk,), dtype=torch.long)
+            num_nodes_lig = torch.randint(15, 40, (samples_in_chunk,), dtype=torch.long)
             # print(f"num_nodes_lig sampled from range [15, 55]: {num_nodes_lig}")
         else:
             num_nodes_lig = torch.randint(
-                num_nodes_lig_config - 5,
-                num_nodes_lig_config + 2,
+                num_nodes_lig_config - 10,
+                num_nodes_lig_config + 10,
                 (samples_in_chunk,),
                 dtype=torch.long
             )
         
         num_nodes_lig = num_nodes_lig.to(self.device)
+        print(f"num_nodes_lig: {num_nodes_lig}")
 
 
         local_mask_base = torch.arange(samples_in_chunk, device=self.device)
@@ -197,7 +202,7 @@ class RolloutCollector:
             # kwargs:
             xh_pocket=xh_pocket,
             global_pocket_mask=global_pocket_mask,
-            names=names # Now receiving the correct list ['PocketA', 'PocketA', ...]
+            names=names # carries the pocket names - important for docking etc.
         )
 
         raw_score = rewards.clone() 

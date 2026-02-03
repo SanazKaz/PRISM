@@ -2,18 +2,18 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --partition=short
 #SBATCH --gres=gpu:h100:1
-#SBATCH --time 05:00:00
-#SBATCH --output=bin_CD/CD_DiffSBDD/CD_DiffSBDD_baseline_%x_%j.log
+#SBATCH --time 12:00:00
+#SBATCH --output=jobs_files/generation/axis_1_posebusters_CD_%x_%j.log
 exec 2>&1
 
 # =============================================================================
-# CD DiffSBDD Baseline Evaluation: Single target job (for parallel submission)
+# CD Geometry Model Evaluation: Generate ligands from trained checkpoints
 # 
 # Arguments:
-#   $1 - Target name (e.g., BRD4_BD1_4whw)
-#   $2 - Path to model checkpoint
+#   $1 - Target name (e.g., BRD4_BD1)
+#   $2 - Path to model checkpoint (.pt file)
 #
-# Usage: sbatch CD_test_file.sh TARGET_NAME MODEL_PATH
+# Usage: Called by submit_all_targets.sh
 # =============================================================================
 
 TARGET=$1
@@ -21,13 +21,13 @@ MODEL_PATH=$2
 
 if [ -z "${TARGET}" ]; then
     echo "[ERROR] No target specified!"
-    echo "Usage: sbatch CD_test_file.sh TARGET_NAME MODEL_PATH"
+    echo "Usage: sbatch test_file.sh TARGET_NAME MODEL_PATH"
     exit 1
 fi
 
 if [ -z "${MODEL_PATH}" ]; then
     echo "[ERROR] No model path specified!"
-    echo "Usage: sbatch CD_test_file.sh TARGET_NAME MODEL_PATH"
+    echo "Usage: sbatch test_file.sh TARGET_NAME MODEL_PATH"
     exit 1
 fi
 
@@ -41,7 +41,7 @@ module load Anaconda3
 source activate /data/stat-cadd/wolf7055/conda/envs/PRISM_25
 
 echo "============================================="
-echo "DiffSBDD Baseline Evaluation: ${TARGET}"
+echo "CD Geometry Model Evaluation: ${TARGET}"
 echo "Started at: $(date)"
 echo "Node: $(hostname)"
 echo "============================================="
@@ -54,11 +54,12 @@ PRISM_ROOT="/data/stat-cadd/wolf7055/PRISM"
 SCRIPT_PATH="${PRISM_ROOT}/scripts/test.py"
 CONFIG_PATH="${PRISM_ROOT}/configs/ppo_config.yaml"
 
-# Output directory for DiffSBDD baseline
-OUTDIR="/data/stat-cadd/wolf7055/PRISM/bin_CD/CD_DiffSBDD"
+# Output directory for CD geometry model generations
+OUTDIR="/data/stat-cadd/wolf7055/PRISM/generation_results/final_geometry_checks_CD"
+mkdir -p ${OUTDIR}
 
 # Generation settings
-N_SAMPLES=10000
+N_SAMPLES=20000
 BATCH_SIZE=75
 
 # -----------------------------------------------------------------------------

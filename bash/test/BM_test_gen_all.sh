@@ -45,7 +45,7 @@ TARGETS=(
 )
 
 # Create jobs directory if needed
-mkdir -p bin_size_distribution_BM/BM_DiffSBDD
+mkdir -p bin_BM/BM_DiffSBDD
 
 
 echo "============================================="

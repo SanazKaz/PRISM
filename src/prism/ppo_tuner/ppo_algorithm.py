@@ -24,15 +24,15 @@ class PPOAlgorithm:
                  reward_function,
                  config, 
                  dataset_info, 
-                 run_root):
+                 checkpoint_dir):
         self.policy_network = policy_network
         self.config = config
         self.device = next(policy_network.parameters()).device
         self.reward_function = reward_function
-        self.run_root = run_root
+        self.checkpoint_dir = checkpoint_dir
         
         # Initialize CSV logging
-        self.log_dir = Path(run_root) / "training_logs"
+        self.log_dir = Path(checkpoint_dir) / "training_logs"
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self.csv_path = self.log_dir / "training_metrics.csv"
         self._initialize_csv()

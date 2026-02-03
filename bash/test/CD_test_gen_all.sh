@@ -45,7 +45,7 @@ TARGETS=(
 )
 
 # Create jobs directory if needed
-mkdir -p bin_size_distribution_CD/CD_DiffSBDD
+mkdir -p bin_CD/CD_DiffSBDD
 
 echo "============================================="
 echo "Submitting ${#TARGETS[@]} parallel CD DiffSBDD baseline jobs"

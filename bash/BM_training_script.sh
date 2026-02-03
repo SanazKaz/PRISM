@@ -1,11 +1,11 @@
 #!/bin/bash
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=64GB
-#SBATCH --gres=gpu:1
+#SBATCH --gres=gpu:h100:1
 #SBATCH --ntasks-per-node=1
-#SBATCH --partition=devel
-#SBATCH --time 00:10:00
-#SBATCH --job-name=TESTING_TRAINING_BM
+#SBATCH --partition=short
+#SBATCH --time 11:00:00
+#SBATCH --job-name=BM_final_geometry_checks_lr4e-7
 #SBATCH --mail-user=wolf7055@ox.ac.uk
 #SBATCH --mail-type=END,FAIL
 #SBATCH --array=0-23
@@ -52,8 +52,8 @@ SOURCE_DATASET_PATH=${DATASETS[$DATASET_IDX]}
 DATASET_NAME=$(basename $(dirname $SOURCE_DATASET_PATH))
 
 # --- 2. LOGGING SETUP (for SLURM logs only) ---
-JOB_NAME="TESTING_TRAINING_BM"
-SLURM_LOG_DIR="${PROJECT_ROOT}/jobs_files/anamoly_training_detection_bm/${JOB_NAME}/${DATASET_NAME}"
+JOB_NAME="BM_final_geometry_checks_lr4e-7"
+SLURM_LOG_DIR="${PROJECT_ROOT}/jobs_files/${JOB_NAME}/${DATASET_NAME}"
 mkdir -p $SLURM_LOG_DIR 
 
 LOG_FILE="${SLURM_LOG_DIR}/seed_${SEED}_taskid_${SLURM_ARRAY_TASK_ID}.log"

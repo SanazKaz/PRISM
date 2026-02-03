@@ -107,14 +107,6 @@ def main(args):
     # --- 2. Instantiate the DataModule ---
     datamodule = LigandPocketDataModule(config)
 
-    # --- 3. Instantiate the LightningModule ---
-    histogram_file = Path(config.datadir, 'size_distribution.npy')
-    if not histogram_file.exists():
-        raise FileNotFoundError(f"Histogram file not found at {histogram_file}")
-    node_histogram = np.load(histogram_file).tolist()
-    
-    model = PPOFineTuner(config=config, warm_start_checkpoint=args.warm_start_from_ddpm, node_histogram=node_histogram)
-    
     # --- 4. Setup Callbacks and Trainer ---
     
     # If passed explicitly, use it. Otherwise try to derive it (risky on scratch).
@@ -132,6 +124,19 @@ def main(args):
                           )
     
     print(f"[********* CHECKPOINT DIR **********] {checkpoint_dir}")
+    
+    # --- 3. Instantiate the LightningModule ---
+    histogram_file = Path(config.datadir, 'size_distribution.npy')
+    if not histogram_file.exists():
+        raise FileNotFoundError(f"Histogram file not found at {histogram_file}")
+    node_histogram = np.load(histogram_file).tolist()
+    
+    model = PPOFineTuner(
+        config=config, 
+        warm_start_checkpoint=args.warm_start_from_ddpm, 
+        node_histogram=node_histogram,
+        checkpoint_dir=checkpoint_dir)
+    
 
     checkpoint_callback = PTModelCheckpoint(
         dirpath=str(checkpoint_dir),
@@ -165,7 +170,7 @@ def main(args):
     )
 
     # --- 5. Start Training ---
-    trainer.fit(model, datamodule=datamodule, ckpt_path=args.resume_from_checkpoint)
+    trainer.fit(model, datamodule=datamodule, ckpt_path=args.resume_from_checkpoint, weights_only=False)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

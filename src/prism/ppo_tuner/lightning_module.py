@@ -23,7 +23,7 @@ class PPOFineTuner(pl.LightningModule):
     This is the main LightningModule for PPO fine-tuning.
     It acts as a lightweight wrapper around the core PPOAlgorithm.
     """
-    def __init__(self, config, node_histogram=None, warm_start_checkpoint=None):
+    def __init__(self, config, node_histogram=None, warm_start_checkpoint=None, checkpoint_dir=None):
         super().__init__()
         self.save_hyperparameters(config)
         self.config = config
@@ -78,7 +78,7 @@ class PPOFineTuner(pl.LightningModule):
             reward_function=self.reward_manager,
             config=self.config,
             dataset_info=self.dataset_info,
-            run_root=self.config.logdir
+            checkpoint_dir=checkpoint_dir
         )
         self.freeze_parameters()
 

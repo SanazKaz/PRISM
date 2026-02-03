@@ -2,8 +2,8 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --partition=short
 #SBATCH --gres=gpu:h100:1
-#SBATCH --time 07:00:00
-#SBATCH --output=bin_size_distribution_BM/BM_DiffSBDD/BM_DiffSBDD_baseline_%x_%j.log
+#SBATCH --time 05:00:00
+#SBATCH --output=bin_BM/BM_DiffSBDD/BM_DiffSBDD_baseline_%x_%j.log
 exec 2>&1
 
 # =============================================================================
@@ -55,7 +55,7 @@ SCRIPT_PATH="${PRISM_ROOT}/scripts/test.py"
 CONFIG_PATH="${PRISM_ROOT}/configs/binding_moad_fa_ppo.yaml"
 
 # Output directory for DiffSBDD baseline
-OUTDIR="/data/stat-cadd/wolf7055/PRISM/bin_size_distribution_BM/BM_DiffSBDD_mols"
+OUTDIR="/data/stat-cadd/wolf7055/PRISM/bin_BM/BM_DiffSBDD"
 
 # Generation settings
 N_SAMPLES=10000

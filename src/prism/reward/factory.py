@@ -1,6 +1,8 @@
 # registers the rewards and returns the RewardManager class
 
 import argparse
+import os
+
 from src.prism.reward.scorer import RewardManager
 from src.prism.reward.scoring.molecular_props import QEDReward, SAScoreReward, LipinskiReward, BertzReward
 from src.prism.reward.scoring.sucos import SuCOSReward
@@ -11,8 +13,10 @@ from src.prism.reward.scoring.flatness_checks import PoseBustersFlatnessReward
 from src.prism.reward.scoring.aromatic_counter import AromaticBonus
 from src.prism.reward.scoring.aromatic_feature import AromaticFeatureReward
 from src.prism.reward.scoring.multi_features import MultiFeatureReward
-from src.prism.reward.scoring.silly_walks import SillyWalksReward, SillyRingsReward
+from src.prism.reward.scoring.silly_walks import SillyWalksReward
 from src.prism.reward.scoring.strain_energy import MMFFStrainReward
+from src.prism.reward.scoring.property_match import Property2DReward
+from src.prism.reward.scoring.ligand_effiency import LigandEfficiencyReward
 
 
 # 1. The Registry
@@ -31,8 +35,9 @@ REWARD_REGISTRY = {
     "aromatic_anchor": AromaticFeatureReward,
     "multi_features": MultiFeatureReward,
     "silly_walks": SillyWalksReward,
-    "silly_rings": SillyRingsReward,
     "mmff_strain": MMFFStrainReward,
+    "property_2d": Property2DReward,
+    "ligand_efficiency": LigandEfficiencyReward,
 }
 
 def get_reward_manager(config, dataset_info, ddpm_module=None):
@@ -108,8 +113,16 @@ def get_reward_manager(config, dataset_info, ddpm_module=None):
             active_rewards.append(reward_cls(reward_paths['multi_features']))
         elif name == 'silly_walks':
             active_rewards.append(reward_cls(reward_paths['silly_walks']))
-        elif name == 'silly_rings':
-            active_rewards.append(reward_cls(reward_paths['silly_rings']))
+        elif name == 'property_2d':
+            target_name = getattr(reward_params_ns, 'target_name', None)
+            if target_name is None:
+                raise ValueError("property_2d reward requires 'target_name' in reward_params")
+            active_rewards.append(reward_cls(
+                reference_json_path=reward_paths['property_2d'],
+                target_name=target_name
+            ))
+        elif name == 'ligand_efficiency':
+            active_rewards.append(reward_cls(dataset_info=dataset_info))
         else:
             active_rewards.append(reward_cls())
             

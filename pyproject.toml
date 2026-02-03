@@ -1,7 +1,37 @@
 [project]
 name = "prism"
 version = "0.1.0"
-description = "Add your description here"
+description = "PRISM: Policy-Reinforced Iterative Structure-Based Molecular Diffusion"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    # Core Scientific Stack
+    "numpy",
+    "scipy",
+    "pandas",
+    "seaborn",
+    "matplotlib",
+    "scikit-learn",
+    "networkx",
+    "joblib",
+    "tqdm",
+    "pyyaml",
+    "imageio",
+    
+    # PyTorch ecosystem (install torch separately with your cuda verison)
+    "pytorch",
+    "pytorch-lightning",
+    "torch-scatter",
+    
+    # Cheminformatics
+    "rdkit",
+    "biopython",
+    "openbabel",
+    
+    # Molecular validation
+    "posebusters",
+    "prolif",
+    
+    # Logging
+    "wandb",
+]
