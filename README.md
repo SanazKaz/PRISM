@@ -5,14 +5,43 @@ A reinforcement learning framework for structure-based molecular generation.
 ## Setup
 
 ### Environment Installation
-```bash
-# Create conda environment from yaml file
-conda env create -f environment.yml
-conda activate prism
 
+- Need to edit the pyproject.toml to remove the torch, torch-scatter and pytorch-lightning dependencies after installing manually with cuda support.
+
+```bash
+# Create conda environment from pyproject.toml (Not tested)
+conda env create -n prism python=3.12
+conda activate prism
+# install torch with cuda support
+pip install torch==2.8.0 
+pip install torch-scatter -f https://data.pyg.org/whl/torch-2.8.0+cu129/
+pip install pytorch-lightning
+# Install repo
+pip install -e .
+```
+
+
+
+
+```bash
+# Create uv environment from pyproject.toml
+uv venv
+source .venv/bin/activate
+# install torch with cuda support
+uv pip install torch==2.8.0
+uv pip install torch-scatter -f https://data.pyg.org/whl/torch-2.8.0+cu129/
+uv pip install pytorch-lightning
+# Install repo
+uv pip install -e .
+```
+
+
+
+```bash
 # Verify installation
 python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}')"
 ```
+
 
 ## Data Processing
 
@@ -21,9 +50,10 @@ Provide a uniprot id or a list of pdbs in a text file and the processing script 
 A sample pdb id list is provided in data 
 
 ```bash
-python scripts/process_data.py \
-    --input_dir data/pdb_list.txt \
-    --output_dir data/Carbonic_Anhydrase_II 
+python -m scripts.process_data \ 
+    --pdb_list /home/alexi/Documents/PRISM/data/example_pdb_list.txt \ 
+    --output_dir /home/alexi/Documents/PRISM/data/test
+
 ```
 ## Generating Ligands
 
@@ -35,7 +65,7 @@ We provide a standalone generation script that decouples inference from the trai
 
 Obtain the original diffusion model checkpoint from DiffSBDD:
 ```bash
-wget -P checkpoints/ [https://zenodo.org/record/8183747/files/crossdocked_fullatom_cond.ckpt](https://zenodo.org/record/8183747/files/crossdocked_fullatom_cond.ckpt)
+wget -P checkpoints/ https://zenodo.org/record/8183747/files/crossdocked_fullatom_cond.ckpt
 ```
 obtain our  model checkpoint from DiffSBDD using:
 
@@ -44,18 +74,19 @@ obtain our  model checkpoint from DiffSBDD using:
 Generate molecules from a trained checkpoint using a protein structure:
 
 ```bash
-python scripts/generate_ligands.py \
-    checkpoints/seed=42_best_reward.pt \
-    --config configs/ppo_config.yaml \
-    --pdbfile data/pocket_files/protein.pdb \
-    --outfile results/generated_ligands.sdf \
-    --ref_ligand data/sdf_files/reference_ligand.sdf \
-    --n_samples 100 \
-    --batch_size 25 \
-    --timesteps 500 \
-    --num_nodes_lig 25
-    --sanitize 
+python scripts/generate_ligands.py \ 
+    checkpoints/crossdocked_fullatom_cond.ckpt \ 
+    --config configs/ppo_config.yaml \ 
+    --pdbfile data/test/02_preprocessed/pocket_files/1cil_ETS_C_263_pocket.pdb \ 
+    --outfile data/test/results/generated_ligands.sdf \ 
+    --ref_ligand data/test/02_preprocessed/sdf_files/1cil_ETS_C_263.sdf \ 
+    --n_samples 100 \ 
+    --batch_size 25 \ 
+    --timesteps 500 \ 
+    --num_nodes_lig 25 \ 
+    --sanitize \ 
     --relax
+
 ```
 
 ### Configuration
@@ -92,10 +123,11 @@ The base diffusion model configuration (EGNN architecture, diffusion schedule) m
 
 Train PRISM with reinforcement learning:
 ```bash
-python scripts/train.py \
-    --config configs/ppo_config.yaml \
-    --warm_start_from_ddpm checkpoints/crossdocked_fa_cond_temp.ckpt \
-    --seed 42
+python scripts/train.py \ 
+    --config configs/ppo_config.yaml \ 
+    --warm_start_from_ddpm checkpoints/crossdocked_fullatom_cond.ckpt \ 
+    --seed 42 \
+
 ```
 
 The training configuration is managed through `configs/ppo_config.yaml`. Key settings include:

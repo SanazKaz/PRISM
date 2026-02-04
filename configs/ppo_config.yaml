@@ -5,7 +5,7 @@ wandb_params:
   entity: 'sanazkazeminia97'
   project: 'iclr_curriculum_CD_multi_objectives'
 dataset: 'crossdock' #(refers to the model's dataset_info_key)
-datadir: '/data/stat-cadd/wolf7055/PRISM/data/BRD4_BD1/03_final_dataset'
+datadir: 'data/test/03_final_dataset'
 enable_progress_bar: False
 num_sanity_val_steps: 0
 batch_size: 108 # number of pockets to sample for (60)
@@ -113,6 +113,6 @@ visualize_chain_epoch: 999999
 eval_params:
   n_eval_samples: 20
   eval_batch_size: 20
-  smiles_file: '/data/stat-cadd/wolf7055/PRISM/data/BRD4_BD1/03_final_dataset/train_smiles.npy'
+  smiles_file: 'data/test/03_final_dataset/train_smiles.npy'
   n_visualize_samples: 0
   keep_frames: 0

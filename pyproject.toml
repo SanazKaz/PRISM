@@ -3,7 +3,7 @@ name = "prism"
 version = "0.1.0"
 description = "PRISM: Policy-Reinforced Iterative Structure-Based Molecular Diffusion"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 dependencies = [
     # Core Scientific Stack
     "numpy",
@@ -17,12 +17,7 @@ dependencies = [
     "tqdm",
     "pyyaml",
     "imageio",
-    
-    # PyTorch ecosystem (install torch separately with your cuda verison)
-    "pytorch",
-    "pytorch-lightning",
-    "torch-scatter",
-    
+
     # Cheminformatics
     "rdkit",
     "biopython",
