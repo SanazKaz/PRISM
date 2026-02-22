@@ -5,6 +5,7 @@ from typing import List
 from rdkit import Chem
 from rdkit.Chem import Descriptors, Lipinski, rdMolDescriptors
 from src.prism.reward.scorer import BaseReward
+from rdkit.Chem import Crippen
 
 
 class Property2DReward(BaseReward):
@@ -42,6 +43,7 @@ class Property2DReward(BaseReward):
         'HBD_C': 4.0,       # VERY IMPORTANT - model makes too many HBD atoms
         'HBA_C': 4.0,       # VERY IMPORTANT - model makes too many HBA atoms
         'FusedR_C': 3.0,    # VERY IMPORTANT - model makes too many fused rings
+        'LogP_C': 2.0,     # to prevent greasy molecules
     }
 
     # Aromatic bonus weight - same scale as property weights above
@@ -68,13 +70,20 @@ class Property2DReward(BaseReward):
 
         # Store mean and sigma per property for Gaussian scoring
         self.gaussian_params = {}
+        # 2. But ensure specific "Learning Lanes" are wide enough to feel the slope
         for prop_name in self.WEIGHTS.keys():
-            if prop_name in target_data:
-                mean  = target_data[prop_name]['mean']
-                std   = target_data[prop_name]['std']
-                sigma = max(self.SIGMA_MULTIPLIER * std, 1e-3)  # Guard against zero std
-
-                self.gaussian_params[prop_name] = {'mean': mean, 'sigma': sigma}
+            mean = target_data[prop_name]['mean']
+            std = target_data[prop_name]['std']
+            
+            # Calculate initial sigma
+            sigma = self.SIGMA_MULTIPLIER * std
+            
+            # APPLY FLOORS some props have very small stds
+            if prop_name in ['SA', 'AroR_C', 'AliR_C', 'ChiA_C', 'LogP_C']:
+                sigma = max(sigma, 0.3) 
+            
+            self.gaussian_params[prop_name] = {'mean': mean, 'sigma': sigma}
+                
 
         # Per-target aromatic ring target from reference mean
         aro_mean = target_data['AroR_C']['mean']
@@ -169,6 +178,7 @@ class Property2DReward(BaseReward):
                 'HBD_C': rdMolDescriptors.CalcNumHBD(mol),
                 'HBA_C': rdMolDescriptors.CalcNumHBA(mol),
                 'FusedR_C': sum(1 for i in range(ring_info.NumRings()) if ring_info.IsRingFused(i)),
+                'LogP_C': Crippen.MolLogP(mol) / 5,
             }
 
             return props
@@ -230,8 +240,9 @@ class Property2DReward(BaseReward):
                     total_weight += self.WEIGHTS[prop_name]
 
             # 2. Aromatic bonus added into the same weighted sum
-            aro_count     = mol_props['AroR_C']
-            total_score  += self._aromatic_bonus(aro_count)
+            aro_count_raw = int(round(mol_props['AroR_C'] * 3)) 
+            total_score  += self._aromatic_bonus(aro_count_raw)
+
             total_weight += self.AROMATIC_BONUS_WEIGHT
 
             base_score = total_score / total_weight if total_weight > 0 else 0.0
@@ -254,7 +265,7 @@ class Property2DReward(BaseReward):
                     )
             print(f"[Property2D Debug] {Chem.MolToSmiles(mol)}")
             print("\n".join(debug_lines))
-            print(f"  aromatic_bonus={self._aromatic_bonus(aro_count):.2f}")
+            print(f"  aromatic_bonus={self._aromatic_bonus(aro_count_raw):.2f}")
             print(f"  base={base_score:.3f}, ring_penalty={ring_penalty:.3f}, final={final_score:.3f}")
 
             scores.append(float(final_score))
