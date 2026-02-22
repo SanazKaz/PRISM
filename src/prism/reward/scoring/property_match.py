@@ -18,9 +18,9 @@ class Property2DReward(BaseReward):
     # How many std devs to allow (lower = stricter)
     RANGE_MULTIPLIERS = {
         'MW': 1.5,          # Moderate - config already controls node count
-        'AroR_C': 1.0,      # STRICT - model underproduces, need precise match
-        'AliR_C': 1.0,      # STRICT - model overproduces, need precise match
-        'SA': 1.2,          # FAIRLY STRICT - important for synthesizability
+        'AroR_C': 1.5,      # STRICT - model underproduces, need precise match
+        'AliR_C': 0.8,      # STRICT - model overproduces, need precise match
+        'SA': 2.0,          # FAIRLY STRICT - important for synthesizability
         'HetA_C': 1.2,      # FAIRLY STRICT - controls composition
         'RotB_C': 1.0,      # STRICT - model makes too many, need to reduce
         'NHOH_C': 1.2,      # FAIRLY STRICT - important for binding
@@ -30,13 +30,13 @@ class Property2DReward(BaseReward):
     # Property importance weights
     WEIGHTS = {
         'MW': 0.8,          # Low - config handles this
-        'AroR_C': 2.5,      # CRITICAL - model doesn't make enough
-        'AliR_C': 2.5,      # CRITICAL - model makes too many
-        'SA': 3.0,          # VERY IMPORTANT - fight complexity
+        'AroR_C': 4,      # CRITICAL - model doesn't make enough
+        'AliR_C': 4.0,      # CRITICAL - model makes too many
+        'SA': 2.0,          # VERY IMPORTANT - fight complexity
         'HetA_C': 2.0,      # IMPORTANT - controls composition
-        'RotB_C': 2.5,      # CRITICAL - must reduce drastically
-        'NHOH_C': 2.5,      # VERY IMPORTANT - binding interactions
-        'ChiA_C': 2.0,      # VERY IMPORTANT - reduce chiral centers
+        'RotB_C': 3.0,      # CRITICAL - must reduce drastically
+        'NHOH_C': 3.0,      # VERY IMPORTANT - binding interactions
+        'ChiA_C': 3.0,      # VERY IMPORTANT - reduce chiral centers
     }
     
     # Hard constraint: no rings larger than this
@@ -259,7 +259,7 @@ class Property2DReward(BaseReward):
             if mol_props is None:
                 scores.append(0.0); continue
                 
-            # 1. Calculate the base property score (weighted sum)
+            # 1. Base Property Score (0.0 to 1.0)
             total_score = 0.0
             total_weight = 0.0
             for prop_name in self.RANGE_MULTIPLIERS.keys():
@@ -267,15 +267,17 @@ class Property2DReward(BaseReward):
                     total_score += self._property_score(mol_props[prop_name], prop_name)
                     total_weight += self.WEIGHTS[prop_name]
             
-            final_score = total_score / total_weight if total_weight > 0 else 0.0
+            base_score = total_score / total_weight if total_weight > 0 else 0.0
             
-            # 2. Apply Soft Penalties as MULTIPLIERS
-            # This keeps the gradient alive!
-            fsp3_mult = self._check_fsp3(mol)
+            # 2. Ring Size Penalty (Additive)
+            # Instead of multiplying, we subtract a small value.
+            # 1.0 = valid, 0.6 = one-atom excess. Let's convert that to a -0.4 penalty.
             ring_mult = self._get_ring_penalty(mol)
+            ring_penalty = (1.0 - ring_mult) * 0.5  # Max penalty of -0.5
             
-            # Final combined score
-            final_score = final_score * fsp3_mult * ring_mult
+            # Final Score: Balanced and Clamped
+            # This prevents one bad ring from making a "great" molecule look like "zero."
+            final_score = max(0.0, base_score - ring_penalty)
             
             scores.append(float(final_score))
             
