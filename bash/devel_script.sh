@@ -3,9 +3,10 @@
 #SBATCH --mem=32GB
 #SBATCH --gres=gpu:h100:1
 #SBATCH --partition=short
-#SBATCH --time 03:00:00
-#SBATCH --job-name=TESTING_ligand_efficiency
-#SBATCH --output=jobs_files/TESTING_ligand_efficiency.log
+#SBATCH --time 05:00:00
+#SBATCH --job-name=property_2d_fused_rings_test
+#SBATCH --output=jobs_files/property_2d_fused_rings%a.log
+#SBATCH --array=0-1
 
 
 # --- Environment Setup ---
@@ -17,6 +18,8 @@ source activate /data/stat-cadd/wolf7055/conda/envs/PRISM_25
 echo "Python executable: $(which python)"
 
 # --- DEFINITIONS ---
+
+
 export PROJECT_ROOT="/data/stat-cadd/wolf7055/PRISM"
 PERMANENT_DATA_DIR="${PROJECT_ROOT}/data/BRD4_BD1/03_final_dataset"
 
@@ -27,11 +30,11 @@ SCRATCH_DATASET_DIR="${WORK_DIR}/BRD4_BD1_test"
 export DEBUG_PPO=0
 
 # Seeds array
-SEEDS=(42 976 123 789)
+SEEDS=(42 976)
 SEED=${SEEDS[$SLURM_ARRAY_TASK_ID]}
 
 # Checkpoint path for this seed
-CHECKPOINT_PATH="/data/stat-cadd/wolf7055/PRISM/Log_Results/axis_2_sillwalks_CD/axis_2_sillwalks_CD/checkpoints/BRD4_BD1/seed=42/epoch=58-reward=0.49.ckpt"
+CHECKPOINT_PATH="/data/stat-cadd/wolf7055/PRISM/Log_Results/final_geometry_checks_CD/checkpoints/BRD4_BD1/seed=42/epoch=40-reward=0.72.ckpt"
 # CHECKPOINT_PATH="${CHECKPOINT_DIR}/seed=${SEED}/last.ckpt"
 
 echo "=========================================="
@@ -67,7 +70,7 @@ nvidia-smi
 echo "Starting PRISM training using Scratch Data..."
 
 srun python "${PROJECT_ROOT}/scripts/train.py" \
-    --config "${PROJECT_ROOT}/configs/ppo_devel.yaml" \
+    --config "${PROJECT_ROOT}/configs/ppo_config.yaml" \
     --resume_from_checkpoint "${CHECKPOINT_PATH}" \
     --datadir "${SCRATCH_DATASET_DIR}" \
     --seed ${SEED}

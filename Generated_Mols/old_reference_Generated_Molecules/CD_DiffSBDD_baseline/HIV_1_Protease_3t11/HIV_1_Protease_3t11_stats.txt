@@ -1,0 +1,6 @@
+target: HIV_1_Protease_3t11
+n_valid: 10000
+n_generated: 10200
+validity_rate: 0.9811764705882353
+time_seconds: 3912.783408164978
+time_per_mol: 0.3912783408164978

@@ -1,4 +1,4 @@
-run_identifier: 'Testing_new_paths'
+run_identifier: 'Testing_property_2d_changes_BHandHBAHBD'
 logdir: 'Log_Results'
 wandb_params:
   mode: 'online' # seeing if it will reduce overhead 
@@ -8,7 +8,7 @@ dataset: 'crossdock' #(refers to the model's dataset_info_key)
 datadir: '/data/stat-cadd/wolf7055/PRISM/data/BRD4_BD1/03_final_dataset'
 enable_progress_bar: False
 num_sanity_val_steps: 0
-batch_size: 28 # number of pockets to sample for (60)
+batch_size: 10 # number of pockets to sample for (60)
 lr: 1.0e-6 
 num_workers: 0 # suggested by terminal for better parallelisations ???
 gpus: 1
@@ -29,9 +29,9 @@ loss_params:
 ppo_params:
   num_outer_epochs: 100         # num of PPO cycles (outer epochs)
   num_inner_epochs: 2            # Updates per rollout (inner epochs)
-  n_steps: 56                    # Rollout length (mols generated)
+  n_steps: 40                    # Rollout length (mols generated)
   ligand_chunk_size: 56
-  ppo_batch_size: 56             # Size of each PPO update batch
+  ppo_batch_size: 40             # Size of each PPO update batch
   clip_range: 0.1                # PPO clipping parameter
   value_loss_coef: 0.0           # Weight for value loss
   entropy_coef: 0.001            # Weight for entropy bonus
@@ -65,15 +65,15 @@ reward_params:
     sucos: 0.0
     interaction_fingerprints: 0.0
     feature_density: 0.0
-    geometry_checks: 0.1
+    geometry_checks: 0.3
     flatness_checks: 0.0
     aromatic_counter: 0.0
     aromatic_anchor: 0.0
     multi_features: 0.0
     silly_walks: 0.0
     mmff_strain: 0.0
-    property_2d: 0.3
-    ligand_efficiency: 0.6
+    property_2d: 0.7
+    ligand_efficiency: 0.0
   reward_paths:
     feature_density: 'src/prism/reward/scoring/reward_data/ampc_hotspot_global_centered_eps0.5_min10_aromatic5.pkl'
     aromatic_anchor: 'src/prism/reward/scoring/reward_data/ampc_hotspot_global_centered_eps0.5_min10_aromatic5.pkl'
@@ -106,7 +106,7 @@ diffusion_params:
   diffusion_loss_type: 'l2'
   normalize_factors: [1, 4]
 
-eval_epochs: 15
+eval_epochs: 100
 visualize_sample_epoch: 99999
 visualize_chain_epoch: 999999
 eval_params:

@@ -1,0 +1,5 @@
+Model: /data/stat-cadd/wolf7055/PRISM/Log_Results/axis_2_sillwalks_CD/axis_2_sillwalks_CD/checkpoints/HIV_1_Protease/seed=123/last.pt
+Config: /data/stat-cadd/wolf7055/PRISM/configs/ppo_config.yaml
+N samples per target: 1000
+
+HIV_1_Protease_2qnn: 1000 mols, 99.24% valid, 16.5 min

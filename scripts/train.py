@@ -95,6 +95,11 @@ def main(args):
         config.logdir = args.logdir
         print(f"[LOGDIR] Override logdir to {args.logdir}")
         
+    if args.hotspot_path:
+        # Since config is a Namespace, use dot notation:
+        config.reward_params.reward_paths.feature_density = args.hotspot_path
+        print(f"[HOTSPOT] Overriding hotspot path to: {args.hotspot_path}")
+        
     
     if hasattr(config, 'eval_params'):
         # We assume the file is always named 'train_smiles.npy' and lives in the datadir
@@ -179,6 +184,7 @@ if __name__ == "__main__":
     parser.add_argument('--warm_start_from_ddpm', type=str, default=None, help="Path to pretrained DDPM checkpoint for warm start")
     parser.add_argument('--seed', type=int, default=42, help="Random seed for reproducibility")
     parser.add_argument('--datadir', type=str, default=None, help="Path to the dataset")
+    parser.add_argument('--hotspot_path', type=str, default=None, help="Override path for FeatureDensityReward hotspot pkl")
     
     # [FIX 4] Added missing arguments to avoid crash
     parser.add_argument('--logdir', type=str, default=None, help="Override log directory (Safe Scratch)")

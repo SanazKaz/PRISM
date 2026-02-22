@@ -1,0 +1,6 @@
+target: Estrogen_recep_alpha_5kct
+n_valid: 10000
+n_generated: 10200
+validity_rate: 0.9865686274509804
+time_seconds: 5991.459200382233
+time_per_mol: 0.5991459200382233

@@ -1,0 +1,5 @@
+Model: /data/stat-cadd/wolf7055/PRISM/checkpoints/moad_fullatom_cond.ckpt
+Config: /data/stat-cadd/wolf7055/PRISM/configs/binding_moad_fa_ppo.yaml
+N samples per target: 10000
+
+HIV_1_Protease_2qnn: 10000 mols, 98.15% valid, 259.9 min

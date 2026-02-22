@@ -1,0 +1,6 @@
+target: EGFR_4wkq
+n_valid: 10000
+n_generated: 10500
+validity_rate: 0.9537142857142857
+time_seconds: 7102.159551858902
+time_per_mol: 0.7102159551858902

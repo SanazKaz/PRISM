@@ -179,7 +179,7 @@ def remove_ligands_far_from_reference(pdb_dir, output_dir, reference_pdb):
 
 
 # ------------------------------
-# ⭐ NEW FUNCTION: Add bond orders by matching first 4 letters
+# NEW FUNCTION: Add bond orders by matching first 4 letters
 # ------------------------------
 def apply_bond_orders_from_sdf(pdb_dir, sdf_dir, output_dir, match_len=4):
     os.makedirs(output_dir, exist_ok=True)
@@ -229,7 +229,7 @@ def apply_bond_orders_from_sdf(pdb_dir, sdf_dir, output_dir, match_len=4):
 
 
 # ------------------------------
-# ⭐ UPDATED MAIN PIPELINE
+#  UPDATED MAIN PIPELINE
 # ------------------------------
 def process_pdb_dataset(raw_pdb_dir, output_protein_dir, output_ligand_dir, original_sdf_dir, final_sdf_output):
     pymol.finish_launching(['pymol', '-qc'])

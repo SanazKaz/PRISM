@@ -1,0 +1,5 @@
+Model: /data/stat-cadd/wolf7055/PRISM/checkpoints/moad_fullatom_cond.ckpt
+Config: /data/stat-cadd/wolf7055/PRISM/configs/binding_moad_fa_ppo.yaml
+N samples per target: 10000
+
+BRD4_BD1_6fo5: 1109 mols, 92.42% valid, 28.7 min

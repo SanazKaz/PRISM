@@ -1,0 +1,6 @@
+target: Estrogen_recep_alpha_2qzo
+n_valid: 1000
+n_generated: 1050
+validity_rate: 0.9885714285714285
+time_seconds: 590.9070951938629
+time_per_mol: 0.5909070951938629

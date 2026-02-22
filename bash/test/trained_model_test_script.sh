@@ -2,8 +2,8 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --partition=short
 #SBATCH --gres=gpu:h100:1
-#SBATCH --time 12:00:00
-#SBATCH --output=jobs_files/generation/axis_1_posebusters_CD_%x_%j.log
+#SBATCH --time 01:00:00
+#SBATCH --output=jobs_files/generation_features_2d_geom_adjusted2d%x_%j.log
 exec 2>&1
 
 # =============================================================================
@@ -55,12 +55,12 @@ SCRIPT_PATH="${PRISM_ROOT}/scripts/test.py"
 CONFIG_PATH="${PRISM_ROOT}/configs/ppo_config.yaml"
 
 # Output directory for CD geometry model generations
-OUTDIR="/data/stat-cadd/wolf7055/PRISM/generation_results/final_geometry_checks_CD"
+OUTDIR="/data/stat-cadd/wolf7055/PRISM/generation_results/features_2d_geom_adjusted2d"
 mkdir -p ${OUTDIR}
 
 # Generation settings
-N_SAMPLES=20000
-BATCH_SIZE=75
+N_SAMPLES=1000
+BATCH_SIZE=100
 
 # -----------------------------------------------------------------------------
 # Run

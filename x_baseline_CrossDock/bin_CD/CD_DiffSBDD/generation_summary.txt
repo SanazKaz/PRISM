@@ -1,0 +1,5 @@
+Model: /data/stat-cadd/wolf7055/PRISM/checkpoints/crossdocked_fa_cond_temp.ckpt
+Config: /data/stat-cadd/wolf7055/PRISM/configs/ppo_config.yaml
+N samples per target: 10000
+
+HIV_1_Protease_1hos: 10000 mols, 98.50% valid, 158.6 min

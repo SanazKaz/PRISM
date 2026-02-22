@@ -1,0 +1,6 @@
+target: Factor_Xa_2p3t
+n_valid: 10000
+n_generated: 10500
+validity_rate: 0.9584761904761905
+time_seconds: 8776.344959974289
+time_per_mol: 0.8776344959974289

@@ -1,0 +1,6 @@
+target: Estrogen_recep_alpha_4ivy
+n_valid: 10000
+n_generated: 10125
+validity_rate: 0.9892345679012345
+time_seconds: 8960.444871664047
+time_per_mol: 0.8960444871664047

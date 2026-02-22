@@ -21,6 +21,10 @@ from rdkit.Chem.rdchem import Mol
 
 from src.prism.reward.scorer import BaseReward
 
+# TODO: tomorrow need to analyse this and figure out where the failures are coming from
+# increase cutoff to 20
+# reduce aromatic gate threshold and the weight of it.
+# run
 
 class FeatureDensityReward(BaseReward):
     
@@ -36,7 +40,7 @@ class FeatureDensityReward(BaseReward):
         'ZnBinder': 0.05,
     }
     
-    def __init__(self, pkl_path: str, sigma: float = 1.0, cutoff: float = 3.0,
+    def __init__(self, pkl_path: str, sigma: float = 1.0, cutoff: float = 5.0,
                  feature_weights: Dict[str, float] = None,
                  aromatic_gate_threshold: float = 0.1,
                  aromatic_gate_penalty: float = 0.6):

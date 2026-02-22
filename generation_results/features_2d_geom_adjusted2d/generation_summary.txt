@@ -1,0 +1,5 @@
+Model: /data/stat-cadd/wolf7055/PRISM/Log_Results/features_geom_2d_CD_iclr_adjusted_2dweights/prop_adjusted_0.6f_3p_0.1g_features_geom_2d_CD_2d_/checkpoints/HIV_1_Protease/seed=42/last.pt
+Config: /data/stat-cadd/wolf7055/PRISM/configs/ppo_config.yaml
+N samples per target: 1000
+
+HIV_1_Protease_1hos: 1000 mols, 99.18% valid, 17.7 min

@@ -1,0 +1,6 @@
+target: Factor_Xa_1ezq
+n_valid: 10000
+n_generated: 10425
+validity_rate: 0.9631654676258993
+time_seconds: 8221.13914346695
+time_per_mol: 0.8221139143466949

@@ -164,7 +164,7 @@ class RolloutCollector:
             # print(f"num_nodes_lig sampled from range [15, 55]: {num_nodes_lig}")
         else:
             num_nodes_lig = torch.randint(
-                num_nodes_lig_config - 10,
+                num_nodes_lig_config - 5,
                 num_nodes_lig_config + 10,
                 (samples_in_chunk,),
                 dtype=torch.long

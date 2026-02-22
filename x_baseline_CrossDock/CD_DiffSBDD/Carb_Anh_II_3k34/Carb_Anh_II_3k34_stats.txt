@@ -1,0 +1,6 @@
+target: Carb_Anh_II_3k34
+n_valid: 10000
+n_generated: 10200
+validity_rate: 0.9803921568627451
+time_seconds: 5810.527545928955
+time_per_mol: 0.5810527545928955

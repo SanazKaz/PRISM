@@ -9,39 +9,39 @@
 # =============================================================================
 
 # Base path for checkpoints
-CKPT_BASE="/data/stat-cadd/wolf7055/PRISM/Log_Results/final_geometry_checks_CD/checkpoints"
+CKPT_BASE="/data/stat-cadd/wolf7055/PRISM/Log_Results/features_geom_2d_CD_iclr_adjusted_2dweights/prop_adjusted_0.6f_3p_0.1g_features_geom_2d_CD_2d_/checkpoints"
 
 # Map each test structure to its trained model checkpoint
 declare -A MODEL_MAP
-# BRD4_BD1 structures → BRD4 model
-MODEL_MAP["BRD4_BD1_4whw"]="${CKPT_BASE}/BRD4_BD1/seed=976/epoch=43-reward=0.76.pt"
-MODEL_MAP["BRD4_BD1_6fo5"]="${CKPT_BASE}/BRD4_BD1/seed=976/epoch=43-reward=0.76.pt"
-MODEL_MAP["BRD4_BD1_6xvc"]="${CKPT_BASE}/BRD4_BD1/seed=976/epoch=43-reward=0.76.pt"
+# BRD4_BD1 structures → BRD4 model - good
+MODEL_MAP["BRD4_BD1_4whw"]="${CKPT_BASE}/BRD4_BD1/seed=976/epoch=88-reward=0.51.pt"
+MODEL_MAP["BRD4_BD1_6fo5"]="${CKPT_BASE}/BRD4_BD1/seed=976/epoch=88-reward=0.51.pt"
+MODEL_MAP["BRD4_BD1_6xvc"]="${CKPT_BASE}/BRD4_BD1/seed=976/epoch=88-reward=0.51.pt"
 
-# Carb_Anh_II structures → Carb_Anh_II model
-MODEL_MAP["Carb_Anh_II_6rl9"]="${CKPT_BASE}/Carb_Anh_II/seed=976/epoch=44-reward=0.78.pt"
-MODEL_MAP["Carb_Anh_II_3k34"]="${CKPT_BASE}/Carb_Anh_II/seed=976/epoch=44-reward=0.78.pt"
-MODEL_MAP["Carb_Anh_II_5n0d"]="${CKPT_BASE}/Carb_Anh_II/seed=976/epoch=44-reward=0.78.pt"
+# Carb_Anh_II structures → Carb_Anh_II model - good
+MODEL_MAP["Carb_Anh_II_6rl9"]="${CKPT_BASE}/Carb_Anh_II/seed=42/last.pt"
+MODEL_MAP["Carb_Anh_II_3k34"]="${CKPT_BASE}/Carb_Anh_II/seed=42/last.pt"
+MODEL_MAP["Carb_Anh_II_5n0d"]="${CKPT_BASE}/Carb_Anh_II/seed=42/last.pt"
 
-# EGFR structures → EGFR model
-MODEL_MAP["EGFR_8a27"]="${CKPT_BASE}/EGFR/seed=123/epoch=42-reward=0.80.pt"
-MODEL_MAP["EGFR_3poz"]="${CKPT_BASE}/EGFR/seed=123/epoch=42-reward=0.80.pt"
-MODEL_MAP["EGFR_4wkq"]="${CKPT_BASE}/EGFR/seed=123/epoch=42-reward=0.80.pt"
+# EGFR structures → EGFR model - BAD
+MODEL_MAP["EGFR_8a27"]="${CKPT_BASE}/EGFR/seed=42/last.pt"
+MODEL_MAP["EGFR_3poz"]="${CKPT_BASE}/EGFR/seed=42/last.pt"
+MODEL_MAP["EGFR_4wkq"]="${CKPT_BASE}/EGFR/seed=42/last.pt"
 
-# Estrogen_recep_alpha structures → Estrogen model
-MODEL_MAP["Estrogen_recep_alpha_4ivy"]="${CKPT_BASE}/Estrogen_recep_alpha/seed=123/epoch=30-reward=0.90.pt"
-MODEL_MAP["Estrogen_recep_alpha_5kct"]="${CKPT_BASE}/Estrogen_recep_alpha/seed=123/epoch=30-reward=0.90.pt"
-MODEL_MAP["Estrogen_recep_alpha_2qzo"]="${CKPT_BASE}/Estrogen_recep_alpha/seed=123/epoch=30-reward=0.90.pt"
+# Estrogen_recep_alpha structures → Estrogen model - mediocre
+MODEL_MAP["Estrogen_recep_alpha_4ivy"]="${CKPT_BASE}/Estrogen_recep_alpha/seed=976/last.pt"
+MODEL_MAP["Estrogen_recep_alpha_5kct"]="${CKPT_BASE}/Estrogen_recep_alpha/seed=976/last.pt"
+MODEL_MAP["Estrogen_recep_alpha_2qzo"]="${CKPT_BASE}/Estrogen_recep_alpha/seed=976/last.pt"
 
-# Factor_Xa structures → Factor_Xa model
-MODEL_MAP["Factor_Xa_1ezq"]="${CKPT_BASE}/Factor_Xa/seed=976/epoch=40-reward=0.76.pt"
-MODEL_MAP["Factor_Xa_2p3t"]="${CKPT_BASE}/Factor_Xa/seed=976/epoch=40-reward=0.76.pt"
-MODEL_MAP["Factor_Xa_3kl6"]="${CKPT_BASE}/Factor_Xa/seed=976/epoch=40-reward=0.76.pt"
+# Factor_Xa structures → Factor_Xa model bad
+MODEL_MAP["Factor_Xa_1ezq"]="${CKPT_BASE}/Factor_Xa/seed=123/last.pt"
+MODEL_MAP["Factor_Xa_2p3t"]="${CKPT_BASE}/Factor_Xa/seed=123/last.pt"
+MODEL_MAP["Factor_Xa_3kl6"]="${CKPT_BASE}/Factor_Xa/seed=123/last.pt"
 
-# HIV_1_Protease structures → HIV model
-MODEL_MAP["HIV_1_Protease_2qnn"]="${CKPT_BASE}/HIV_1_Protease/seed=976/epoch=44-reward=0.84.pt"
-MODEL_MAP["HIV_1_Protease_3t11"]="${CKPT_BASE}/HIV_1_Protease/seed=976/epoch=44-reward=0.84.pt"
-MODEL_MAP["HIV_1_Protease_1hos"]="${CKPT_BASE}/HIV_1_Protease/seed=976/epoch=44-reward=0.84.pt"
+# HIV_1_Protease structures → HIV model good
+MODEL_MAP["HIV_1_Protease_2qnn"]="${CKPT_BASE}/HIV_1_Protease/seed=42/last.pt"
+MODEL_MAP["HIV_1_Protease_3t11"]="${CKPT_BASE}/HIV_1_Protease/seed=42/last.pt"
+MODEL_MAP["HIV_1_Protease_1hos"]="${CKPT_BASE}/HIV_1_Protease/seed=42/last.pt"
 
 # All targets to evaluate (18 test structures)
 TARGETS=(
@@ -77,7 +77,7 @@ TARGETS=(
 )
 
 # Create jobs directory if needed
-mkdir -p jobs_files/generation
+mkdir -p jobs_files/2D_property_CD_geom
 
 echo "============================================="
 echo "Submitting ${#TARGETS[@]} parallel PRISM CD geometry evaluation jobs"
@@ -121,7 +121,7 @@ echo "Monitor with:"
 echo "  squeue -u \$USER"
 echo ""
 echo "Check individual logs:"
-echo "  tail -f jobs_files/generation/CD_geometry_BRD4_BD1_4whw_*.log"
+echo "  tail -f jobs_files/generation_sillwalks_CD/CD_geometry_BRD4_BD1_4whw_*.log"
 echo ""
 echo "Cancel all:"
 echo "  scancel ${JOB_IDS[*]}"

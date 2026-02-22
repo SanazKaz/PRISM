@@ -11,6 +11,9 @@ lightning_logs/
 Log_Results/
 wandb/
 
+# bash/
+# configs/
+
 # Data and checkpoints
 # data/AMPC_beta_lactamase/
 # data/Carb_Anh_II/
