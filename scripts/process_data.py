@@ -15,6 +15,49 @@ from pathlib import Path
 
 from data.preprocessing import (fetch_pdbs, preprocess_data, create_dataset)
 
+
+def filter_test_pdbs_from_split(
+    all_data_path: Path,
+    test_pdbs_path: Path,
+    output_path: Path
+) -> Path:
+    """
+    Filters test PDB entries from the preprocessed split file to prevent
+    data leakage into the training set.
+
+    Reads all_data.txt produced by preprocessing, removes any entry whose
+    PDB ID (first token before '_') matches a test PDB ID, and writes the
+    filtered list to train_data.txt.
+
+    Args:
+        all_data_path: Path to all_data.txt from preprocessing.
+        test_pdbs_path: Path to test_pdbs.txt containing one PDB ID per line.
+        output_path: Path to write the filtered train_data.txt.
+
+    Returns:
+        Path to the filtered output file.
+    """
+    test_ids = {
+        line.strip().lower()
+        for line in test_pdbs_path.read_text().splitlines()
+        if line.strip() and not line.startswith('#')
+    }
+    print(f"  Loaded {len(test_ids)} test PDB IDs to exclude.")
+
+    all_entries = [
+        line.strip()
+        for line in all_data_path.read_text().splitlines()
+        if line.strip() and not line.startswith('#')
+    ]
+
+    filtered = [e for e in all_entries if e.split('_')[0].lower() not in test_ids]
+    removed = len(all_entries) - len(filtered)
+
+    output_path.write_text('\n'.join(filtered) + '\n')
+    print(f"  {len(all_entries)} total entries -> {len(filtered)} kept, {removed} removed (test set).")
+
+    return output_path
+
 def main():
     parser = argparse.ArgumentParser(
         description="Full data pipeline.", 
@@ -92,13 +135,26 @@ def main():
         print(f"[STEP 2/3] FAILED: {e}")
         sys.exit(1)
 
+    # --- 3.5: Filter test PDBs from split file ---
+    print("\n[STEP 2.5/3] Filtering test PDBs from training split...")
+    test_pdbs_path = Path("/data/stat-cadd/wolf7055/PRISM/data/preprocessing/test_pdbs.txt")
+    train_split_path = preprocess_dir / "train_data.txt"
+
+    filter_test_pdbs_from_split(
+        all_data_path=preprocess_dir / "all_data.txt",
+        test_pdbs_path=test_pdbs_path,
+        output_path=train_split_path
+    )
+    print("[STEP 2.5/3] Filtering Complete.")
+
+
     # --- 4. Run STEP 3: Create Final Dataset ---
     print("\n[STEP 3/3] Creating Final .npz Dataset...")
     try:
         dataset_args = argparse.Namespace(
             input_dir=str(preprocess_dir),
             output_dir=str(final_dataset_dir),
-            split_file="all_data.txt", 
+            split_file="train_data.txt", 
             deduplicate=args.deduplicate,
             dataset_name=job_name,
             dataset_info_key=args.dataset_info_key,
