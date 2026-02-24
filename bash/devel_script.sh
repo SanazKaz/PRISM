@@ -1,21 +1,21 @@
-#!/bin/bash
-#SBATCH --cpus-per-task=4
-#SBATCH --mem=32GB
-#SBATCH --gres=gpu:h100:1
-#SBATCH --partition=short
-#SBATCH --time 05:00:00
-#SBATCH --job-name=property_2d_fused_rings_test
-#SBATCH --output=jobs_files/property_2d_fused_rings%a.log
-#SBATCH --array=0-1
+# #!/bin/bash
+# #SBATCH --cpus-per-task=4
+# #SBATCH --mem=32GB
+# #SBATCH --gres=gpu:1
+# #SBATCH --partition=devel
+# #SBATCH --time 05:00:00
+# #SBATCH --job-name=test
+# #SBATCH --output=jobs_files/test_new%a.log
+# #SBATCH --array=0-1
 
 
-# --- Environment Setup ---
-module purge
-module load Anaconda3
-source activate /data/stat-cadd/wolf7055/conda/envs/PRISM_25
+# # --- Environment Setup ---
+# module purge
+# module load Anaconda3
+# source activate /data/stat-cadd/wolf7055/conda/envs/PRISM_25
 
 
-echo "Python executable: $(which python)"
+# echo "Python executable: $(which python)"
 
 # --- DEFINITIONS ---
 

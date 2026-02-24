@@ -27,6 +27,22 @@ class BaseReward(ABC):
         pass
     
     @property
+    def epoch_weight_schedule(self) -> Optional[int]:
+        """Epoch threshold for weight swap. None means no scheduling."""
+        return None
+
+    @property
+    def weight_before_epoch(self) -> Optional[float]:
+        """Weight to use before epoch threshold. None means use config weight."""
+        return None
+    
+    @property
+    def weight_after_epoch(self) -> Optional[float]:
+        """Weight to use after epoch threshold. None means use config weight."""
+        return None
+
+    # TODO: remove from rewards later - keeping for backwards compatibility
+    @property
     def increase_weight_after_epoch(self) -> Optional[int]:
         """The epoch after which to increase the weight.
         If None, the weight will not be increased.
@@ -75,25 +91,26 @@ class RewardManager:
                 raise ValueError(f"Weight for reward '{reward.name}' not found in reward_weights.")
 
     def _get_effective_weight(self, reward_fn: BaseReward, current_epoch: int) -> float:
-        """
-        Calculate the effective weight for a reward function based on current epoch.
-        
-        Args:
-            reward_fn: The reward function instance.
-            current_epoch: Current training epoch.
-            
-        Returns:
-            Effective weight to use for this reward.
-        """
         base_weight = self.base_weights[reward_fn.name]
-        
-        # Check if this reward has weight scheduling enabled
-        epoch_threshold = reward_fn.increase_weight_after_epoch
-        if epoch_threshold is not None and current_epoch >= epoch_threshold:
-            multiplier = reward_fn.increased_weight_multiplier
-            effective_weight = base_weight * multiplier
-            return effective_weight
-        
+
+        if reward_fn.epoch_weight_schedule is not None:
+            if current_epoch < reward_fn.epoch_weight_schedule:
+                weight = reward_fn.weight_before_epoch if reward_fn.weight_before_epoch is not None else base_weight
+            else:
+                weight = reward_fn.weight_after_epoch if reward_fn.weight_after_epoch is not None else base_weight
+            
+            # Log the transition exactly once
+            if current_epoch == reward_fn.epoch_weight_schedule:
+                print(f"[RewardManager] Weight schedule triggered for '{reward_fn.name}': "
+                    f"{reward_fn.weight_before_epoch} -> {reward_fn.weight_after_epoch} "
+                    f"at epoch {current_epoch}")
+            
+            return weight
+
+        if reward_fn.increase_weight_after_epoch is not None:
+            if current_epoch >= reward_fn.increase_weight_after_epoch:
+                return base_weight * reward_fn.increased_weight_multiplier
+
         return base_weight
     
     

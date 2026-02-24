@@ -10,7 +10,7 @@ from __future__ import annotations
 import os
 import pickle
 from pathlib import Path
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
 
 import torch
 import numpy as np
@@ -29,13 +29,14 @@ from src.prism.reward.scorer import BaseReward
 class FeatureDensityReward(BaseReward):
     
     # Default weights - prioritise aromatics, downweight easy hydrophobes
+    # in real setting these should be adjusted to the ideal profile for a target
     DEFAULT_FEATURE_WEIGHTS = {
-        'Aromatic': 0.35,
-        'Acceptor': 0.25,
-        'Donor': 0.20,
+        'Aromatic': 0.20,
+        'Acceptor': 0.30,
+        'Donor': 0.25,
         'Hydrophobe': 0.05,
         'NegIonizable': 0.05,
-        'PosIonizable': 0.00,
+        'PosIonizable': 0.05,
         'LumpedHydrophobe': 0.05,
         'ZnBinder': 0.05,
     }
@@ -109,6 +110,18 @@ class FeatureDensityReward(BaseReward):
     @property
     def name(self) -> str:
         return "feature_density"
+    
+    @property
+    def epoch_weight_schedule(self) -> Optional[int]:
+        return 80
+
+    @property
+    def weight_before_epoch(self) -> Optional[float]:
+        return 0.2
+
+    @property
+    def weight_after_epoch(self) -> Optional[float]:
+        return 0.7
 
     def _score_feature_type(self, feat_type: str, mol_feats: List, 
                             ideal_count: int) -> Tuple[float, float]:

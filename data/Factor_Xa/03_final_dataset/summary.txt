@@ -1,15 +1,15 @@
 # SUMMARY for CUSTOM_PDB_LIST Dataset Split
 
 # After processing
-num_samples train: 123
-num_samples val:   123
-num_samples test:  123
+num_samples train: 119
+num_samples val:   119
+num_samples test:  119
 
 # Info (from training set)
 'atom_encoder': {'C': 0, 'N': 1, 'O': 2, 'S': 3, 'B': 4, 'Br': 5, 'Cl': 6, 'P': 7, 'I': 8, 'F': 9}
 'atom_decoder': ['C', 'N', 'O', 'S', 'B', 'Br', 'Cl', 'P', 'I', 'F']
 'aa_encoder': {'C': 0, 'N': 1, 'O': 2, 'S': 3, 'B': 4, 'Br': 5, 'Cl': 6, 'P': 7, 'I': 8, 'F': 9}
 'aa_decoder': ['C', 'N', 'O', 'S', 'B', 'Br', 'Cl', 'P', 'I', 'F']
-'atom_hist': {'C': 2932, 'N': 535, 'O': 448, 'S': 117, 'B': 0, 'Br': 0, 'Cl': 98, 'P': 1, 'I': 0, 'F': 70}
-'aa_hist': {'C': 13710, 'N': 3402, 'O': 4362, 'S': 257, 'B': 0, 'Br': 0, 'Cl': 0, 'P': 0, 'I': 0, 'F': 0}
+'atom_hist': {'C': 2851, 'N': 521, 'O': 432, 'S': 115, 'B': 0, 'Br': 0, 'Cl': 94, 'P': 0, 'I': 0, 'F': 70}
+'aa_hist': {'C': 13326, 'N': 3305, 'O': 4240, 'S': 251, 'B': 0, 'Br': 0, 'Cl': 0, 'P': 0, 'I': 0, 'F': 0}
 'n_nodes_shape': (76, 273)

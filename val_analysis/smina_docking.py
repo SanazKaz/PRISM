@@ -1,7 +1,7 @@
 """
 SMINA Docking Module
 
-Handles molecular docking calculations using SMINA.
+Handles molecular docking calculations using SMINA using --minimize.
 Separate from metrics calculation to maintain single responsibility.
 """
 
@@ -14,22 +14,14 @@ from typing import List, Dict, Optional
 from pathlib import Path
 from rdkit import Chem
 
-
-import os
-import re
-import subprocess
-import tempfile
-from pathlib import Path
-from typing import List, Dict, Optional
-import numpy as np
-from rdkit import Chem
-
-# important if using docking as a reward
 from src.prism.utils import center_pocket_on_ligand_com
+
 
 class SminaDocking:
     """
-    SMINA docking helper — robust parsing and safer return values.
+    SMINA docking helper using --minimize mode.
+    Scores are read from the output SDF <minimizedAffinity> tag
+    rather than stdout, which is where smina actually writes them.
     """
 
     def __init__(
@@ -56,54 +48,62 @@ class SminaDocking:
             self.sdf_dir = None
 
     @staticmethod
+    def _extract_affinity_from_sdf(sdf_path: str) -> Optional[float]:
+        """
+        Extract minimizedAffinity from smina --minimize output SDF.
+        smina writes the score as an SDF property tag:
+            > <minimizedAffinity>
+            -10.25880
+        """
+        if not sdf_path or not os.path.exists(sdf_path):
+            return None
+        with open(sdf_path) as f:
+            content = f.read()
+        m = re.search(r"<minimizedAffinity>\s*\n\s*([+-]?\d+(?:\.\d+)?)", content)
+        return float(m.group(1)) if m else None
+
+    @staticmethod
     def _extract_affinity(stdout: str, stderr: str = "") -> Optional[float]:
         """
-        Robustly extract a docking affinity from stdout/stderr text.
+        Fallback: robustly extract a docking affinity from stdout/stderr text.
+        Kept for compatibility but --minimize scores should come from the SDF.
         Tries, in order:
-          - REMARK VINA RESULT: <score> ...
+          - REMARK VINA RESULT: <score>
           - Affinity: <score>
-          - a leading index line like "1   -7.3   ..."
-          - the last numeric token on the last non-empty line (fallback)
+          - index table line like "1   -7.3   ..."
+          - last negative float in plausible docking range
         Returns None when no sensible score found.
         """
         text = "\n".join(filter(None, [stdout or "", stderr or ""]))
 
-        # 1) Vina remark: "REMARK VINA RESULT:    -7.3    0.000    0.000"
         m = re.search(r"REMARK\s+VINA\s+RESULT:\s*([+-]?\d+(?:\.\d+)?)", text, flags=re.IGNORECASE)
         if m:
             return float(m.group(1))
 
-        # 2) "Affinity: -7.3"
         m = re.search(r"Affinity:\s*([+-]?\d+(?:\.\d+)?)", text, flags=re.IGNORECASE)
         if m:
             return float(m.group(1))
 
-        # 3) Lines like "   1    -7.300    0.000   0.000"
         m = re.search(r"^\s*\d+\s+([+-]?\d+(?:\.\d+)?)", text, flags=re.MULTILINE)
         if m:
             return float(m.group(1))
 
-        # 4) Look for any float tokens; prefer negative values (likely energies)
         floats = re.findall(r"([+-]?\d+\.\d+)", text)
         if floats:
-            # convert to floats
             nums = [float(x) for x in floats]
-            # prefer negative numbers in plausible docking range
             negs = [n for n in nums if n < 0.0]
             if negs:
-                # choose the most negative but within sane limits
                 candidate = min(negs)
                 if -500.0 < candidate < 50.0:
                     return float(candidate)
-            # fallback: choose last numeric token if plausible
             candidate = nums[-1]
             if -500.0 < candidate < 50.0:
                 return float(candidate)
 
-        # nothing found
         return None
 
     def _parse_pocket_name(self, name: str) -> str:
+        """Strip pocket suffix variants to recover the base target name."""
         if "_pocket_only.pdb" in name:
             return name.split("_pocket_only.pdb")[0]
         elif "_pocket" in name:
@@ -115,70 +115,85 @@ class SminaDocking:
         self, mol: Chem.Mol, receptor_pdb_path: str, ref_ligand_path: str
     ) -> Optional[Dict[str, Optional[float]]]:
         """
-        Docks a molecule after centering the pocket to match the generated ligand's origin.
-        Includes a Coordinate Check to verify alignment.
+        Minimizes a molecule in the pocket using smina --minimize.
+        Centers the pocket on the reference ligand COM before running.
+        Score is read from the output SDF <minimizedAffinity> tag.
         """
         if not os.path.exists(self.smina_path):
             return {"score": None, "stdout": "", "stderr": "smina_executable_missing"}
 
         tmp_sdf = None
-        tmp_pdb = None 
-        
-        try:
-            # 1. ALIGNMENT: Move pocket to (0,0,0) based on the reference ligand
-            from src.prism.utils import center_pocket_on_ligand_com
-            from Bio.PDB import PDBIO
-            from rdkit.Chem import rdMolTransforms
+        tmp_pdb = None
+        tmp_out = None
 
-            # This helper should return the centered Bio.PDB object and the centered RDKit reference ligand
-            pocket_obj, ref_centered_mol = center_pocket_on_ligand_com(receptor_pdb_path, ref_ligand_path)
-            
+        try:
+            # 1. Center pocket on reference ligand COM
+            from Bio.PDB import PDBIO
+
+            pocket_obj, ref_centered_mol = center_pocket_on_ligand_com(
+                receptor_pdb_path, ref_ligand_path
+            )
+
             if pocket_obj is None or ref_centered_mol is None:
                 return {"score": None, "stdout": "", "stderr": "centering_failed"}
 
-            # 2. SAVE CENTERED POCKET to temp file
+            # 2. Save centered pocket to temp PDB
             with tempfile.NamedTemporaryFile(mode="w", suffix=".pdb", delete=False) as pdb_tmp:
                 tmp_pdb = pdb_tmp.name
                 io = PDBIO()
                 io.set_structure(pocket_obj)
                 io.save(tmp_pdb)
 
-            # 3. SAVE GENERATED LIGAND (the one from the model) to temp file
+            # 3. Save generated ligand to temp SDF
             with tempfile.NamedTemporaryFile(mode="w", suffix=".sdf", delete=False) as lig_tmp:
                 tmp_sdf = lig_tmp.name
                 writer = Chem.SDWriter(tmp_sdf)
                 writer.write(mol)
                 writer.close()
 
-            # --- COORDINATE CHECK  ---
-            # gen_com = rdMolTransforms.ComputeCentroid(mol.GetConformer())
-            # ref_com = rdMolTransforms.ComputeCentroid(ref_centered_mol.GetConformer())
-            
-            # dist = np.linalg.norm(np.array([gen_com.x, gen_com.y, gen_com.z]) - 
-            #                       np.array([ref_com.x, ref_com.y, ref_com.z]))
+            # 4. Create temp output SDF path
+            with tempfile.NamedTemporaryFile(suffix=".sdf", delete=False) as out_tmp:
+                tmp_out = out_tmp.name
 
-            # print(f"\n[COORD CHECK] {Path(receptor_pdb_path).name}")
-            # print(f"  Generated Ligand COM: ({gen_com.x:6.2f}, {gen_com.y:6.2f}, {gen_com.z:6.2f})")
-            # print(f"  Reference Pocket COM: ({ref_com.x:6.2f}, {ref_com.y:6.2f}, {ref_com.z:6.2f})")
-            # print(f"  Alignment Offset:     {dist:6.2f} Å")
-            # ---------------------------------------------------------
-
-            # 4. RUN SMINA
-            # We use --autobox_ligand {tmp_sdf} because the generated ligand 
-            # is now the best indicator of where the binding site origin is.
+            # 5. Build smina command - list form to safely handle any spaces in paths
             if self.local_opt:
-                cmd = (
-                    f"{self.smina_path} -l {tmp_sdf} -r {tmp_pdb} "
-                    f"--autobox_ligand {tmp_sdf} --exhaustiveness 4 --num_modes 1"
-                )
+                cmd = [
+                    self.smina_path,
+                    "-l", tmp_sdf,
+                    "-r", tmp_pdb,
+                    "--autobox_ligand", tmp_sdf,
+                    "--autobox_add", "4",
+                    "--exhaustiveness", "4",
+                    "--num_modes", "1",
+                    "-o", tmp_out,
+                    "--quiet",
+                ]
             else:
-                cmd = f"{self.smina_path} -l {tmp_sdf} -r {tmp_pdb} --score_only"
+                cmd = [
+                    self.smina_path,
+                    "-l", tmp_sdf,
+                    "-r", tmp_pdb,
+                    "--minimize",
+                    "--minimize_iters", "1000",
+                    "--autobox_ligand", tmp_sdf,
+                    "--autobox_add", "4",
+                    "-o", tmp_out,
+                    "--quiet",
+                ]
 
-            proc = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=self.timeout)
-            
+            proc = subprocess.run(
+                cmd, shell=False, capture_output=True, text=True, timeout=self.timeout
+            )
+
             stdout = proc.stdout or ""
             stderr = proc.stderr or ""
-            score = self._extract_affinity(stdout, stderr)
+
+            # Read score from output SDF - this is where smina --minimize writes it
+            score = self._extract_affinity_from_sdf(tmp_out)
+
+            # Fallback to stdout parsing if SDF score not found
+            if score is None:
+                score = self._extract_affinity(stdout, stderr)
 
             return {"score": score, "stdout": stdout.strip(), "stderr": stderr.strip()}
 
@@ -187,15 +202,20 @@ class SminaDocking:
         except Exception as e:
             return {"score": None, "stdout": "", "stderr": f"exception:{e}"}
         finally:
-            # Clean up all temp files created in this call
-            for f in [tmp_sdf, tmp_pdb]:
+            for f in [tmp_sdf, tmp_pdb, tmp_out]:
                 if f and os.path.exists(f):
                     try:
                         os.unlink(f)
-                    except:
+                    except Exception:
                         pass
 
-    def dock_batch(self, molecules: List[Chem.Mol], names: List[str], max_failures: int = 5) -> Dict[str, float]:
+    def dock_batch(
+        self, molecules: List[Chem.Mol], names: List[str], max_failures: int = 5
+    ) -> Dict[str, float]:
+        """
+        Run minimization over a batch of molecules.
+        Returns aggregated score statistics across the batch.
+        """
         if not molecules or not names:
             return self._empty_results()
 
@@ -244,6 +264,7 @@ class SminaDocking:
 
     @staticmethod
     def _empty_results() -> Dict[str, float]:
+        """Return zeroed results dict when docking cannot be performed."""
         return {
             "smina_score_mean": 0.0,
             "smina_score_std": 0.0,

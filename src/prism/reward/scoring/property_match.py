@@ -1,12 +1,14 @@
+from typing import List, Optional
+
 import json
 import numpy as np
 import torch
-from typing import List
+
 from rdkit import Chem
 from rdkit.Chem import Descriptors, Lipinski, rdMolDescriptors
-from src.prism.reward.scorer import BaseReward
 from rdkit.Chem import Crippen
 
+from src.prism.reward.scorer import BaseReward
 
 class Property2DReward(BaseReward):
     """
@@ -35,15 +37,15 @@ class Property2DReward(BaseReward):
     WEIGHTS = {
         # 'MW': 0.8,        # Commented out - controlled by node count config
         'AroR_C': 4.0,      # CRITICAL - model underproduces aromatic rings
-        'AliR_C': 4.0,      # CRITICAL - model overproduces aliphatic rings
-        'SA':     2.0,       # VERY IMPORTANT - synthesizability
+        'AliR_C': 4.5,      # CRITICAL - model overproduces aliphatic rings
+        'SA':     2.5,       # VERY IMPORTANT - synthesizability
         'HetA_C': 2.0,       # IMPORTANT - heteroatom composition
-        'RotB_C': 3.0,       # CRITICAL - model overproduces rotatable bonds
+        'RotB_C': 3.5,       # CRITICAL - model overproduces rotatable bonds
         'ChiA_C': 3.0,       # VERY IMPORTANT - model makes too many chiral centres
-        'HBD_C': 4.0,       # VERY IMPORTANT - model makes too many HBD atoms
+        'HBD_C': 4.2,       # VERY IMPORTANT - model makes too many HBD atoms
         'HBA_C': 4.0,       # VERY IMPORTANT - model makes too many HBA atoms
-        'FusedR_C': 3.0,    # VERY IMPORTANT - model makes too many fused rings
-        'LogP_C': 2.0,     # to prevent greasy molecules
+        'FusedR_C': 3.5,    # VERY IMPORTANT - model makes too many fused rings
+        'LogP_C': 1.0,     # to prevent greasy molecules
     }
 
     # Aromatic bonus weight - same scale as property weights above
@@ -100,6 +102,18 @@ class Property2DReward(BaseReward):
     @property
     def name(self) -> str:
         return "property_2d"
+
+    @property
+    def epoch_weight_schedule(self) -> Optional[int]:
+        return 80
+
+    @property
+    def weight_before_epoch(self) -> Optional[float]:
+        return 0.7
+
+    @property
+    def weight_after_epoch(self) -> Optional[float]:
+        return 0.2
 
     def _check_ring_sizes(self, mol: Chem.Mol) -> tuple:
         """

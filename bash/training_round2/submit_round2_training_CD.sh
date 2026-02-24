@@ -13,7 +13,7 @@ PROJECT_ROOT="/data/stat-cadd/wolf7055/PRISM"
 ROUND1_CKPT_BASE="${PROJECT_ROOT}/Log_Results/final_geometry_checks_CD/checkpoints"
 
 TRAINING_SCRIPT_PATH="bash/training_round2/round2_training_CD.sh"
-LOG_DIR="${PROJECT_ROOT}/jobs_files/2D_property_CD_geom"
+LOG_DIR="${PROJECT_ROOT}/jobs_files/feat_2dprop_geom_cd_curriculum"
 
 
 # Round 1 best checkpoints (Must match order of TARGETS)

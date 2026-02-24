@@ -50,7 +50,7 @@ class PoseBustersFlatnessReward(BaseReward):
     
     @property
     def increase_weight_after_epoch(self) -> Optional[int]:
-        return None
+        return 100
 
     @property
     def increased_weight_multiplier(self) -> float:
