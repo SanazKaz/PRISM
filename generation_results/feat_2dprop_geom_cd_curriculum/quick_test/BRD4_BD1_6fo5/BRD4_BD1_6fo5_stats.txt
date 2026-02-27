@@ -1,0 +1,6 @@
+target: BRD4_BD1_6fo5
+n_valid: 1000
+n_generated: 1100
+validity_rate: 0.9890909090909091
+time_seconds: 1304.6439142227173
+time_per_mol: 1.3046439142227173

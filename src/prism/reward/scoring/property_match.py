@@ -105,15 +105,15 @@ class Property2DReward(BaseReward):
 
     @property
     def epoch_weight_schedule(self) -> Optional[int]:
-        return 80
+        return None
 
     @property
     def weight_before_epoch(self) -> Optional[float]:
-        return 0.7
+        return None
 
     @property
     def weight_after_epoch(self) -> Optional[float]:
-        return 0.2
+        return None
 
     def _check_ring_sizes(self, mol: Chem.Mol) -> tuple:
         """
@@ -266,21 +266,21 @@ class Property2DReward(BaseReward):
             ring_penalty = (1.0 - ring_mult) * 0.5
             final_score  = max(0.0, base_score - ring_penalty)
 
-            # Temporary debug - remove before full training run
-            debug_lines = []
-            for prop_name in self.WEIGHTS.keys():
-                if prop_name in self.gaussian_params and prop_name in mol_props:
-                    raw_score = self._property_score(mol_props[prop_name], prop_name)
-                    debug_lines.append(
-                        f"  {prop_name}={mol_props[prop_name]:.2f} "
-                        f"(mean={self.gaussian_params[prop_name]['mean']:.2f}, "
-                        f"sigma={self.gaussian_params[prop_name]['sigma']:.2f}) "
-                        f"-> weighted={raw_score:.3f}"
-                    )
-            print(f"[Property2D Debug] {Chem.MolToSmiles(mol)}")
-            print("\n".join(debug_lines))
-            print(f"  aromatic_bonus={self._aromatic_bonus(aro_count_raw):.2f}")
-            print(f"  base={base_score:.3f}, ring_penalty={ring_penalty:.3f}, final={final_score:.3f}")
+            # # Temporary debug - remove before full training run
+            # debug_lines = []
+            # for prop_name in self.WEIGHTS.keys():
+            #     if prop_name in self.gaussian_params and prop_name in mol_props:
+            #         raw_score = self._property_score(mol_props[prop_name], prop_name)
+            #         debug_lines.append(
+            #             f"  {prop_name}={mol_props[prop_name]:.2f} "
+            #             f"(mean={self.gaussian_params[prop_name]['mean']:.2f}, "
+            #             f"sigma={self.gaussian_params[prop_name]['sigma']:.2f}) "
+            #             f"-> weighted={raw_score:.3f}"
+            #         )
+            # print(f"[Property2D Debug] {Chem.MolToSmiles(mol)}")
+            # print("\n".join(debug_lines))
+            # print(f"  aromatic_bonus={self._aromatic_bonus(aro_count_raw):.2f}")
+            # print(f"  base={base_score:.3f}, ring_penalty={ring_penalty:.3f}, final={final_score:.3f}")
 
             scores.append(float(final_score))
 

@@ -1,0 +1,5 @@
+Model: /data/stat-cadd/wolf7055/PRISM/Log_Results/feat_2dprop_geom_cd_curriculum/feat_2dprop_geom_cd_curriculum/checkpoints/Carb_Anh_II/seed=123/epoch=142-reward=0.44.pt
+Config: /data/stat-cadd/wolf7055/PRISM/configs/ppo_config.yaml
+N samples per target: 1000
+
+Carb_Anh_II_6rl9: 1000 mols, 97.09% valid, 27.3 min

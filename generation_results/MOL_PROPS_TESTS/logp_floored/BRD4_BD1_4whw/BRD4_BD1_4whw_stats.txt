@@ -1,0 +1,6 @@
+target: BRD4_BD1_4whw
+n_valid: 1000
+n_generated: 1088
+validity_rate: 0.9678308823529411
+time_seconds: 418.6280071735382
+time_per_mol: 0.4186280071735382

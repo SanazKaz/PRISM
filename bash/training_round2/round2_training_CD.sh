@@ -4,8 +4,8 @@
 #SBATCH --gres=gpu:h100:1
 #SBATCH --ntasks-per-node=1
 #SBATCH --partition=short
-#SBATCH --time 12:00:00
-#SBATCH --job-name=feat_2dprop_geom_cd_curriculum
+#SBATCH --time 08:00:00
+#SBATCH --job-name=molecular_props_geom_step2
 #SBATCH --mail-user=wolf7055@ox.ac.uk
 #SBATCH --mail-type=END,FAIL
 #SBATCH --array=0-23
@@ -52,9 +52,9 @@ HOTSPOT_PKLS=(
 )
 
 # --- OUTPUT PATHS: Logs & Checkpoints ---
-CHECKPOINT_OUTPUT_DIR="${PROJECT_ROOT}/Log_Results/feat_2dprop_geom_cd_curriculum"
-JOB_NAME="feat_2dprop_geom_cd_curriculum"
-SLURM_LOG_BASE_DIR="${PROJECT_ROOT}/jobs_files/feat_2dprop_geom_cd_curriculum/${JOB_NAME}"
+CHECKPOINT_OUTPUT_DIR="${PROJECT_ROOT}/Log_Results/molecular_props_geom_step2"
+JOB_NAME="molecular_props_geom_step2"
+SLURM_LOG_BASE_DIR="${PROJECT_ROOT}/jobs_files/molecular_props_geom_step2/${JOB_NAME}"
 
 # =============================================================================
 # 2. TASK INDEXING & LOGGING SETUP

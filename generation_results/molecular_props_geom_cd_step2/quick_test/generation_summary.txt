@@ -1,0 +1,5 @@
+Model: /data/stat-cadd/wolf7055/PRISM/Log_Results/molecular_props_geom_step2/molecular_props_geom_step2/checkpoints/EGFR/seed=42/last.pt
+Config: /data/stat-cadd/wolf7055/PRISM/configs/ppo_config.yaml
+N samples per target: 1000
+
+EGFR_3poz: 1000 mols, 99.18% valid, 20.4 min

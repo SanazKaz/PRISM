@@ -2,8 +2,8 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --partition=short
 #SBATCH --gres=gpu:h100:1
-#SBATCH --time 01:00:00
-#SBATCH --output=jobs_files/generation_features_2d_geom_adjusted2d%x_%j.log
+#SBATCH --time 00:30:00
+#SBATCH --output=jobs_files/generating_molecular_props_geom_step2/quick_test/%x_%j.log
 exec 2>&1
 
 # =============================================================================
@@ -55,7 +55,7 @@ SCRIPT_PATH="${PRISM_ROOT}/scripts/test.py"
 CONFIG_PATH="${PRISM_ROOT}/configs/ppo_config.yaml"
 
 # Output directory for CD geometry model generations
-OUTDIR="/data/stat-cadd/wolf7055/PRISM/generation_results/features_2d_geom_adjusted2d"
+OUTDIR="/data/stat-cadd/wolf7055/PRISM/generation_results/molecular_props_geom_cd_step2/quick_test"
 mkdir -p ${OUTDIR}
 
 # Generation settings

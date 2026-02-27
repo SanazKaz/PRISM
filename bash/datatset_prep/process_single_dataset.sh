@@ -2,7 +2,7 @@
 #SBATCH --cpus-per-task=6
 #SBATCH --mem=64GB
 #SBATCH --partition=short
-#SBATCH --time 02:00:00
+#SBATCH --time 01:30:00
 #SBATCH --job-name=PRISM_HIV1
 #SBATCH --output=jobs_files/Process_HIV1_Protease.log
 
@@ -21,7 +21,7 @@ set -e  # Exit on any error
 # --- Environment Setup ---
 module purge
 module load Anaconda3
-source activate /data/stat-cadd/wolf7055/conda/envs/prism_backup
+source activate /data/stat-cadd/wolf7055/conda/envs/PRISM_25
 echo "Python executable: $(which python)"
 echo ""
 

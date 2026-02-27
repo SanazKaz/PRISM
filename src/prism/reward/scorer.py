@@ -71,7 +71,8 @@ class RewardManager:
                  reward_fns: List[BaseReward], 
                  reward_weights: Dict[str, float], 
                  dataset_info: Any, 
-                 ddpm_module: Any = None):
+                 ddpm_module: Any = None,
+                 aggregation: str = "weighted_sum"): # "weighted_sum" or "product"
         """
         Args:
             reward_fns: List of instantiated reward classes inheriting from BaseReward.
@@ -84,11 +85,17 @@ class RewardManager:
         self.base_weights = reward_weights.copy()
         self.dataset_info = dataset_info
         self.ddpm_module = ddpm_module
-        
+        self.aggregation = aggregation
+
         # Validate weights match rewards
         for reward in self.reward_fns:
             if reward.name not in self.weights:
                 raise ValueError(f"Weight for reward '{reward.name}' not found in reward_weights.")
+
+        # Validate aggregation method
+        if self.aggregation not in ["weighted_sum", "product"]:
+            raise ValueError(f"Invalid aggregation method: {self.aggregation}")
+        print(f"[RewardManager] Using aggregation method: {self.aggregation}")
 
     def _get_effective_weight(self, reward_fn: BaseReward, current_epoch: int) -> float:
         base_weight = self.base_weights[reward_fn.name]
@@ -160,7 +167,13 @@ class RewardManager:
         valid_indices = list(mol_to_batch_idx.values())
         
         # Reset the valid slots to 0.0 before accumulating weighted sums
-        total_rewards[valid_indices] = 0.0
+        if self.aggregation == "weighted_sum":
+            total_rewards[valid_indices] = 0.0
+        elif self.aggregation == "product":
+            total_rewards[valid_indices] = 1.0
+        else:
+            raise ValueError(f"Invalid aggregation method: {self.aggregation}")
+
         for reward_fn in self.reward_fns:
             try:
                 # Calculate raw scores for the list of RDKit objects.
@@ -185,7 +198,12 @@ class RewardManager:
                     score = raw_scores[local_idx]
                     
                     # Accumulate weighted sum
-                    total_rewards[batch_idx] += score * weight
+                    if self.aggregation == "weighted_sum":
+                        total_rewards[batch_idx] += score * weight
+                    elif self.aggregation == "product":
+                        total_rewards[batch_idx] *= score
+                    else:
+                        raise ValueError(f"Invalid aggregation method: {self.aggregation}")
                     
                     # Store raw component score
                     component_scores[reward_fn.name][batch_idx] = score

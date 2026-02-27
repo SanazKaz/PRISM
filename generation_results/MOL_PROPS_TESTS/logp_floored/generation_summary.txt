@@ -1,0 +1,5 @@
+Model: //data/stat-cadd/wolf7055/PRISM/Log_Results/log_p_floored_property_2d_fused_rings_test_chiralitywidened/checkpoints/tmp/seed=976/last.pt
+Config: /data/stat-cadd/wolf7055/PRISM/configs/ppo_config.yaml
+N samples per target: 1000
+
+BRD4_BD1_4whw: 1000 mols, 96.78% valid, 7.0 min

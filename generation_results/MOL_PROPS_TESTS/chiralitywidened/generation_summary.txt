@@ -1,0 +1,5 @@
+Model: /data/stat-cadd/wolf7055/PRISM/Log_Results/property_2d_fused_rings_test_chiralitywidened/checkpoints/tmp/seed=976/last.pt
+Config: configs/ppo_config.yaml
+N samples per target: 1000
+
+BRD4_BD1_4whw: 1000 mols, 95.13% valid, 34.5 min

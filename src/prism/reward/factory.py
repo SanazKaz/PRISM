@@ -16,7 +16,7 @@ from src.prism.reward.scoring.multi_features import MultiFeatureReward
 from src.prism.reward.scoring.silly_walks import SillyWalksReward
 from src.prism.reward.scoring.strain_energy import MMFFStrainReward
 from src.prism.reward.scoring.property_match import Property2DReward
-from src.prism.reward.scoring.ligand_effiency import LigandEfficiencyReward
+from src.prism.reward.scoring.smina_docking import SminaDockingReward
 
 
 # 1. The Registry
@@ -37,7 +37,7 @@ REWARD_REGISTRY = {
     "silly_walks": SillyWalksReward,
     "mmff_strain": MMFFStrainReward,
     "property_2d": Property2DReward,
-    "ligand_efficiency": LigandEfficiencyReward,
+    "smina_docking": SminaDockingReward,
 }
 
 def get_reward_manager(config, dataset_info, ddpm_module=None):
@@ -56,10 +56,12 @@ def get_reward_manager(config, dataset_info, ddpm_module=None):
     # 1. Safely access 'reward_params' from the Namespace
     # We use getattr because older configs might not have this section
     reward_params_ns = getattr(config, 'reward_params', None)
-
     if reward_params_ns is None:
         print("WARNING: 'reward_params' not found in config. No rewards will be calculated.")
         return RewardManager([], {}, dataset_info, ddpm_module)
+    # new 
+    aggregation = getattr(reward_params_ns, 'aggregation', 'weighted_sum')
+
 
     # 2. Safely access 'rewards' from the nested Namespace
     rewards_ns = getattr(reward_params_ns, 'rewards', None)
@@ -121,7 +123,7 @@ def get_reward_manager(config, dataset_info, ddpm_module=None):
                 reference_json_path=reward_paths['property_2d'],
                 target_name=target_name
             ))
-        elif name == 'ligand_efficiency':
+        elif name == 'smina_docking':
             active_rewards.append(reward_cls(dataset_info=dataset_info))
         else:
             active_rewards.append(reward_cls())
@@ -133,5 +135,6 @@ def get_reward_manager(config, dataset_info, ddpm_module=None):
         reward_fns=active_rewards,
         reward_weights=weights,
         dataset_info=dataset_info,
-        ddpm_module=ddpm_module
+        ddpm_module=ddpm_module,
+        aggregation=aggregation
     )

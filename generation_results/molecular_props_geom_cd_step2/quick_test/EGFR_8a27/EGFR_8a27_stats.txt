@@ -1,0 +1,6 @@
+target: EGFR_8a27
+n_valid: 1000
+n_generated: 1100
+validity_rate: 0.990909090909091
+time_seconds: 1081.2819604873657
+time_per_mol: 1.0812819604873658
