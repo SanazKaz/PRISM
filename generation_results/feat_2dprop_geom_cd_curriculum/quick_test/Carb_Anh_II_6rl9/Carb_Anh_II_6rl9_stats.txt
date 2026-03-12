@@ -1,6 +1,0 @@
-target: Carb_Anh_II_6rl9
-n_valid: 1000
-n_generated: 1100
-validity_rate: 0.9709090909090909
-time_seconds: 1640.775724887848
-time_per_mol: 1.6407757248878478

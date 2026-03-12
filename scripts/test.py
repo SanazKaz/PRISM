@@ -1,8 +1,9 @@
 """
-test_prism_targets.py
+test_prism_crossdocked.py
 
-Generate 10,000 ligands for each of 6 PRISM evaluation targets.
-Hardcoded paths for reproducible evaluation runs.
+Generate ligands for the CrossDocked test set using a PRISM .pt checkpoint.
+Mirrors the structure of test_prism_targets.py but loops over the crossdocked
+test directory (PDB + SDF + TXT files) rather than hardcoded targets.
 """
 
 import argparse
@@ -24,7 +25,7 @@ from openbabel import openbabel
 # Suppress OpenBabel logging
 openbabel.obErrorLog.StopLogging()
 
-# --- Path Setup (same as generate_ligands.py) ---
+# --- Path Setup ---
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DIFFSBDD_PATH = Path(PROJECT_ROOT) / "src" / "models" / "diffsbdd"
 sys.path.insert(0, str(DIFFSBDD_PATH))
@@ -44,109 +45,8 @@ except ImportError:
     from src.models.diffsbdd.analysis.molecule_builder import process_molecule
     from src.models.diffsbdd import utils
 
-MAXITER = 200  # Increased for 10k samples
-MAXNTRIES = 5
-
-
-# =============================================================================
-# TEST TARGETS - Edit paths here if needed
-# =============================================================================
-BASE_PATH = Path("/data/stat-cadd/wolf7055/PRISM/data")
-
-
-# =============================================================================
-# TEST TARGETS - Edit paths here if needed
-# =============================================================================
-BASE_PATH = Path("/data/stat-cadd/wolf7055/PRISM/data")
-
-TEST_TARGETS = {
-    # BRD4_BD1 - 3 test structures
-    "BRD4_BD1_4whw": {
-        "pocket": BASE_PATH / "BRD4_BD1/02_preprocessed/pocket_files/4whw_3OT_B_201_pocket.pdb",
-        "ligand": BASE_PATH / "BRD4_BD1/02_preprocessed/sdf_files/4whw_3OT_B_201.sdf",
-    },
-    "BRD4_BD1_6fo5": {
-        "pocket": BASE_PATH / "BRD4_BD1/02_preprocessed/pocket_files/6fo5_DZH_B_201_pocket.pdb",
-        "ligand": BASE_PATH / "BRD4_BD1/02_preprocessed/sdf_files/6fo5_DZH_B_201.sdf",
-    },
-    "BRD4_BD1_6xvc": {
-        "pocket": BASE_PATH / "BRD4_BD1/02_preprocessed/pocket_files/6xvc_O32_D_203_pocket.pdb",
-        "ligand": BASE_PATH / "BRD4_BD1/02_preprocessed/sdf_files/6xvc_O32_D_203.sdf",
-    },
-    
-    # Carb_Anh_II - 3 test structures
-    "Carb_Anh_II_6rl9": {
-        "pocket": BASE_PATH / "Carb_Anh_II/02_preprocessed/pocket_files/6rl9_SAN_E_304_pocket.pdb",
-        "ligand": BASE_PATH / "Carb_Anh_II/02_preprocessed/sdf_files/6rl9_SAN_E_304.sdf",
-    },
-    "Carb_Anh_II_3k34": {
-        "pocket": BASE_PATH / "Carb_Anh_II/02_preprocessed/pocket_files/3k34_SUA_D_1003_pocket.pdb",
-        "ligand": BASE_PATH / "Carb_Anh_II/02_preprocessed/sdf_files/3k34_SUA_D_1003.sdf",
-    },
-    "Carb_Anh_II_5n0d": {
-        "pocket": BASE_PATH / "Carb_Anh_II/02_preprocessed/pocket_files/5n0d_8F2_C_302_pocket.pdb",
-        "ligand": BASE_PATH / "Carb_Anh_II/02_preprocessed/sdf_files/5n0d_8F2_C_302.sdf",
-    },
-    
-    # EGFR - 3 test structures
-    "EGFR_8a27": {
-        "pocket": BASE_PATH / "EGFR/02_preprocessed/pocket_files/8a27_KY9_C_1102_pocket.pdb",
-        "ligand": BASE_PATH / "EGFR/02_preprocessed/sdf_files/8a27_KY9_C_1102.sdf",
-    },
-    "EGFR_3poz": {
-        "pocket": BASE_PATH / "EGFR/02_preprocessed/pocket_files/3poz_03P_E_1023_pocket.pdb",
-        "ligand": BASE_PATH / "EGFR/02_preprocessed/sdf_files/3poz_03P_E_1023.sdf",
-    },
-    "EGFR_4wkq": {
-        "pocket": BASE_PATH / "EGFR/02_preprocessed/pocket_files/4wkq_IRE_B_1101_pocket.pdb",
-        "ligand": BASE_PATH / "EGFR/02_preprocessed/sdf_files/4wkq_IRE_B_1101.sdf",
-    },
-    
-    # Estrogen_recep_alpha - 3 test structures
-    
-    "Estrogen_recep_alpha_4ivy": {
-        "pocket": BASE_PATH / "Estrogen_recep_alpha/02_preprocessed/pocket_files/4ivy_1GT_E_601_pocket.pdb",
-        "ligand": BASE_PATH / "Estrogen_recep_alpha/02_preprocessed/sdf_files/4ivy_1GT_E_601.sdf",
-    },
-
-    "Estrogen_recep_alpha_5kct": {
-        "pocket": BASE_PATH / "Estrogen_recep_alpha/02_preprocessed/pocket_files/5kct_OB6_F_601_pocket.pdb",
-        "ligand": BASE_PATH / "Estrogen_recep_alpha/02_preprocessed/sdf_files/5kct_OB6_F_601.sdf",
-    },
-    "Estrogen_recep_alpha_2qzo": {
-        "pocket": BASE_PATH / "Estrogen_recep_alpha/02_preprocessed/pocket_files/2qzo_KN1_E_1_pocket.pdb",
-        "ligand": BASE_PATH / "Estrogen_recep_alpha/02_preprocessed/sdf_files/2qzo_KN1_E_1.sdf",
-    },
-    
-    # Factor_Xa - 3 test structures
-    "Factor_Xa_1ezq": {
-        "pocket": BASE_PATH / "Factor_Xa/02_preprocessed/pocket_files/1ezq_RPR_D_265_pocket.pdb",
-        "ligand": BASE_PATH / "Factor_Xa/02_preprocessed/sdf_files/1ezq_RPR_D_265.sdf",
-    },
-    "Factor_Xa_2p3t": {
-        "pocket": BASE_PATH / "Factor_Xa/02_preprocessed/pocket_files/2p3t_993_E_500_pocket.pdb",
-        "ligand": BASE_PATH / "Factor_Xa/02_preprocessed/sdf_files/2p3t_993_E_500.sdf",
-    },
-    "Factor_Xa_3kl6": {
-        "pocket": BASE_PATH / "Factor_Xa/02_preprocessed/pocket_files/3kl6_443_C_1_pocket.pdb",
-        "ligand": BASE_PATH / "Factor_Xa/02_preprocessed/sdf_files/3kl6_443_C_1.sdf",
-    },
-    
-    # HIV_1_Protease - 3 test structures
-    "HIV_1_Protease_2qnn": {
-        "pocket": BASE_PATH / "HIV_1_Protease/02_preprocessed/pocket_files/2qnn_QN1_F_2501_pocket.pdb",
-        "ligand": BASE_PATH / "HIV_1_Protease/02_preprocessed/sdf_files/2qnn_QN1_F_2501.sdf",
-    },
-    "HIV_1_Protease_3t11": {
-        "pocket": BASE_PATH / "HIV_1_Protease/02_preprocessed/pocket_files/3t11_3T1_C_101_pocket.pdb",
-        "ligand": BASE_PATH / "HIV_1_Protease/02_preprocessed/sdf_files/3t11_3T1_C_101.sdf",
-    },
-    "HIV_1_Protease_1hos": {
-        "pocket": BASE_PATH / "HIV_1_Protease/02_preprocessed/pocket_files/1hos_PHP_C_400_pocket.pdb",
-        "ligand": BASE_PATH / "HIV_1_Protease/02_preprocessed/sdf_files/1hos_PHP_C_400.sdf",
-    },
-}
-# =============================================================================
+MAXITER = 10
+MAXNTRIES = 10
 
 
 class RecursiveNamespace(Namespace):
@@ -162,15 +62,15 @@ class RecursiveNamespace(Namespace):
 
 def load_model(checkpoint_path: Path, config_path: Path, device: str):
     """
-    Initialize model from config and load weights from checkpoint.
-    
+    Initialize model from config and load weights from .pt checkpoint.
+
     Args:
         checkpoint_path: Path to model weights (.pt or .ckpt)
         config_path: Path to model configuration YAML
         device: Device to load model onto ('cuda' or 'cpu')
-    
+
     Returns:
-        Loaded and initialized LigandPocketDDPM model
+        Loaded and initialised LigandPocketDDPM model
     """
     with open(config_path, 'r') as f:
         raw_config = yaml.safe_load(f)
@@ -197,7 +97,7 @@ def load_model(checkpoint_path: Path, config_path: Path, device: str):
     try:
         model = LigandPocketDDPM(**filtered_args)
     except TypeError as e:
-        raise RuntimeError(f"Model initialization failed: {e}")
+        raise RuntimeError(f"Model initialisation failed: {e}")
 
     print(f"Loading weights from {checkpoint_path}...")
     checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
@@ -229,14 +129,14 @@ def load_model(checkpoint_path: Path, config_path: Path, device: str):
     return model
 
 
-def generate_for_target(
-    model, 
-    target_name: str,
-    pocket_path: Path,
-    ligand_path: Path,
+def generate_for_pocket(
+    model,
+    sdf_file: Path,
+    pdb_file: Path,
+    resi_list: list,
     outdir: Path,
-    n_samples: int = 10000,
-    batch_size: int = 200,
+    n_samples: int = 100,
+    batch_size: int = 100,
     sanitize: bool = True,
     relax: bool = False,
     all_frags: bool = False,
@@ -249,195 +149,146 @@ def generate_for_target(
     skip_existing: bool = False,
 ):
     """
-    Generate molecules for a single target pocket.
-    
+    Generate molecules for a single crossdocked pocket.
+
     Args:
         model: Loaded LigandPocketDDPM model
-        target_name: Name identifier for this target
-        pocket_path: Path to pocket PDB file
-        ligand_path: Path to reference ligand SDF
-        outdir: Output directory
+        sdf_file: Path to reference ligand SDF
+        pdb_file: Path to pocket PDB file
+        resi_list: List of pocket residue identifiers from .txt file
+        outdir: Output directory for raw and processed SDFs
         n_samples: Number of valid molecules to generate
         batch_size: Generation batch size
-        ... other generation parameters
-    
+        sanitize: Whether to sanitize molecules with RDKit
+        relax: Whether to run force field relaxation
+        all_frags: Whether to keep all fragments
+        fix_n_nodes: Whether to fix atom count to reference ligand
+        timesteps: Number of diffusion timesteps
+        resamplings: Number of resamplings per step
+        jump_length: Jump length for resampling
+        n_nodes_bias: Bias added to sampled node count
+        n_nodes_min: Minimum node count
+        skip_existing: Skip if output already exists
+
     Returns:
-        Dictionary with generation statistics
+        Time taken for this pocket, or None if skipped
     """
-    # Setup output paths
-    target_outdir = outdir / target_name
-    target_outdir.mkdir(parents=True, exist_ok=skip_existing)
-    
-    raw_sdf_file = target_outdir / f'{target_name}_raw.sdf'
-    processed_sdf_file = target_outdir / f'{target_name}_processed.sdf'
-    stats_file = target_outdir / f'{target_name}_stats.txt'
-    
-    # Check if already complete
-    if skip_existing and processed_sdf_file.exists() and stats_file.exists():
-        print(f"[SKIP] {target_name} already processed.")
-        return None
-    
-    # Validate input files
-    if not pocket_path.exists():
-        raise FileNotFoundError(f"Pocket not found: {pocket_path}")
-    if not ligand_path.exists():
-        raise FileNotFoundError(f"Ligand not found: {ligand_path}")
-    
-    print(f"\n{'='*60}")
-    print(f"Generating {n_samples} molecules for {target_name}")
-    print(f"Pocket: {pocket_path.name}")
-    print(f"Reference: {ligand_path.name}")
-    print(f"{'='*60}")
-    
-    t_start = time()
-    
-    # Get reference ligand atom count if needed
+    ligand_name = sdf_file.stem
+    raw_sdf_dir = outdir / 'raw'
+    processed_sdf_dir = outdir / 'processed'
+    times_dir = outdir / 'pocket_times'
+
+    sdf_out_raw = raw_sdf_dir / f'{ligand_name}_gen.sdf'
+    sdf_out_processed = processed_sdf_dir / f'{ligand_name}_gen.sdf'
+    time_file = times_dir / f'{ligand_name}.txt'
+
+    if skip_existing and time_file.exists() and sdf_out_processed.exists() and sdf_out_raw.exists():
+        with open(time_file, 'r') as f:
+            elapsed = float(f.read().split()[1])
+        return elapsed
+
     if fix_n_nodes:
-        suppl = Chem.SDMolSupplier(str(ligand_path), sanitize=False)
-        if suppl[0] is None:
-            raise ValueError(f"Could not read reference ligand: {ligand_path}")
-        num_nodes_lig = suppl[0].GetNumHeavyAtoms()
-        print(f"[INFO] Fixing atom count to {num_nodes_lig}")
+        suppl = Chem.SDMolSupplier(str(sdf_file), sanitize=False)
+        num_nodes_lig = suppl[0].GetNumAtoms() if suppl[0] else None
     else:
         num_nodes_lig = None
 
-    all_molecules = []
-    valid_molecules = []
-    processed_molecules = []
-    iter_count = 0
-    n_generated = 0
-    n_valid = 0
-
-    # Progress bar for this target
-    pbar = tqdm(total=n_samples, desc=f"{target_name}", unit="mol")
-
-    while len(valid_molecules) < n_samples:
-        iter_count += 1
-        if iter_count > MAXITER:
-            warnings.warn(f"Max iterations reached for {target_name}. Got {len(valid_molecules)}/{n_samples}")
-            break
-
-        # Sample random atom counts for each molecule in batch (range 18-30)
-        if num_nodes_lig is not None:
-            # Fixed size from reference ligand
-            num_nodes_lig_inflated = torch.ones(batch_size, dtype=int) * num_nodes_lig
-            print(f"[INFO] ####################### num_nodes_lig_inflated: {num_nodes_lig_inflated}")
-        else:
-            # Random sampling from drug-like range
-            num_nodes_lig_inflated = torch.randint(low=15, high=50, size=(batch_size,))
-            print(f"[INFO] ####################### random sampling from drug-like range")
-            print(f"[INFO] ####################### num_nodes_lig_inflated: {num_nodes_lig_inflated}")
+    for n_try in range(MAXNTRIES):
         try:
-            with torch.no_grad():
-                mols_batch = model.generate_ligands(
-                    pocket_path,
-                    batch_size,
-                    resi_list=None,
-                    ref_ligand=str(ligand_path),
-                    num_nodes_lig=num_nodes_lig_inflated,
-                    timesteps=timesteps,
-                    sanitize=False,
-                    largest_frag=False,
-                    relax_iter=0,
-                    n_nodes_bias=n_nodes_bias,
-                    n_nodes_min=n_nodes_min,
-                    resamplings=resamplings,
-                    jump_length=jump_length
-                )
-        except Exception as e:
-            import traceback
-            print(f"\n[ERROR] Batch generation failed: {e}")
-            print(f"[ERROR] Pocket: {pocket_path}")
-            print(f"[ERROR] Ligand: {ligand_path}")
-            traceback.print_exc()
-            continue
+            t_start = time()
 
-        all_molecules.extend(mols_batch)
+            all_molecules = []
+            valid_molecules = []
+            processed_molecules = []
+            iter_count = 0
+            n_generated = 0
+            n_valid = 0
 
-        # Process molecules
-        mols_batch_processed = [
-            process_molecule(
-                m,
-                sanitize=sanitize,
-                relax_iter=(200 if relax else 0),
-                largest_frag=not all_frags
-            )
-            for m in mols_batch
-        ]
-        processed_molecules.extend(mols_batch_processed)
-        
-        valid_batch = [m for m in mols_batch_processed if m is not None]
-        n_generated += batch_size
-        n_valid += len(valid_batch)
-        valid_molecules.extend(valid_batch)
+            while len(valid_molecules) < n_samples:
+                iter_count += 1
+                if iter_count > MAXITER:
+                    raise RuntimeError('Maximum number of iterations exceeded.')
 
-        # Update progress
-        pbar.n = min(len(valid_molecules), n_samples)
-        pbar.set_postfix({
-            'valid': f'{n_valid}/{n_generated}',
-            'rate': f'{n_valid/n_generated*100:.1f}%' if n_generated > 0 else 'N/A'
-        })
-        pbar.refresh()
+                num_nodes_lig_inflated = None if num_nodes_lig is None else \
+                    torch.ones(batch_size, dtype=int) * num_nodes_lig
 
-    pbar.close()
+                with torch.no_grad():
+                    mols_batch = model.generate_ligands(
+                        pdb_file,
+                        batch_size,
+                        resi_list,
+                        num_nodes_lig=num_nodes_lig_inflated,
+                        timesteps=timesteps,
+                        sanitize=False,
+                        largest_frag=False,
+                        relax_iter=0,
+                        n_nodes_bias=n_nodes_bias,
+                        n_nodes_min=n_nodes_min,
+                        resamplings=resamplings,
+                        jump_length=jump_length,
+                    )
 
-    # Trim to exact count
-    valid_molecules = valid_molecules[:n_samples]
+                all_molecules.extend(mols_batch)
 
-    # Reorder: valid first, then invalid
-    all_molecules = \
-        [all_molecules[i] for i, m in enumerate(processed_molecules) if m is not None] + \
-        [all_molecules[i] for i, m in enumerate(processed_molecules) if m is None]
+                mols_batch_processed = [
+                    process_molecule(
+                        m,
+                        sanitize=sanitize,
+                        relax_iter=(200 if relax else 0),
+                        largest_frag=not all_frags,
+                    )
+                    for m in mols_batch
+                ]
+                processed_molecules.extend(mols_batch_processed)
 
-    # Save molecules
-    print(f"[SAVE] Writing {len(all_molecules)} raw molecules...")
-    utils.write_sdf_file(raw_sdf_file, all_molecules)
-    
-    print(f"[SAVE] Writing {len(valid_molecules)} processed molecules...")
-    utils.write_sdf_file(processed_sdf_file, valid_molecules)
+                valid_batch = [m for m in mols_batch_processed if m is not None]
+                n_generated += batch_size
+                n_valid += len(valid_batch)
+                valid_molecules.extend(valid_batch)
 
-    # Calculate stats
-    elapsed = time() - t_start
-    validity_rate = n_valid / n_generated if n_generated > 0 else 0
-    
-    stats = {
-        'target': target_name,
-        'n_valid': len(valid_molecules),
-        'n_generated': n_generated,
-        'validity_rate': validity_rate,
-        'time_seconds': elapsed,
-        'time_per_mol': elapsed / len(valid_molecules) if valid_molecules else 0,
-    }
+            # Trim to exact count
+            valid_molecules = valid_molecules[:n_samples]
 
-    # Save stats
-    with open(stats_file, 'w') as f:
-        for k, v in stats.items():
-            f.write(f"{k}: {v}\n")
+            # Reorder: valid first, then invalid
+            all_molecules = \
+                [all_molecules[i] for i, m in enumerate(processed_molecules) if m is not None] + \
+                [all_molecules[i] for i, m in enumerate(processed_molecules) if m is None]
 
-    print(f"[DONE] {target_name}: {len(valid_molecules)} valid molecules")
-    print(f"       Validity: {validity_rate*100:.2f}% | Time: {elapsed/60:.1f} min")
+            utils.write_sdf_file(sdf_out_raw, all_molecules)
+            utils.write_sdf_file(sdf_out_processed, valid_molecules)
 
-    return stats
+            elapsed = time() - t_start
+            with open(time_file, 'w') as f:
+                f.write(f"{str(sdf_file)} {elapsed}")
+
+            return elapsed
+
+        except (RuntimeError, ValueError) as e:
+            if n_try >= MAXNTRIES - 1:
+                raise RuntimeError(f"Max retries exceeded for {ligand_name}: {e}")
+            warnings.warn(f"Attempt {n_try + 1}/{MAXNTRIES} failed: '{e}'. Retrying...")
+
+    return None
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Generate 10k ligands for each PRISM evaluation target"
+        description="Generate ligands for the CrossDocked test set using a PRISM .pt checkpoint"
     )
     parser.add_argument('checkpoint', type=Path,
                         help="Path to model weights (.pt or .ckpt)")
     parser.add_argument('--config', type=Path, required=True,
-                        help="Path to model config YAML")
+                        help="Path to model config YAML (e.g. ppo_config.yaml)")
+    parser.add_argument('--test_dir', type=Path, required=True,
+                        help="Path to crossdocked test directory containing PDB/SDF/TXT files")
     parser.add_argument('--outdir', type=Path, required=True,
                         help="Output directory")
-    parser.add_argument('--n_samples', type=int, default=10000,
-                        help="Number of valid molecules per target (default: 10000)")
-    parser.add_argument('--batch_size', type=int, default=200,
-                        help="Batch size for generation (default: 200)")
-    parser.add_argument('--targets', type=str, nargs='+', default=None,
-                        help="Specific targets to run (default: all)")
-    parser.add_argument('--target', type=str, default=None,
-                        help="Single target to run (for parallel job submission)")
+    parser.add_argument('--test_list', type=Path, default=None,
+                        help="Optional comma-separated list of ligand stems to restrict generation")
+    parser.add_argument('--n_samples', type=int, default=100,
+                        help="Number of valid molecules per pocket (default: 100)")
+    parser.add_argument('--batch_size', type=int, default=120,
+                        help="Batch size for generation (default: 120)")
     parser.add_argument('--sanitize', action='store_true',
                         help="Sanitize molecules with RDKit")
     parser.add_argument('--relax', action='store_true',
@@ -453,46 +304,55 @@ def main():
     parser.add_argument('--n_nodes_bias', type=int, default=0)
     parser.add_argument('--n_nodes_min', type=int, default=0)
     parser.add_argument('--skip_existing', action='store_true',
-                        help="Skip targets that are already complete")
+                        help="Skip pockets that already have output files")
     args = parser.parse_args()
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     print(f"Running on device: {device}")
 
+    # Create output subdirectories
+    args.outdir.mkdir(parents=True, exist_ok=True)
+    (args.outdir / 'raw').mkdir(exist_ok=True)
+    (args.outdir / 'processed').mkdir(exist_ok=True)
+    (args.outdir / 'pocket_times').mkdir(exist_ok=True)
+
     # Load model once
     model = load_model(args.checkpoint, args.config, device)
 
-    # Select targets (--target takes precedence for single-target parallel jobs)
-    if args.target:
-        if args.target not in TEST_TARGETS:
-            print(f"[ERROR] Unknown target: {args.target}")
-            print(f"Available: {list(TEST_TARGETS.keys())}")
-            return
-        targets = {args.target: TEST_TARGETS[args.target]}
-    elif args.targets:
-        targets = {k: v for k, v in TEST_TARGETS.items() if k in args.targets}
-        if not targets:
-            print(f"[ERROR] No matching targets. Available: {list(TEST_TARGETS.keys())}")
-            return
-    else:
-        targets = TEST_TARGETS
+    # Gather test files
+    test_files = sorted(args.test_dir.glob('[!.]*.sdf'))
+    if args.test_list is not None:
+        with open(args.test_list, 'r') as f:
+            test_list = set(f.read().split(','))
+        test_files = [x for x in test_files if x.stem in test_list]
 
-    print(f"\nWill generate {args.n_samples} molecules for {len(targets)} targets:")
-    for name in targets:
-        print(f"  - {name}")
+    print(f"\nFound {len(test_files)} pockets in test set.")
 
-    # Create output directory
-    args.outdir.mkdir(parents=True, exist_ok=True)
+    time_per_pocket = {}
+    pbar = tqdm(test_files, desc="Pockets")
 
-    # Generate for each target
-    all_stats = []
-    for target_name, paths in targets.items():
+    for sdf_file in pbar:
+        ligand_name = sdf_file.stem
+        pdb_name, pocket_id, *suffix = ligand_name.split('_')
+        pdb_file = Path(sdf_file.parent, f"{pdb_name}.pdb")
+        txt_file = Path(sdf_file.parent, f"{ligand_name}.txt")
+
+        if not pdb_file.exists():
+            warnings.warn(f"[SKIP] PDB not found for {ligand_name}: {pdb_file}")
+            continue
+        if not txt_file.exists():
+            warnings.warn(f"[SKIP] TXT not found for {ligand_name}: {txt_file}")
+            continue
+
+        with open(txt_file, 'r') as f:
+            resi_list = f.read().split()
+
         try:
-            stats = generate_for_target(
+            elapsed = generate_for_pocket(
                 model=model,
-                target_name=target_name,
-                pocket_path=paths['pocket'],
-                ligand_path=paths['ligand'],
+                sdf_file=sdf_file,
+                pdb_file=pdb_file,
+                resi_list=resi_list,
                 outdir=args.outdir,
                 n_samples=args.n_samples,
                 batch_size=args.batch_size,
@@ -507,37 +367,25 @@ def main():
                 n_nodes_min=args.n_nodes_min,
                 skip_existing=args.skip_existing,
             )
-            if stats:
-                all_stats.append(stats)
+            if elapsed is not None:
+                time_per_pocket[str(sdf_file)] = elapsed
+                pbar.set_description(f"Last: {ligand_name} ({elapsed:.1f}s)")
+
         except Exception as e:
-            print(f"[ERROR] Failed for {target_name}: {e}")
+            warnings.warn(f"[ERROR] Failed for {ligand_name}: {e}")
             continue
 
-    # Summary
-    print(f"\n{'='*60}")
-    print("GENERATION COMPLETE")
-    print(f"{'='*60}")
-    
-    if all_stats:
-        total_mols = sum(s['n_valid'] for s in all_stats)
-        total_time = sum(s['time_seconds'] for s in all_stats)
-        avg_validity = np.mean([s['validity_rate'] for s in all_stats])
-        
-        print(f"Total molecules: {total_mols}")
-        print(f"Total time: {total_time/60:.1f} minutes")
-        print(f"Average validity: {avg_validity*100:.2f}%")
-        
-        # Save summary
-        summary_file = args.outdir / 'generation_summary.txt'
-        with open(summary_file, 'w') as f:
-            f.write(f"Model: {args.checkpoint}\n")
-            f.write(f"Config: {args.config}\n")
-            f.write(f"N samples per target: {args.n_samples}\n\n")
-            for s in all_stats:
-                f.write(f"{s['target']}: {s['n_valid']} mols, "
-                       f"{s['validity_rate']*100:.2f}% valid, "
-                       f"{s['time_seconds']/60:.1f} min\n")
-        print(f"\nSummary saved to: {summary_file}")
+    # Save pocket times summary
+    times_summary = args.outdir / 'pocket_times.txt'
+    with open(times_summary, 'w') as f:
+        for k, v in time_per_pocket.items():
+            f.write(f"{k} {v}\n")
+
+    if time_per_pocket:
+        times_arr = torch.tensor(list(time_per_pocket.values()))
+        print(f"\nTime per pocket: {times_arr.mean():.3f} +/- {times_arr.std(unbiased=False):.2f}s")
+        print(f"Total pockets completed: {len(time_per_pocket)}")
+        print(f"Output written to: {args.outdir}")
 
 
 if __name__ == "__main__":

@@ -1,11 +1,11 @@
 #!/bin/bash
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64GB
-#SBATCH --gres=gpu:1
+#SBATCH --gres=gpu:h100:1
 #SBATCH --ntasks-per-node=1
 #SBATCH --partition=short
-#SBATCH --time 08:00:00
-#SBATCH --job-name=multi_objective_CD
+#SBATCH --time 06:00:00
+#SBATCH --job-name=single_objective_QED_CD
 #SBATCH --mail-user=wolf7055@ox.ac.uk
 #SBATCH --mail-type=END,FAIL
 #SBATCH --array=0-23
@@ -51,8 +51,8 @@ SOURCE_DATASET_ROOT=${DATASETS[$DATASET_IDX]}
 DATASET_NAME=$(basename $SOURCE_DATASET_ROOT)
 
 # --- 2. LOGGING SETUP (for SLURM logs only) ---
-JOB_NAME="multi_objective_CD"
-SLURM_LOG_DIR="${PROJECT_ROOT}/axis_1/multi_objective_CD/${JOB_NAME}/${DATASET_NAME}"
+JOB_NAME="single_objective_QED_CD"
+SLURM_LOG_DIR="${PROJECT_ROOT}/single_objective_QED_CD/${JOB_NAME}/${DATASET_NAME}"
 mkdir -p $SLURM_LOG_DIR 
 
 LOG_FILE="${SLURM_LOG_DIR}/seed_${SEED}_taskid_${SLURM_ARRAY_TASK_ID}.log"
@@ -120,7 +120,7 @@ export DEBUG_PPO=0
 echo "Starting training..."
 # Now pass the 03_final_dataset subdirectory from scratch
 srun python "${PROJECT_ROOT}/scripts/train.py" \
-    --config "${PROJECT_ROOT}/configs/ppo_config.yaml" \
+    --config "${PROJECT_ROOT}/configs/exp_specific/single_obj_qed.yaml" \
     --warm_start_from_ddpm "${WARM_START_CKPT}" \
     --seed $SEED \
     --datadir "${SCRATCH_WORK_DIR}/03_final_dataset" \

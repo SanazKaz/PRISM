@@ -17,7 +17,7 @@ from src.prism.reward.scoring.silly_walks import SillyWalksReward
 from src.prism.reward.scoring.strain_energy import MMFFStrainReward
 from src.prism.reward.scoring.property_match import Property2DReward
 from src.prism.reward.scoring.smina_docking import SminaDockingReward
-
+from src.prism.reward.scoring.custom_qed_sa import CustomQEDReward, CustomSAScoreReward
 
 # 1. The Registry
 
@@ -38,6 +38,8 @@ REWARD_REGISTRY = {
     "mmff_strain": MMFFStrainReward,
     "property_2d": Property2DReward,
     "smina_docking": SminaDockingReward,
+    "custom_qed": CustomQEDReward,
+    "custom_sa_score": CustomSAScoreReward,
 }
 
 def get_reward_manager(config, dataset_info, ddpm_module=None):

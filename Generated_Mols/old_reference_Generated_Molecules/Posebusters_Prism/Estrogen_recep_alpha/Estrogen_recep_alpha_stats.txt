@@ -1,6 +1,0 @@
-target: Estrogen_recep_alpha
-n_valid: 10000
-n_generated: 10125
-validity_rate: 0.9933827160493827
-time_seconds: 9176.692821025848
-time_per_mol: 0.9176692821025848

@@ -1,5 +1,0 @@
-Model: /data/stat-cadd/wolf7055/PRISM/Log_Results/feat_2dprop_geom_cd_curriculum/feat_2dprop_geom_cd_curriculum/checkpoints/Factor_Xa/seed=789/last.pt
-Config: /data/stat-cadd/wolf7055/PRISM/configs/ppo_config.yaml
-N samples per target: 1000
-
-Factor_Xa_3kl6: 1000 mols, 97.00% valid, 30.1 min

@@ -1,14 +1,14 @@
-run_identifier: 'short_crossdocked_dataset_geometry_training'
+run_identifier: 'Single_Objective_QED'
 logdir: 'Log_Results'
 wandb_params:
   mode: 'offline' # seeing if it will reduce overhead 
   entity: 'sanazkazeminia97'
-  project: 'Crossdocked_Dataset_geometry_training'
+  project: 'Single_Objective_QED'
 dataset: 'crossdock' #(refers to the model's dataset_info_key)
-datadir: '/data/stat-cadd/wolf7055/PRISM/data/cross_dock/processed_crossdock_noH_full_temp'
+datadir: '/data/stat-cadd/wolf7055/PRISM/data/test/03_final_dataset'
 enable_progress_bar: False
 num_sanity_val_steps: 0
-batch_size: 2 # number of pockets to sample for (60)
+batch_size: 56 # number of pockets to sample for (60)
 lr: 1.0e-6 
 num_workers: 4 # suggested by terminal for better parallelisations ???
 gpus: 1
@@ -27,11 +27,11 @@ loss_params:
   clamp_lj: 3.0
 
 ppo_params:
-  num_outer_epochs: 20          # num of PPO cycles (outer epochs)
+  num_outer_epochs: 160          # num of PPO cycles (outer epochs)
   num_inner_epochs: 2            # Updates per rollout (inner epochs)
-  n_steps: 10                    # Rollout length (mols generated)
+  n_steps: 112                    # Rollout length (mols generated)
   ligand_chunk_size: 66
-  ppo_batch_size: 10             # Size of each PPO update batch
+  ppo_batch_size: 112             # Size of each PPO update batch
   clip_range: 0.1                # PPO clipping parameter
   value_loss_coef: 0.0           # Weight for value loss
   entropy_coef: 0.001            # Weight for entropy bonus
@@ -40,7 +40,7 @@ ppo_params:
   num_train_timesteps: 300 #increase from 150
   num_mini_batches: 1            # Mini-batches per update
   target_kl: 0.03                # Early stopping KL divergence
-  lr: 3.0e-5                     # Optimizer learning rate (0.001)
+  lr: 5.0e-5                     # Optimizer learning rate (0.001)
   mol_timeout_sec: 60
   num_nodes_lig: 25              # fixed number of nodes for ligand
   top_k: False
@@ -59,23 +59,21 @@ reward_params:
   # Map the reward name to its weight
   # To disable a reward, simply remove it from this list or set weight to 0
   rewards:
-    qed: 0.0
+    qed: 1.0
     sa_score: 0.0
     lipinski: 0.0
     bertz: 0.0
     sucos: 0.0
     interaction_fingerprints: 0.0
     feature_density: 0.0
-    geometry_checks: 0.1
+    geometry_checks: 0.0
     flatness_checks: 0.0
     aromatic_counter: 0.0
     aromatic_anchor: 0.0
     multi_features: 0.0
     silly_walks: 0.0
     property_2d: 0.0
-    smina_docking: 0.5
-    custom_qed: 0.3
-    custom_sa_score: 0.2
+    smina_docking: 0.0
   reward_paths:
     feature_density: '/data/stat-cadd/wolf7055/PRISM/data/BRD4_BD1/hotspot_analysis/BRD4_BD1_hotspot_data.pkl'
     aromatic_anchor: 'src/prism/reward/scoring/reward_data/ampc_hotspot_global_centered_eps0.5_min10_aromatic5.pkl'
@@ -109,12 +107,12 @@ diffusion_params:
   diffusion_loss_type: 'l2'
   normalize_factors: [1, 4]
 
-eval_epochs: 4
+eval_epochs: 10
 visualize_sample_epoch: 99999
 visualize_chain_epoch: 999999
 eval_params:
   n_eval_samples: 20
   eval_batch_size: 20
-  smiles_file: '/data/stat-cadd/wolf7055/PRISM/data/cross_dock/processed_crossdock_noH_full_temp/train_smiles.npy'
+  smiles_file: '/data/stat-cadd/wolf7055/PRISM/data/test/03_final_dataset/train_smiles.npy'
   n_visualize_samples: 0
   keep_frames: 0

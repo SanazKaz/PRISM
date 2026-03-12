@@ -1,6 +1,0 @@
-target: EGFR_3poz
-n_valid: 10000
-n_generated: 10350
-validity_rate: 0.9710144927536232
-time_seconds: 6852.009177684784
-time_per_mol: 0.6852009177684784

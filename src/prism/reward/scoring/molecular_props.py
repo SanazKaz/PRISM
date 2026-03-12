@@ -24,15 +24,15 @@ class QEDReward(BaseReward):
 
     def __call__(self, molecules: List[Chem.Mol], **kwargs) -> torch.Tensor:
         # Custom weights: (MW, ALOGP, HBA, HBD, PSA, ROTB, AROM, ALERTS)
-        custom_weights = (0.66, 0.46, 0.10, 0.61, 0.06, 0.40, 0.6, 0.95)
+        custom_weights = (0.66, 0.46, 0.05, 0.61, 0.06, 0.65, 0.48, 0.95)
         scores = []
         
         for mol in molecules:
-            # try:
-            score = QED.qed(mol, w=custom_weights)
-            scores.append(float(score))
-            # except Exception:
-            #     scores.append(0.0)
+            try:
+                score = QED.qed(mol, w=custom_weights)
+                scores.append(float(score))
+            except Exception:
+                scores.append(0.0)
         
         return torch.tensor(scores)
 

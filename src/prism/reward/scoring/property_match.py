@@ -281,7 +281,15 @@ class Property2DReward(BaseReward):
             # print("\n".join(debug_lines))
             # print(f"  aromatic_bonus={self._aromatic_bonus(aro_count_raw):.2f}")
             # print(f"  base={base_score:.3f}, ring_penalty={ring_penalty:.3f}, final={final_score:.3f}")
+            
+            # Apply a threshold to the score to prevent it from being too high
+            threshold = 0.65
+            if final_score > threshold:
+                score = 1.0
+            else:
+                score = final_score / threshold
+            
+            scores.append(float(score))
 
-            scores.append(float(final_score))
 
         return torch.tensor(scores, dtype=torch.float32)

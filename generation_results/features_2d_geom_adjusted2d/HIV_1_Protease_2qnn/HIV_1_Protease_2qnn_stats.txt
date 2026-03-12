@@ -1,6 +1,0 @@
-target: HIV_1_Protease_2qnn
-n_valid: 1000
-n_generated: 1100
-validity_rate: 0.9927272727272727
-time_seconds: 711.2147285938263
-time_per_mol: 0.7112147285938263

@@ -1,5 +1,0 @@
-Model: /data/stat-cadd/wolf7055/PRISM/Log_Results/final_geometry_checks_CD/checkpoints/Factor_Xa/seed=976/epoch=40-reward=0.76.pt
-Config: /data/stat-cadd/wolf7055/PRISM/configs/ppo_config.yaml
-N samples per target: 20000
-
-Factor_Xa_2p3t: 14579 mols, 97.19% valid, 220.2 min

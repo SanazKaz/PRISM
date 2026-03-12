@@ -10,7 +10,7 @@ import re
 import subprocess
 import tempfile
 import numpy as np
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 from pathlib import Path
 from rdkit import Chem
 
@@ -41,11 +41,9 @@ class SminaDocking:
 
         if dataset_info:
             self.data_root = Path(dataset_info["datadir"]).parent
-            self.pocket_dir = self.data_root / "02_preprocessed" / "pocket_files"
-            self.sdf_dir = self.data_root / "02_preprocessed" / "sdf_files"
+            self.crossdocked_dir = self.data_root / "crossdocked_pocket10"
         else:
-            self.pocket_dir = None
-            self.sdf_dir = None
+            self.crossdocked_dir = None
 
     @staticmethod
     def _extract_affinity_from_sdf(sdf_path: str) -> Optional[float]:
@@ -102,14 +100,26 @@ class SminaDocking:
 
         return None
 
-    def _parse_pocket_name(self, name: str) -> str:
-        """Strip pocket suffix variants to recover the base target name."""
-        if "_pocket_only.pdb" in name:
-            return name.split("_pocket_only.pdb")[0]
-        elif "_pocket" in name:
-            return name.split("_pocket")[0]
-        else:
-            return name
+    def _parse_pocket_name(self, name: str) -> Tuple[str, str]:
+        """
+        Parse the concatenated name string produced by the CrossDocked dataset loader.
+
+        Input format:
+            {target_folder}/{stem}_pocket10.pdb_{target_folder}/{stem}.sdf
+
+        Example:
+            POL_HV1H2_489_587_0/1fb7_A_rec_1hwr_216_lig_tt_min_0_pocket10.pdb_POL_HV1H2_489_587_0/1fb7_A_rec_1hwr_216_lig_tt_min_0.sdf
+
+        Returns:
+            (target_folder, stem) e.g. ('POL_HV1H2_489_587_0', '1fb7_A_rec_1hwr_216_lig_tt_min_0')
+        """
+        # Split on .pdb_ to isolate the pocket half
+        pocket_half = name.split(".pdb_")[0]   # e.g. POL_HV1H2_489_587_0/1fb7_..._pocket10
+        parts = pocket_half.split("/")
+        target_folder = parts[0]               # e.g. POL_HV1H2_489_587_0
+        pocket_filename = parts[1]             # e.g. 1fb7_..._pocket10
+        stem = pocket_filename.replace("_pocket10", "")  # e.g. 1fb7_...
+        return target_folder, stem
 
     def dock_molecule(
         self, mol: Chem.Mol, receptor_pdb_path: str, ref_ligand_path: str
@@ -219,7 +229,7 @@ class SminaDocking:
         if not molecules or not names:
             return self._empty_results()
 
-        if self.pocket_dir is None or self.sdf_dir is None:
+        if self.crossdocked_dir is None:
             return self._empty_results()
 
         scores = []
@@ -230,9 +240,9 @@ class SminaDocking:
                 break
 
             try:
-                base_name = self._parse_pocket_name(name)
-                pocket_path = self.pocket_dir / f"{base_name}_pocket.pdb"
-                ref_ligand_path = self.sdf_dir / f"{base_name}.sdf"
+                target_folder, stem = self._parse_pocket_name(name)
+                pocket_path = self.crossdocked_dir / target_folder / f"{stem}_pocket10.pdb"
+                ref_ligand_path = self.crossdocked_dir / target_folder / f"{stem}.sdf"
 
                 if not pocket_path.exists() or not ref_ligand_path.exists():
                     consecutive_failures += 1

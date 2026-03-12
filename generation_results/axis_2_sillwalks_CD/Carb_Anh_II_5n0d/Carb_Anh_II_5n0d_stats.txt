@@ -1,6 +1,0 @@
-target: Carb_Anh_II_5n0d
-n_valid: 1000
-n_generated: 1050
-validity_rate: 0.9895238095238095
-time_seconds: 635.0424134731293
-time_per_mol: 0.6350424134731293

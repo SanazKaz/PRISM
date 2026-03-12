@@ -4,9 +4,9 @@
 #SBATCH --gres=gpu:h100:1
 #SBATCH --partition=short
 #SBATCH --time 04:00:00
-#SBATCH --job-name=weighted_sum_cd_brd4_bd1
-#SBATCH --output=jobs_files/weighted_sum_cd_brd4_bd1_%a.log
-#SBATCH --array=0-1
+#SBATCH --job-name=ceiling_removed_REAL_product_aggregation_brd4_bd1
+#SBATCH --output=jobs_files/ceiling_removed_REAL_product_aggregation_brd4_bd1_%a.log
+#SBATCH --array=0
 
 
 # --- Environment Setup ---
@@ -35,7 +35,7 @@ SEEDS=(42 976)
 SEED=${SEEDS[$SLURM_ARRAY_TASK_ID]}
 
 # Checkpoint path for this seed
-CHECKPOINT_PATH="/data/stat-cadd/wolf7055/PRISM/Log_Results/molecular_props_geom_step2/molecular_props_geom_step2/checkpoints/BRD4_BD1/seed=42/last.ckpt"
+CHECKPOINT_PATH="/data/stat-cadd/wolf7055/PRISM/Log_Results/short_crossdocked_dataset_geometry_training/checkpoints/7275716/seed=42/last.ckpt"
 # CHECKPOINT_PATH="${CHECKPOINT_DIR}/seed=${SEED}/last.ckpt"
 
 echo "=========================================="
@@ -72,7 +72,7 @@ nvidia-smi
 echo "Starting PRISM training using Scratch Data..."
 
 srun python "${PROJECT_ROOT}/scripts/train.py" \
-    --config "${PROJECT_ROOT}/configs/weighted_sum_cd.yaml" \
+    --config "${PROJECT_ROOT}/configs/ppo_config.yaml" \
     --resume_from_checkpoint "${CHECKPOINT_PATH}" \
     --datadir "${SCRATCH_DATASET_DIR}" \
     --seed ${SEED}

@@ -1,6 +1,0 @@
-target: HIV_1_Protease_1hos
-n_valid: 1000
-n_generated: 1050
-validity_rate: 0.9961904761904762
-time_seconds: 648.6473300457001
-time_per_mol: 0.6486473300457001

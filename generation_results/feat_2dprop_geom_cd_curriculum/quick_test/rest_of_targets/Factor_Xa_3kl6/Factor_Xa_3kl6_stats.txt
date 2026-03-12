@@ -1,6 +1,0 @@
-target: Factor_Xa_3kl6
-n_valid: 1000
-n_generated: 1100
-validity_rate: 0.97
-time_seconds: 1805.9498867988586
-time_per_mol: 1.8059498867988586

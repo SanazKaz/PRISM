@@ -1,6 +1,0 @@
-target: BRD4_BD1_6xvc
-n_valid: 1000
-n_generated: 1100
-validity_rate: 0.9790909090909091
-time_seconds: 482.3960564136505
-time_per_mol: 0.4823960564136505
