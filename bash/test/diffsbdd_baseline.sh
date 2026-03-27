@@ -2,18 +2,20 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --partition=short
 #SBATCH --gres=gpu:h100:1
-#SBATCH --time 00:45:00
-#SBATCH --output=jobs_files/2D_geom_docking/test_targets/%x_%j.log
+#SBATCH --time 00:30:00
+#SBATCH --output=jobs_files/diffsbdd_baseline_targets/%x_%j.log
 exec 2>&1
 
 # =============================================================================
-# CD Geometry Model Evaluation: Generate ligands from trained checkpoints
-# 
-# Arguments:
-#   $1 - Target name (e.g., BRD4_BD1)
-#   $2 - Path to model checkpoint (.pt file)
+# diffsbdd_baseline.sh
 #
-# Usage: Called by submit_all_targets_test.sh
+# Generates ligands for a single target using the DiffSBDD baseline model.
+#
+# Arguments:
+#   $1 - Target name (e.g., BRD4_BD1_4whw)
+#   $2 - Path to model checkpoint (.ckpt file)
+#
+# Usage: Called by submit_diffsbdd_baseline.sh
 # =============================================================================
 
 TARGET=$1
@@ -21,13 +23,13 @@ MODEL_PATH=$2
 
 if [ -z "${TARGET}" ]; then
     echo "[ERROR] No target specified!"
-    echo "Usage: sbatch test_file.sh TARGET_NAME MODEL_PATH"
+    echo "Usage: sbatch diffsbdd_baseline.sh TARGET_NAME MODEL_PATH"
     exit 1
 fi
 
 if [ -z "${MODEL_PATH}" ]; then
     echo "[ERROR] No model path specified!"
-    echo "Usage: sbatch test_file.sh TARGET_NAME MODEL_PATH"
+    echo "Usage: sbatch diffsbdd_baseline.sh TARGET_NAME MODEL_PATH"
     exit 1
 fi
 
@@ -41,7 +43,7 @@ module load Anaconda3
 source activate /data/stat-cadd/wolf7055/conda/envs/PRISM_25
 
 echo "============================================="
-echo "CD Geometry Model Evaluation: ${TARGET}"
+echo "DiffSBDD Baseline Generation: ${TARGET}"
 echo "Started at: $(date)"
 echo "Node: $(hostname)"
 echo "============================================="
@@ -54,40 +56,38 @@ PRISM_ROOT="/data/stat-cadd/wolf7055/PRISM"
 SCRIPT_PATH="${PRISM_ROOT}/scripts/test_targets.py"
 CONFIG_PATH="${PRISM_ROOT}/configs/ppo_config.yaml"
 
-# Output directory for CD geometry model generations
-OUTDIR="/data/stat-cadd/wolf7055/PRISM/generation_results/2D_geom_docking/trained_model_test_script"
-mkdir -p ${OUTDIR}
+OUTDIR="${PRISM_ROOT}/generation_results/diffsbdd_baseline_targets"
+mkdir -p "${OUTDIR}"
 
-# Generation settings
 N_SAMPLES=1000
 BATCH_SIZE=100
 
 # -----------------------------------------------------------------------------
-# Run
+# RUN
 # -----------------------------------------------------------------------------
 
 echo ""
-echo "Model: ${MODEL_PATH}"
+echo "Model:  ${MODEL_PATH}"
+echo "Config: ${CONFIG_PATH}"
 echo "Target: ${TARGET}"
-echo "Output: ${OUTDIR}/${TARGET}"
+echo "Output: ${OUTDIR}"
 echo ""
 
 nvidia-smi --query-gpu=name,memory.total --format=csv
 echo ""
 
 cd "${PRISM_ROOT}/src/models/diffsbdd"
+export PYTHONPATH="${PRISM_ROOT}/src/models/diffsbdd:${PYTHONPATH}"
 
-export PYTHONPATH="${PRISM_ROOT}/src/models/diffsbdd:${PYTHONPATH}" 
-
-python ${SCRIPT_PATH} "${MODEL_PATH}" \
+python "${SCRIPT_PATH}" "${MODEL_PATH}" \
     --config "${CONFIG_PATH}" \
     --outdir "${OUTDIR}" \
     --target "${TARGET}" \
     --n_samples ${N_SAMPLES} \
     --batch_size ${BATCH_SIZE} \
     --sanitize \
-    --skip_existing \
-    --fix_n_nodes
+    --fix_n_nodes \
+    --skip_existing
 
 EXIT_CODE=$?
 
@@ -97,5 +97,7 @@ echo "Completed: ${TARGET}"
 echo "Exit code: ${EXIT_CODE}"
 echo "Finished at: $(date)"
 echo "============================================="
+
+nvidia-smi
 
 exit ${EXIT_CODE}

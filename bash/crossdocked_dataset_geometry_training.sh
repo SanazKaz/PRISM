@@ -1,16 +1,16 @@
 #!/bin/bash
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64GB
-#SBATCH --gres=gpu:1
+#SBATCH --gres=gpu:h100:1
 #SBATCH --ntasks-per-node=1
 #SBATCH --partition=short
-#SBATCH --time 03:00:00
-#SBATCH --job-name=12-3-26_prod_multiobjective_CD
+#SBATCH --time 04:00:00
+#SBATCH --job-name=ws_13-3-26_sized_weighted_sum_multiobjective_CD
 #SBATCH --mail-user=wolf7055@ox.ac.uk
 #SBATCH --mail-type=END,FAIL
-#SBATCH --array=0-3
-#SBATCH --output=jobs_files/12-3-prod_multiobjective_CD_%a.log
-#SBATCH --error=jobs_files/12-3_prod_multiobjective_CD_%a.log
+#SBATCH --array=0-1
+#SBATCH --output=jobs_files/13-3-26_sized_weighted_sum_multiobjective_CD_%a.log
+#SBATCH --error=jobs_files/13-3-26_sized_weighted_sum_multiobjective_CD_%a.log
 
 module purge
 module load Anaconda3
@@ -20,7 +20,7 @@ source activate /data/stat-cadd/wolf7055/conda/envs/PRISM_25
 # --- 1. SETUP PATHS ---
 export PROJECT_ROOT="/data/stat-cadd/wolf7055/PRISM"
 
-SEEDS=(42 976 123 789)
+SEEDS=(42 976)
 SEED=${SEEDS[$SLURM_ARRAY_TASK_ID]}
 
 WARM_START_CKPT="${PROJECT_ROOT}/Log_Results/short_crossdocked_dataset_geometry_training/checkpoints/7275716/seed=42/last.ckpt"
@@ -64,7 +64,7 @@ export DEBUG_PPO=0
 # --- 3. RUN TRAINING ---
 echo "Starting training..."
 srun python "${PROJECT_ROOT}/scripts/train.py" \
-    --config "${PROJECT_ROOT}/configs/ppo_config.yaml" \
+    --config "${PROJECT_ROOT}/configs/weighted_sum_cd.yaml" \
     --resume_from_checkpoint "${WARM_START_CKPT}" \
     --seed $SEED \
     --datadir "$DATADIR" \

@@ -169,7 +169,7 @@ class RolloutCollector:
         #         (samples_in_chunk,),
         #         dtype=torch.long
         #     )
-        num_nodes_lig = num_nodes_lig.clamp(min=15)
+        num_nodes_lig = num_nodes_lig.clamp(min=20)
         num_nodes_lig = num_nodes_lig.to(self.device)
         # print(f"num_nodes_lig: {num_nodes_lig}")
 

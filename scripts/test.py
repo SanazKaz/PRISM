@@ -190,6 +190,7 @@ def generate_for_pocket(
     if fix_n_nodes:
         suppl = Chem.SDMolSupplier(str(sdf_file), sanitize=False)
         num_nodes_lig = suppl[0].GetNumAtoms() if suppl[0] else None
+        print(f"FIX N NODES WORKING{num_nodes_lig}")
     else:
         num_nodes_lig = None
 

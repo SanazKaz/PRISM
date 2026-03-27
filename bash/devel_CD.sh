@@ -1,16 +1,16 @@
 #!/bin/bash
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64GB
-#SBATCH --gres=gpu:h100:1
+#SBATCH --gres=gpu:1
 #SBATCH --ntasks-per-node=1
-#SBATCH --partition=short
-#SBATCH --time 04:00:00
-#SBATCH --job-name=ws_13-3-26_weighted_sum_multiobjective_CD
+#SBATCH --partition=devel
+#SBATCH --time 00:10:00
+#SBATCH --job-name=devel_CD
 #SBATCH --mail-user=wolf7055@ox.ac.uk
 #SBATCH --mail-type=END,FAIL
-#SBATCH --array=0-3
-#SBATCH --output=jobs_files/13-3-26_weighted_sum_multiobjective_CD_%a.log
-#SBATCH --error=jobs_files/13-3-26_weighted_sum_multiobjective_CD_%a.log
+#SBATCH --array=0
+#SBATCH --output=jobs_files/devel_CD_%a.log
+#SBATCH --error=jobs_files/devel_CD_%a.log
 
 module purge
 module load Anaconda3
@@ -64,7 +64,7 @@ export DEBUG_PPO=0
 # --- 3. RUN TRAINING ---
 echo "Starting training..."
 srun python "${PROJECT_ROOT}/scripts/train.py" \
-    --config "${PROJECT_ROOT}/configs/weighted_sum_cd.yaml" \
+    --config "${PROJECT_ROOT}/configs/ppo_devel.yaml" \
     --resume_from_checkpoint "${WARM_START_CKPT}" \
     --seed $SEED \
     --datadir "$DATADIR" \

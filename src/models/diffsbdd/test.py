@@ -47,7 +47,7 @@ if __name__ == "__main__":
 
     # Load model
     model = LigandPocketDDPM.load_from_checkpoint(
-        args.checkpoint, map_location=device)
+        args.checkpoint, map_location=device, weights_only=False)
     model = model.to(device)
 
     test_files = list(args.test_dir.glob('[!.]*.sdf'))

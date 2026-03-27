@@ -298,7 +298,8 @@ if __name__ == '__main__':
     processed_dir.mkdir(exist_ok=True, parents=True)
 
     # Read data split
-    split_path = Path(args.basedir, 'split_by_name.pt')
+    split_path = Path((args.basedir).parent, 'split_by_name.pt')
+    print(f"using split_path: {split_path}")
     data_split = torch.load(split_path)
 
     # There is no validation set, copy 300 training examples (the validation set

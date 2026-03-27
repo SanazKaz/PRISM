@@ -4,12 +4,12 @@
 #SBATCH --gres=gpu:h100:1
 #SBATCH --ntasks-per-node=1
 #SBATCH --partition=short
-#SBATCH --time=04:45:00
-#SBATCH --job-name=PRISM_GEOMETRY_TEST_GEN
+#SBATCH --time=03:30:00
+#SBATCH --job-name=GEN_penalised_logp_seed_42_epoch25
 #SBATCH --mail-user=wolf7055@ox.ac.uk
 #SBATCH --mail-type=END,FAIL
-#SBATCH --output=jobs_files/10_03_2026_prism_geometry_CD_test_gen.log
-#SBATCH --error=jobs_files/10_03_2026_prism_geometry_CD_test_gen.log
+#SBATCH --output=jobs_files/GEN_17_03_2026_penalised_logp.log
+#SBATCH --error=jobs_files/GEN_17_03_2026_penalised_logp.log
 
 module purge
 module load Anaconda3
@@ -17,9 +17,9 @@ source activate /data/stat-cadd/wolf7055/conda/envs/PRISM_25
 
 # --- PATHS ---
 export PROJECT_ROOT="/data/stat-cadd/wolf7055/PRISM"
-CHECKPOINT="${PROJECT_ROOT}/Log_Results/short_crossdocked_dataset_geometry_training/checkpoints/7275716/seed=42/epoch=09-reward=0.68.pt"
+CHECKPOINT="${PROJECT_ROOT}/Log_Results/penalised_logp/penalised_logp/checkpoints/cross_dock/seed=42/epoch=25-reward=0.59.pt"
 TEST_DIR="${PROJECT_ROOT}/data/cross_dock/processed_crossdock_noH_full_temp/test"
-OUTDIR="${PROJECT_ROOT}/results/prism/geometry_reward/seed42"
+OUTDIR="${PROJECT_ROOT}/results/prism/penalised_logp_seed_42_epoch25"
 CONFIG="${PROJECT_ROOT}/configs/ppo_config.yaml"
 SCRIPT="${PROJECT_ROOT}/scripts/test.py"
 

@@ -24,6 +24,7 @@ wandb/
 # data/covid19_main_protease/ # abstract biophysics? and can you epxlain the slide after that? who is the end user
 # data/custom_pdb_list_data/
 # data/pdb_list.txt
+data/cross_dock/
 
 *.ckpt
 *.pth

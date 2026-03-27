@@ -23,6 +23,7 @@ from rdkit import Chem
 from rdkit.Chem.rdchem import Mol
 
 from posebusters.modules.distance_geometry import check_geometry
+
 from src.prism.reward.scorer import BaseReward
 
 

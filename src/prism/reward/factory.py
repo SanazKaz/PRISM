@@ -18,6 +18,8 @@ from src.prism.reward.scoring.strain_energy import MMFFStrainReward
 from src.prism.reward.scoring.property_match import Property2DReward
 from src.prism.reward.scoring.smina_docking import SminaDockingReward
 from src.prism.reward.scoring.custom_qed_sa import CustomQEDReward, CustomSAScoreReward
+from src.prism.reward.scoring.penalised_logp import PenalisedLogP
+
 
 # 1. The Registry
 
@@ -40,6 +42,7 @@ REWARD_REGISTRY = {
     "smina_docking": SminaDockingReward,
     "custom_qed": CustomQEDReward,
     "custom_sa_score": CustomSAScoreReward,
+    "penalised_logp": PenalisedLogP,
 }
 
 def get_reward_manager(config, dataset_info, ddpm_module=None):
@@ -126,7 +129,12 @@ def get_reward_manager(config, dataset_info, ddpm_module=None):
                 target_name=target_name
             ))
         elif name == 'smina_docking':
-            active_rewards.append(reward_cls(dataset_info=dataset_info))
+            docking_params = getattr(config, 'docking_params', None)
+            dataset_type = getattr(docking_params, 'dataset_type', 'crossdock') if docking_params else 'crossdock'
+            active_rewards.append(reward_cls(
+                dataset_info=dataset_info,
+                dataset_type=dataset_type
+            ))
         else:
             active_rewards.append(reward_cls())
             

@@ -54,11 +54,6 @@ MAXNTRIES = 5
 BASE_PATH = Path("/data/stat-cadd/wolf7055/PRISM/data")
 
 
-# =============================================================================
-# TEST TARGETS - Edit paths here if needed
-# =============================================================================
-BASE_PATH = Path("/data/stat-cadd/wolf7055/PRISM/data")
-
 TEST_TARGETS = {
     # BRD4_BD1 - 3 test structures
     "BRD4_BD1_4whw": {
@@ -240,7 +235,7 @@ def generate_for_target(
     sanitize: bool = True,
     relax: bool = False,
     all_frags: bool = False,
-    fix_n_nodes: bool = False,
+    fix_n_nodes: bool = True,
     timesteps: int = None,
     resamplings: int = 10,
     jump_length: int = 1,

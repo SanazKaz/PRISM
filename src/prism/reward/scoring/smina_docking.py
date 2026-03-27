@@ -27,7 +27,7 @@ class SminaDockingReward(BaseReward):
     """
 
     # --- Toggle this flag to switch normalisation mode ---
-    USE_SQRT_NORMALISATION: bool = True
+    USE_SQRT_NORMALISATION: bool = False
 
     # Linear mode bounds (kcal/mol)
     SCORE_MIN: float = -12.0   # maps to reward 1.0
@@ -37,6 +37,7 @@ class SminaDockingReward(BaseReward):
         self,
         smina_path: str = "/data/stat-cadd/wolf7055/PRISM/val_analysis/smina.static",
         local_opt: bool = False,
+        dataset_type: str = "custom",
         timeout: int = 45,
         dataset_info: dict = None,
         score_min: float = -12.0,
@@ -54,6 +55,7 @@ class SminaDockingReward(BaseReward):
         self.timeout = timeout
         self.dataset_info = dataset_info
         self.score_min = score_min
+        self.dataset_type = dataset_type
         self.docker = None  # Lazy-initialised on first call
 
         mode = "sqrt(N_atoms)" if self.USE_SQRT_NORMALISATION else "linear cap"
@@ -69,6 +71,7 @@ class SminaDockingReward(BaseReward):
             self.docker = SminaDocking(
                 smina_path=self.smina_path,
                 dataset_info=dataset_info,
+                dataset_type=self.dataset_type,
                 local_opt=self.local_opt,
                 timeout=self.timeout,
             )
@@ -104,6 +107,29 @@ class SminaDockingReward(BaseReward):
 
         return reward
 
+
+    def trapezoid_atom_normalisation(self, mol: Chem.Mol) -> float:
+        """
+        Top of trapezoid (atom count 20-40 heavy atoms = 1.0)
+        left = 15-20 linear climb
+        right = 40-60 linear climb
+        anything off ramp = 0.0
+        """
+
+        n_atoms = mol.GetNumHeavyAtoms()
+        if n_atoms < 15:
+            return 0.0
+        elif n_atoms < 20:
+            return (n_atoms - 15) / 5
+        elif n_atoms < 40:
+            return 1.0
+        elif n_atoms < 60:
+            return (60 - n_atoms) / 20
+        else:
+            return 0.0
+
+
+
     def __call__(self, molecules: List[Chem.Mol], **kwargs) -> torch.Tensor:
         """
         Calculate docking reward for each molecule.
@@ -127,7 +153,8 @@ class SminaDockingReward(BaseReward):
 
         self._initialize_docker(dataset_info)
 
-        if self.docker.crossdocked_dir is None:
+        # NEW
+        if self.docker.crossdocked_dir is None and self.docker.pocket_dir is None:
             print("[SminaDocking] WARNING: Docking directory not available.")
             return torch.zeros(len(molecules), dtype=torch.float32)
 
@@ -140,14 +167,13 @@ class SminaDockingReward(BaseReward):
 
             pocket_name = names[i] if i < len(names) else None
             if pocket_name is None:
-                print(f"[SminaDocking] No pocket name found for mol {i}")
+                print(f"[SminaDocking] Pocket name was: {repr(pocket_name)}")  # add this
                 scores.append(0.0)
                 continue
+            
 
             try:
-                target_folder, stem = self.docker._parse_pocket_name(pocket_name)
-                pocket_path = self.docker.crossdocked_dir / target_folder / f"{stem}_pocket10.pdb"
-                ref_ligand_path = self.docker.crossdocked_dir / target_folder / f"{stem}.sdf"
+                pocket_path, ref_ligand_path = self.docker._resolve_paths(pocket_name)
 
                 if not pocket_path.exists() or not ref_ligand_path.exists():
                     print(f"[SminaDocking] Missing pocket or reference ligand for mol {i}")
@@ -160,6 +186,7 @@ class SminaDockingReward(BaseReward):
                     ref_ligand_path=str(ref_ligand_path),
                 )
 
+
                 raw_score = result.get("score") if isinstance(result, dict) else None
 
                 if raw_score is None:
@@ -168,16 +195,21 @@ class SminaDockingReward(BaseReward):
 
                 if self.USE_SQRT_NORMALISATION:
                     reward = self._normalise_sqrt(raw_score, mol)
+                    print(f"[Docking|sqrt] Mol {i} | Raw: {raw_score:.3f} kcal/mol "
+                        f"| N_atoms: {mol.GetNumHeavyAtoms()} | Reward: {reward:.3f}")
                 else:
-                    reward = self._normalise_linear(raw_score)
-
-                mode_tag = "sqrt" if self.USE_SQRT_NORMALISATION else "linear"
-                print(f"[Docking|{mode_tag}] Mol {i} | Raw: {raw_score:.3f} kcal/mol "
-                      f"| N_atoms: {mol.GetNumHeavyAtoms()} | Reward: {reward:.3f}")
+                    linear_reward = self._normalise_linear(raw_score)
+                    trap_value = self.trapezoid_atom_normalisation(mol)
+                    reward = linear_reward * trap_value
+                    print(f"[Docking|linear+trap] Mol {i} | Raw: {raw_score:.3f} kcal/mol "
+                        f"| N_atoms: {mol.GetNumHeavyAtoms()} | Linear: {linear_reward:.3f} "
+                        f"| Trap: {trap_value:.3f} | Reward: {reward:.3f}")
+                
                 scores.append(reward)
 
             except Exception as e:
                 print(f"[SminaDocking] Error docking molecule {i}: {e}")
+                print(f"[SminaDocking] Pocket name was: {repr(pocket_name)}")  # <-- here
                 scores.append(0.0)
 
         return torch.tensor(scores, dtype=torch.float32)

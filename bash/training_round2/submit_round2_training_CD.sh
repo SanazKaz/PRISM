@@ -10,10 +10,10 @@
 # 1. PATH & VARIABLE DEFINITIONS
 # =============================================================================
 PROJECT_ROOT="/data/stat-cadd/wolf7055/PRISM"
-ROUND1_CKPT_BASE="${PROJECT_ROOT}/Log_Results/final_geometry_checks_CD/checkpoints"
+ROUND1_CKPT_BASE="${PROJECT_ROOT}/Log_Results/serious/final_geometry_checks_CD/checkpoints"
 
 TRAINING_SCRIPT_PATH="bash/training_round2/round2_training_CD.sh"
-LOG_DIR="${PROJECT_ROOT}/jobs_files/molecular_props_geom_step2"
+LOG_DIR="${PROJECT_ROOT}/jobs_files/2D_geom_docking/2D_geom_docking"
 
 
 # Round 1 best checkpoints (Must match order of TARGETS)

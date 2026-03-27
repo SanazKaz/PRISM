@@ -53,13 +53,14 @@ echo ""
 cd "${PRISM_ROOT}/src/models/diffsbdd"
 export PYTHONPATH="${PRISM_ROOT}/src/models/diffsbdd:${PYTHONPATH}"
 
-python "${PRISM_ROOT}/scripts/test.py" "${MODEL_PATH}" \
+python "${PRISM_ROOT}/scripts/test_targets.py" "${MODEL_PATH}" \
     --config "${PRISM_ROOT}/configs/binding_moad_fa_ppo.yaml" \
     --outdir "${OUTDIR}" \
     --target "${TARGET}" \
     --n_samples ${N_SAMPLES} \
     --batch_size ${BATCH_SIZE} \
-    --sanitize
+    --sanitize \
+    --fix_n_nodes
 
 EXIT_CODE=$?
 

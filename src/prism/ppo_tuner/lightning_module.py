@@ -34,10 +34,16 @@ class PPOFineTuner(pl.LightningModule):
 
         # Filter out PPO-specific and Lightning-specific parameters
         ddpm_config = {k: v for k, v in vars(self.config).items() 
-                    if k not in ['ppo_params', 'enable_progress_bar', 
-                                'num_sanity_val_steps', 'wandb_params',
-                                'gpus', 'n_epochs', 'logdir', 'fp16', 
-                                'run_identifier','reward_params'
+                    if k not in ['ppo_params', 
+                                'enable_progress_bar', 
+                                'num_sanity_val_steps', 
+                                'wandb_params',
+                                'gpus', 'n_epochs', 
+                                'logdir', 
+                                'fp16', 
+                                'run_identifier',
+                                'reward_params',
+                                'docking_params'
                                 ]}
 
         self.ddpm_model = LigandPocketDDPM(
@@ -46,7 +52,6 @@ class PPOFineTuner(pl.LightningModule):
             **ddpm_config
         )
         self.ddpm_model.to(device)
-
         
         # Load pretrained weights if provided
         if warm_start_checkpoint is not None:

@@ -1,0 +1,7 @@
+target,n_molecules,mean,median,std,min,max
+BRD4_BD1,528,28.083,28.0,9.235,5,55
+Factor_Xa,122,34.303,34.0,4.82,12,45
+Carb_Anh_II,364,20.275,20.0,7.213,8,45
+EGFR,69,34.551,35.0,6.243,11,48
+Estrogen_recep_alpha,398,24.377,23.0,5.375,13,41
+HIV_1_Protease,92,44.217,45.5,6.937,18,55
