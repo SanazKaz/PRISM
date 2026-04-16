@@ -14,12 +14,20 @@ wandb/
 bash/
 # configs/
 
-# Data and checkpoints
-# Data and checkpoints
+# Ignore the entire data folder
 data/
-*.pdb
-*.sdf
-*.cif
+
+# Keep preprocessing code
+!data/preprocessing/
+!data/preprocessing/**
+
+# Keep example file
+!data/example_pdb_list.txt
+
+# Keep specific READMEs
+!data/*/
+!data/*/README.md
+!data/*/pdb_list.txt
 
 *.ckpt
 *.pth
