@@ -12,29 +12,25 @@ Log_Results/
 wandb/
 
 bash/
-# configs/
 
-# Ignore the entire data folder
-data/
-
-# Keep preprocessing code
-!data/preprocessing/
-!data/preprocessing/**
-
-# Keep example file
-!data/example_pdb_list.txt
-
-# Keep specific READMEs
-!data/*/
-!data/*/README.md
-!data/*/pdb_list.txt
-
+# Large data files (ignore by extension, not by folder)
 *.ckpt
 *.pth
 *.npz
 *.pdb
 *.sdf
 *.cif
+*.npy
+
+# Specific large data directories
+data/cross_dock/
+data/BRD4_BD1/
+data/EGFR/
+data/Carb_Anh_II/
+data/Estrogen_recep_alpha/
+data/HIV_1_Protease/
+data/Factor_Xa/
+data/custom_pdb_list_data/
 
 src/models/diffsbdd/data/
 src/models/diffsbdd/bash
