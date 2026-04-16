@@ -14,13 +14,13 @@ wandb/
 bash/
 # configs/
 
-Data and checkpoints
-data/AMPC_beta_lactamase/
+# Data and checkpoints
 data/Carb_Anh_II/
 data/EGFR/
 data/BRD4_BD1
 data/Estrogen_recep_alpha/
 data/HIV_1_Protease/
+data/Factor_Xa/
 data/custom_pdb_list_data/
 data/pdb_list.txt
 data/cross_dock/
