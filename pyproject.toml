@@ -3,30 +3,46 @@ name = "prism"
 version = "0.1.0"
 description = "PRISM: Policy-Reinforced Iterative Structure-Based Molecular Diffusion"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = [
-    # Core Scientific Stack
-    "numpy",
-    "scipy",
-    "pandas",
-    "seaborn",
-    "matplotlib",
-    "scikit-learn",
-    "networkx",
-    "joblib",
-    "tqdm",
-    "pyyaml",
-    "imageio",
-
+    # Core scientific computing
+    "numpy==2.4.1",
+    "scipy==1.17.0",
+    "pandas==3.0.0",
+    "matplotlib==3.10.8",
+    "seaborn==0.13.2",
+    "scikit-learn==1.8.0",
+    "networkx==3.6.1",
+    
+    # ML frameworks
+    "torch==2.6.0",
+    "lightning==2.5.0",
+    "pytorch-lightning==2.6.0",
+    "torchmetrics==1.8.2",
+    "lightning-utilities==0.15.2",
+    
     # Cheminformatics
-    "rdkit",
-    "biopython",
-    "openbabel",
+    "rdkit==2025.9.3",
+    "biopython==1.86",
     
-    # Molecular validation
-    "posebusters",
-    "prolif",
+    # Molecular tools
+    "posebusters==0.6.3",
+    "prolif==2.1.0",
+    "datamol==0.12.5",
+    "selfies==2.2.0",
+    "medchem==2.0.5",
     
-    # Logging
-    "wandb",
+    # Utilities
+    "pyyaml==6.0.3",
+    "tqdm==4.67.1",
+    "joblib==1.5.3",
+    "imageio==2.37.2",
+    "loguru==0.7.3",
+    
+    # Logging & tracking
+    "wandb==0.25.1",
 ]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
