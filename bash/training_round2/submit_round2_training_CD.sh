@@ -13,7 +13,7 @@ PROJECT_ROOT="/data/stat-cadd/wolf7055/PRISM"
 ROUND1_CKPT_BASE="${PROJECT_ROOT}/Log_Results/serious/final_geometry_checks_CD/checkpoints"
 
 TRAINING_SCRIPT_PATH="bash/training_round2/round2_training_CD.sh"
-LOG_DIR="${PROJECT_ROOT}/jobs_files/2D_geom_docking/2D_geom_docking"
+LOG_DIR="${PROJECT_ROOT}/jobs_files/03_04_dock_molprops_geom"
 
 
 # Round 1 best checkpoints (Must match order of TARGETS)
@@ -35,7 +35,7 @@ TARGETS=(
     "HIV_1_Protease"
 )
 
-SEEDS=(42 976 123 789)
+SEEDS=(42 976 123)
 
 # =============================================================================
 # 2. PRE-FLIGHT VERIFICATION
@@ -73,7 +73,7 @@ mkdir -p "${LOG_DIR}"
 # =============================================================================
 # 3. SUBMISSION
 # =============================================================================
-echo "Submitting SLURM array job (Tasks 0-23)..."
+echo "Submitting SLURM array job (Tasks 0-17)..."
 echo ""
 
 JOB_OUTPUT=$(sbatch "${PROJECT_ROOT}/${TRAINING_SCRIPT_PATH}")

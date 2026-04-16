@@ -1,9 +1,9 @@
-run_identifier: 'featdensity_molprops_geom'
+run_identifier: 'dock_molprops_geom'
 logdir: 'Log_Results'
 wandb_params:
   mode: 'offline' # seeing if it will reduce overhead 
   entity: 'sanazkazeminia97'
-  project: 'case_study_featdensity_molprops_geom_03_04'
+  project: 'case_study_dock_molprops_geom_03_04'
 dataset: 'crossdock' #(refers to the model's dataset_info_key)
 datadir: '/data/stat-cadd/wolf7055/PRISM/data/cross_dock/processed_crossdock_noH_full_temp'
 enable_progress_bar: False
@@ -65,7 +65,7 @@ reward_params:
     bertz: 0.0
     sucos: 0.0
     interaction_fingerprints: 0.0
-    feature_density: 0.5
+    feature_density: 0.0
     geometry_checks: 0.1
     flatness_checks: 0.0
     aromatic_counter: 0.0
@@ -73,7 +73,7 @@ reward_params:
     multi_features: 0.0
     silly_walks: 0.0
     property_2d: 0.4
-    smina_docking: 0.0
+    smina_docking: 0.5
     custom_qed: 0.0
     custom_sa_score: 0.0
     penalised_logp: 0.0

@@ -9,24 +9,24 @@
 # =============================================================================
 
 # Base path for checkpoints
-CKPT_BASE="/data/stat-cadd/wolf7055/PRISM/Log_Results/case_studies/2D_geom_docking/tests/checkpoints"
+CKPT_BASE="/data/stat-cadd/wolf7055/PRISM/Log_Results/case_studies/03_04_molprops_geom/molprops_geom/checkpoints"
 
 # Map each test structure to its trained model checkpoint
 declare -A MODEL_MAP
 # BRD4_BD1 structures → BRD4 model - good
-MODEL_MAP["BRD4_BD1_4whw"]="${CKPT_BASE}/BRD4_BD1/seed=976/epoch=91-reward=0.67.pt"
-MODEL_MAP["BRD4_BD1_6fo5"]="${CKPT_BASE}/BRD4_BD1/seed=976/epoch=91-reward=0.67.pt"
-MODEL_MAP["BRD4_BD1_6xvc"]="${CKPT_BASE}/BRD4_BD1/seed=976/epoch=91-reward=0.67.pt"
+MODEL_MAP["BRD4_BD1_4whw"]="${CKPT_BASE}/BRD4_BD1/seed=976/epoch=142-reward=0.74.pt"
+MODEL_MAP["BRD4_BD1_6fo5"]="${CKPT_BASE}/BRD4_BD1/seed=976/epoch=142-reward=0.74.pt"
+MODEL_MAP["BRD4_BD1_6xvc"]="${CKPT_BASE}/BRD4_BD1/seed=976/epoch=142-reward=0.74.pt"
 
 # Carb_Anh_II structures → Carb_Anh_II model - good
-MODEL_MAP["Carb_Anh_II_6rl9"]="${CKPT_BASE}/Carb_Anh_II/seed=976/epoch=123-reward=0.64.pt"
-MODEL_MAP["Carb_Anh_II_3k34"]="${CKPT_BASE}/Carb_Anh_II/seed=976/epoch=123-reward=0.64.pt"
-MODEL_MAP["Carb_Anh_II_5n0d"]="${CKPT_BASE}/Carb_Anh_II/seed=976/epoch=123-reward=0.64.pt"
+MODEL_MAP["Carb_Anh_II_6rl9"]="${CKPT_BASE}/Carb_Anh_II/seed=123/epoch=113-reward=0.70.pt"
+MODEL_MAP["Carb_Anh_II_3k34"]="${CKPT_BASE}/Carb_Anh_II/seed=123/epoch=113-reward=0.70.pt"
+MODEL_MAP["Carb_Anh_II_5n0d"]="${CKPT_BASE}/Carb_Anh_II/seed=123/epoch=113-reward=0.70.pt"
 
 # EGFR structures → EGFR model - BAD
-MODEL_MAP["EGFR_8a27"]="${CKPT_BASE}/EGFR/seed=42/epoch=112-reward=0.66.pt"
-MODEL_MAP["EGFR_3poz"]="${CKPT_BASE}/EGFR/seed=42/epoch=112-reward=0.66.pt"
-MODEL_MAP["EGFR_4wkq"]="${CKPT_BASE}/EGFR/seed=42/epoch=112-reward=0.66.pt"
+MODEL_MAP["EGFR_8a27"]="${CKPT_BASE}/EGFR/seed=976/epoch=132-reward=0.72.pt"
+MODEL_MAP["EGFR_3poz"]="${CKPT_BASE}/EGFR/seed=976/epoch=132-reward=0.72.pt"
+MODEL_MAP["EGFR_4wkq"]="${CKPT_BASE}/EGFR/seed=976/epoch=132-reward=0.72.pt"
 
 # Estrogen_recep_alpha structures → Estrogen model - mediocre
 MODEL_MAP["Estrogen_recep_alpha_4ivy"]="${CKPT_BASE}/Estrogen_recep_alpha/seed=976/last.pt"
@@ -34,14 +34,14 @@ MODEL_MAP["Estrogen_recep_alpha_5kct"]="${CKPT_BASE}/Estrogen_recep_alpha/seed=9
 MODEL_MAP["Estrogen_recep_alpha_2qzo"]="${CKPT_BASE}/Estrogen_recep_alpha/seed=976/last.pt"
 
 # Factor_Xa structures → Factor_Xa model bad
-MODEL_MAP["Factor_Xa_1ezq"]="${CKPT_BASE}/Factor_Xa/seed=42/epoch=113-reward=0.67.pt"
-MODEL_MAP["Factor_Xa_2p3t"]="${CKPT_BASE}/Factor_Xa/seed=42/epoch=113-reward=0.67.pt"
-MODEL_MAP["Factor_Xa_3kl6"]="${CKPT_BASE}/Factor_Xa/seed=42/epoch=113-reward=0.67.pt"
+MODEL_MAP["Factor_Xa_1ezq"]="${CKPT_BASE}/Factor_Xa/seed=976/epoch=122-reward=0.73.pt"
+MODEL_MAP["Factor_Xa_2p3t"]="${CKPT_BASE}/Factor_Xa/seed=976/epoch=122-reward=0.73.pt"
+MODEL_MAP["Factor_Xa_3kl6"]="${CKPT_BASE}/Factor_Xa/seed=976/epoch=122-reward=0.73.pt"
 
 # HIV_1_Protease structures → HIV model good
-MODEL_MAP["HIV_1_Protease_2qnn"]="${CKPT_BASE}/HIV_1_Protease/seed=123/epoch=110-reward=0.65.pt"
-MODEL_MAP["HIV_1_Protease_3t11"]="${CKPT_BASE}/HIV_1_Protease/seed=123/epoch=110-reward=0.65.pt"
-MODEL_MAP["HIV_1_Protease_1hos"]="${CKPT_BASE}/HIV_1_Protease/seed=123/epoch=110-reward=0.65.pt"
+MODEL_MAP["HIV_1_Protease_2qnn"]="${CKPT_BASE}/HIV_1_Protease/seed=123/epoch=114-reward=0.72.pt"
+MODEL_MAP["HIV_1_Protease_3t11"]="${CKPT_BASE}/HIV_1_Protease/seed=123/epoch=114-reward=0.72.pt"
+MODEL_MAP["HIV_1_Protease_1hos"]="${CKPT_BASE}/HIV_1_Protease/seed=123/epoch=114-reward=0.72.pt"
 
 # All targets to evaluate (18 test structures)
 TARGETS=(
@@ -51,7 +51,7 @@ TARGETS=(
     "BRD4_BD1_6xvc"
     
     # Carb_Anh_II - 3 test structures
-    # "Carb_Anh_II_6rl9"
+    "Carb_Anh_II_6rl9"
     "Carb_Anh_II_3k34"
     "Carb_Anh_II_5n0d"
     
@@ -77,7 +77,7 @@ TARGETS=(
 )
 
 # Create jobs directory if needed
-mkdir -p jobs_files/2D_geom_docking/test_targets
+mkdir -p jobs_files/06_04_2026_molprops_geom/test_targets
 
 echo "============================================="
 echo "Submitting ${#TARGETS[@]} parallel PRISM CD geometry evaluation jobs"
@@ -121,7 +121,7 @@ echo "Monitor with:"
 echo "  squeue -u \$USER"
 echo ""
 echo "Check individual logs:"
-echo "  tail -f jobs_files/2D_geom_docking/test_targets/CD_BRD4_BD1_4whw_*.log"
+echo "  tail -f jobs_files/06_04_2026_featdensity_molprops_geom/test_targets/CD_BRD4_BD1_4whw_*.log"
 echo ""
 echo "Cancel all:"
 echo "  scancel ${JOB_IDS[*]}"

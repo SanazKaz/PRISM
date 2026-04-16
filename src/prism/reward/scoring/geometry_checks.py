@@ -88,7 +88,7 @@ class PoseBustersGeometryReward(BaseReward):
         
         Returns:
             exp(-penalty) where penalty scales with number of violations.
-            0.0 if molecule is invalid.
+            0.0 if molecule is completely poor.
         """
         if mol is None:
             return 0.0

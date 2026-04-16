@@ -4,13 +4,13 @@
 #SBATCH --gres=gpu:h100:1
 #SBATCH --ntasks-per-node=1
 #SBATCH --partition=short
-#SBATCH --time 04:00:00
-#SBATCH --job-name=ws_13-3-26_sized_weighted_sum_multiobjective_CD
+#SBATCH --time 03:30:00
+#SBATCH --job-name=single_objective_geometry_training
 #SBATCH --mail-user=wolf7055@ox.ac.uk
 #SBATCH --mail-type=END,FAIL
 #SBATCH --array=0-1
-#SBATCH --output=jobs_files/13-3-26_sized_weighted_sum_multiobjective_CD_%a.log
-#SBATCH --error=jobs_files/13-3-26_sized_weighted_sum_multiobjective_CD_%a.log
+#SBATCH --output=jobs_files/crossdocked_31-3-26_single_objective_logp_training_%a.log
+#SBATCH --error=jobs_files/crossdocked_31-3-26_single_objective_logp_training_%a.log
 
 module purge
 module load Anaconda3
@@ -20,11 +20,11 @@ source activate /data/stat-cadd/wolf7055/conda/envs/PRISM_25
 # --- 1. SETUP PATHS ---
 export PROJECT_ROOT="/data/stat-cadd/wolf7055/PRISM"
 
-SEEDS=(42 976)
+SEEDS=(123 789)
 SEED=${SEEDS[$SLURM_ARRAY_TASK_ID]}
 
-WARM_START_CKPT="${PROJECT_ROOT}/Log_Results/short_crossdocked_dataset_geometry_training/checkpoints/7275716/seed=42/last.ckpt"
-CHECKPOINT_OUTPUT_DIR="${PROJECT_ROOT}/Log_Results"
+WARM_START_CKPT="${PROJECT_ROOT}/checkpoints/crossdocked_fa_cond_temp.ckpt"
+CHECKPOINT_OUTPUT_DIR="${PROJECT_ROOT}/Log_Results/penalised_logp"
 DATADIR="${PROJECT_ROOT}/data/cross_dock/processed_crossdock_noH_full_temp"
 
 echo "=========================================="
@@ -64,8 +64,8 @@ export DEBUG_PPO=0
 # --- 3. RUN TRAINING ---
 echo "Starting training..."
 srun python "${PROJECT_ROOT}/scripts/train.py" \
-    --config "${PROJECT_ROOT}/configs/weighted_sum_cd.yaml" \
-    --resume_from_checkpoint "${WARM_START_CKPT}" \
+    --config "${PROJECT_ROOT}/configs/ppo_config.yaml" \
+    --warm_start_from_ddpm "${WARM_START_CKPT}" \
     --seed $SEED \
     --datadir "$DATADIR" \
     --logdir "$CHECKPOINT_OUTPUT_DIR"

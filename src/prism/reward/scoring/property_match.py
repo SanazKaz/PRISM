@@ -189,9 +189,9 @@ class Property2DReward(BaseReward):
                 'ChiA_C': self._count_chiral_centers(mol) / 6,
                 'FSP3':   rdMolDescriptors.CalcFractionCSP3(mol),  # Calculated, not scored
                 # 'BriA_C': rdMolDescriptors.CalcNumBridgeheadAtoms(mol) / 2,
-                'HBD_C': rdMolDescriptors.CalcNumHBD(mol),
-                'HBA_C': rdMolDescriptors.CalcNumHBA(mol),
-                'FusedR_C': sum(1 for i in range(ring_info.NumRings()) if ring_info.IsRingFused(i)),
+                'HBD_C': rdMolDescriptors.CalcNumHBD(mol) / 5,
+                'HBA_C': rdMolDescriptors.CalcNumHBA(mol) / 10,
+                'FusedR_C': sum(1 for i in range(ring_info.NumRings()) if ring_info.IsRingFused(i)) / 6,
                 'LogP_C': Crippen.MolLogP(mol) / 5,
             }
 

@@ -1,15 +1,15 @@
 #!/bin/bash
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64GB
-#SBATCH --gres=gpu:h100:1
+#SBATCH --gres=gpu:1
 #SBATCH --ntasks-per-node=1
-#SBATCH --partition=short
-#SBATCH --time=03:30:00
-#SBATCH --job-name=GEN_penalised_logp_seed_42_epoch25
+#SBATCH --partition=devel
+#SBATCH --time=00:10:00
+#SBATCH --job-name=GEN_crossdocked_dataset_geometry_training_seed_42_epoch40
 #SBATCH --mail-user=wolf7055@ox.ac.uk
 #SBATCH --mail-type=END,FAIL
-#SBATCH --output=jobs_files/GEN_17_03_2026_penalised_logp.log
-#SBATCH --error=jobs_files/GEN_17_03_2026_penalised_logp.log
+#SBATCH --output=jobs_files/GEN_30_03_2026_crossdocked_dataset_geometry_training.log
+#SBATCH --error=jobs_files/GEN_30_03_2026_crossdocked_dataset_geometry_training.log
 
 module purge
 module load Anaconda3
@@ -17,9 +17,9 @@ source activate /data/stat-cadd/wolf7055/conda/envs/PRISM_25
 
 # --- PATHS ---
 export PROJECT_ROOT="/data/stat-cadd/wolf7055/PRISM"
-CHECKPOINT="${PROJECT_ROOT}/Log_Results/penalised_logp/penalised_logp/checkpoints/cross_dock/seed=42/epoch=25-reward=0.59.pt"
+CHECKPOINT="${PROJECT_ROOT}/Log_Results/crossdocked_dataset_geometry_training/checkpoints/7271487/seed=42/epoch=40-reward=0.91.pt"
 TEST_DIR="${PROJECT_ROOT}/data/cross_dock/processed_crossdock_noH_full_temp/test"
-OUTDIR="${PROJECT_ROOT}/results/prism/penalised_logp_seed_42_epoch25"
+OUTDIR="${PROJECT_ROOT}/results/prism/crossdocked_dataset_geometry_training_seed_42_epoch_40"
 CONFIG="${PROJECT_ROOT}/configs/ppo_config.yaml"
 SCRIPT="${PROJECT_ROOT}/scripts/test.py"
 
@@ -59,7 +59,7 @@ nvidia-smi
 
 # --- GENERATION ---
 echo "Starting PRISM geometry reward test generation..."
-7276030
+
 srun python "$SCRIPT" \
     "$CHECKPOINT" \
     --config "$CONFIG" \
@@ -68,7 +68,6 @@ srun python "$SCRIPT" \
     --n_samples 100 \
     --batch_size 120 \
     --sanitize \
-    --skip_existing
 
 echo "Generation complete!"
 echo "Output written to: $OUTDIR"

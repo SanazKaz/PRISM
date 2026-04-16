@@ -4,11 +4,11 @@
 #SBATCH --gres=gpu:h100:1
 #SBATCH --ntasks-per-node=1
 #SBATCH --partition=short
-#SBATCH --time 06:00:00
-#SBATCH --job-name=2D_geom_docking_CD
+#SBATCH --time 08:00:00
+#SBATCH --job-name=dock_molprops_geom_CD
 #SBATCH --mail-user=wolf7055@ox.ac.uk
 #SBATCH --mail-type=END,FAIL
-#SBATCH --array=3-17
+#SBATCH --array=0-17
 #SBATCH --output=/dev/null 
 #SBATCH --error=/dev/null   
 
@@ -52,9 +52,9 @@ HOTSPOT_PKLS=(
 )
 
 # --- OUTPUT PATHS: Logs & Checkpoints ---
-CHECKPOINT_OUTPUT_DIR="${PROJECT_ROOT}/Log_Results/case_studies/2D_geom_docking"
-JOB_NAME="2D_geom_docking"
-SLURM_LOG_BASE_DIR="${PROJECT_ROOT}/jobs_files/2D_geom_docking/${JOB_NAME}"
+CHECKPOINT_OUTPUT_DIR="${PROJECT_ROOT}/Log_Results/case_studies/03_04_dock_molprops_geom"
+JOB_NAME="dock_molprops_geom"
+SLURM_LOG_BASE_DIR="${PROJECT_ROOT}/jobs_files/03_04_dock_molprops_geom/${JOB_NAME}"
 
 # =============================================================================
 # 2. TASK INDEXING & LOGGING SETUP
@@ -83,7 +83,7 @@ LOG_FILE="${SLURM_LOG_DIR}/seed_${SEED}_taskid_${SLURM_ARRAY_TASK_ID}.log"
 exec 1>"$LOG_FILE" 2>&1
 
 echo "=========================================="
-echo "ROUND 2 TRAINING - Sillwalks CD"
+echo "ROUND 2 TRAINING"
 echo "=========================================="
 echo "SLURM Job ID: $SLURM_JOB_ID"
 echo "Array Task ID: $SLURM_ARRAY_TASK_ID"
@@ -134,7 +134,7 @@ export DEBUG_PPO=0
 # --- 5. RUN TRAINING ---
 echo "Starting Round 2 training..."
 srun python "${PROJECT_ROOT}/scripts/train.py" \
-    --config "${PROJECT_ROOT}/configs/exp_specific/case_study_multi.yaml" \
+    --config "${PROJECT_ROOT}/configs/exp_specific/case_study_dock.yaml" \
     --resume_from_checkpoint "${RESUME_FROM_CHECKPOINT}" \
     --seed "$SEED" \
     --datadir "${SCRATCH_WORK_DIR}/03_final_dataset" \

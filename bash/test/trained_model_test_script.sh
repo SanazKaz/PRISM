@@ -3,7 +3,7 @@
 #SBATCH --partition=short
 #SBATCH --gres=gpu:h100:1
 #SBATCH --time 00:45:00
-#SBATCH --output=jobs_files/2D_geom_docking/test_targets/%x_%j.log
+#SBATCH --output=jobs_files/03_04_dock_molprops_geom/test_targets/%x_%j.log
 exec 2>&1
 
 # =============================================================================
@@ -55,7 +55,7 @@ SCRIPT_PATH="${PRISM_ROOT}/scripts/test_targets.py"
 CONFIG_PATH="${PRISM_ROOT}/configs/ppo_config.yaml"
 
 # Output directory for CD geometry model generations
-OUTDIR="/data/stat-cadd/wolf7055/PRISM/generation_results/2D_geom_docking/trained_model_test_script"
+OUTDIR="/data/stat-cadd/wolf7055/PRISM/results/case_studies/03_04_dock_molprops_geom/test_targets"
 mkdir -p ${OUTDIR}
 
 # Generation settings
@@ -86,7 +86,6 @@ python ${SCRIPT_PATH} "${MODEL_PATH}" \
     --n_samples ${N_SAMPLES} \
     --batch_size ${BATCH_SIZE} \
     --sanitize \
-    --skip_existing \
     --fix_n_nodes
 
 EXIT_CODE=$?

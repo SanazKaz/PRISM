@@ -44,7 +44,8 @@ class FeatureDensityReward(BaseReward):
     def __init__(self, pkl_path: str, sigma: float = 1.0, cutoff: float = 5.0,
                  feature_weights: Dict[str, float] = None,
                  aromatic_gate_threshold: float = 0.1,
-                 aromatic_gate_penalty: float = 0.6):
+                 aromatic_gate_penalty: float = 0.6,
+                 count_efficiency_exponent: float = 0.5):
         """
         Args:
             pkl_path: Path to pickled hotspot data.
@@ -77,15 +78,17 @@ class FeatureDensityReward(BaseReward):
         self.aromatic_gate_threshold = aromatic_gate_threshold
         self.aromatic_gate_penalty = aromatic_gate_penalty
         
+        self.count_efficiency_exponent = count_efficiency_exponent
+        
         self.fdef = AllChem.BuildFeatureFactory(os.path.join(RDConfig.RDDataDir, 'BaseFeatures.fdef'))
         
         # Precompute clusters grouped by feature type for efficiency
         self._clusters_by_type = self._group_clusters_by_type()
         
-        print(f"HotspotReward loaded: {len(self.cluster_centers)} clusters")
-        print(f"  sigma={self.sigma}, cutoff={self.cutoff}")
-        print(f"  Feature weights: {self.feature_weights}")
-        print(f"  Aromatic gate: threshold={aromatic_gate_threshold}, penalty={aromatic_gate_penalty}")
+        # print(f"HotspotReward loaded: {len(self.cluster_centers)} clusters")
+        # print(f"  sigma={self.sigma}, cutoff={self.cutoff}")
+        # print(f"  Feature weights: {self.feature_weights}")
+        # print(f"  Aromatic gate: threshold={aromatic_gate_threshold}, penalty={aromatic_gate_penalty}")
 
     def _group_clusters_by_type(self) -> Dict[str, List[Tuple[int, np.ndarray, int]]]:
         """
@@ -110,18 +113,6 @@ class FeatureDensityReward(BaseReward):
     @property
     def name(self) -> str:
         return "feature_density"
-    
-    @property
-    def epoch_weight_schedule(self) -> Optional[int]:
-        return 80
-
-    @property
-    def weight_before_epoch(self) -> Optional[float]:
-        return 0.2
-
-    @property
-    def weight_after_epoch(self) -> Optional[float]:
-        return 0.7
 
     def _score_feature_type(self, feat_type: str, mol_feats: List, 
                             ideal_count: int) -> Tuple[float, float]:
@@ -174,6 +165,10 @@ class FeatureDensityReward(BaseReward):
         # Normalise to 0-1 for this feature type
         normalised = score / max_score if max_score > 0 else 0.0
         
+        if len(mol_feats) > ideal_count:
+            count_efficiency = (ideal_count / len(mol_feats)) ** self.count_efficiency_exponent
+            normalised *= count_efficiency
+
         return normalised, max_score
 
     def score_mol(self, mol: Mol) -> float:

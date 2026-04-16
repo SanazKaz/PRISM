@@ -154,24 +154,43 @@ class RolloutCollector:
             if torch.is_tensor(tensor):
                 single_pocket_data[key] = tensor.to(self.device) 
                 
+
+        num_nodes_lig_config = self.config.ppo_params.num_nodes_lig
+
+        if num_nodes_lig_config is None:
+            num_nodes_lig = torch.randint(15, 40, (samples_in_chunk,), dtype=torch.long)
+        else:
+            num_nodes_lig = torch.randint(
+                num_nodes_lig_config - 5,
+                num_nodes_lig_config + 10,
+                (samples_in_chunk,),
+                dtype=torch.long
+            )
+
+        num_nodes_lig = num_nodes_lig.clamp(min=20)
+        num_nodes_lig = num_nodes_lig.to(self.device)
+
+        # TODO: Needs a more permenant fix. Size dist is not working the way it should.\
+        # Fix is to just use a fixed number of nodes for the ligand OR random sampling from a druglike distribution.
+        
+                
         # num_nodes_lig_config = self.config.ppo_params.num_nodes_lig
         # if num_nodes_lig_config is None:
-            # leads to instability for training with size distribution 
-        num_nodes_lig = self.policy_network.size_distribution.sample_conditional(
-            n1=None, n2=single_pocket_data['size']
-        ).repeat(samples_in_chunk)
-            # num_nodes_lig = torch.randint(15, 40, (samples_in_chunk,), dtype=torch.long)
-        # print(f"num_nodes_lig sampled from size distribution: {num_nodes_lig}")
-        # else:
+        #     # leads to instability for training with size distribution 
+        # # num_nodes_lig = self.policy_network.size_distribution.sample_conditional(
+        #     # n1=None, n2=single_pocket_data['size']
+        # # ).repeat(samples_in_chunk)
+        #     # num_nodes_lig = torch.randint(15, 40, (samples_in_chunk,), dtype=torch.long)
+        # # print(f"num_nodes_lig sampled from size distribution: {num_nodes_lig}")
         #     num_nodes_lig = torch.randint(
         #         num_nodes_lig_config - 5,
         #         num_nodes_lig_config + 10,
         #         (samples_in_chunk,),
         #         dtype=torch.long
         #     )
-        num_nodes_lig = num_nodes_lig.clamp(min=20)
-        num_nodes_lig = num_nodes_lig.to(self.device)
-        # print(f"num_nodes_lig: {num_nodes_lig}")
+        # num_nodes_lig = num_nodes_lig.clamp(min=20)
+        # num_nodes_lig = num_nodes_lig.to(self.device)
+        # # print(f"num_nodes_lig: {num_nodes_lig}")
 
 
         local_mask_base = torch.arange(samples_in_chunk, device=self.device)
