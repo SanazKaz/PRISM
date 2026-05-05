@@ -1,9 +1,9 @@
-run_identifier: 'aromatic_SIZED_weighted_sum_multiobjective_CD'
+run_identifier: 'no_geometry_CD_multi'
 logdir: 'Log_Results'
 wandb_params:
   mode: 'offline' # seeing if it will reduce overhead 
   entity: 'sanazkazeminia97'
-  project: 'Crossdocked_Dataset_MULTI_REWARD_paper'
+  project: 'ablations_CD_multi'
 dataset: 'crossdock' #(refers to the model's dataset_info_key)
 datadir: '/data/stat-cadd/wolf7055/PRISM/data/cross_dock/processed_crossdock_noH_full_temp'
 enable_progress_bar: False
@@ -66,7 +66,7 @@ reward_params:
     sucos: 0.0
     interaction_fingerprints: 0.0
     feature_density: 0.0
-    geometry_checks: 0.1
+    geometry_checks: 0.0 # remove geometry checks
     flatness_checks: 0.0
     aromatic_counter: 0.0
     aromatic_anchor: 0.0

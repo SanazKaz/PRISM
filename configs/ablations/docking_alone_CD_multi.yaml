@@ -1,9 +1,9 @@
-run_identifier: 'aromatic_SIZED_weighted_sum_multiobjective_CD'
+run_identifier: 'docking_alone_CD_multi'
 logdir: 'Log_Results'
 wandb_params:
   mode: 'offline' # seeing if it will reduce overhead 
   entity: 'sanazkazeminia97'
-  project: 'Crossdocked_Dataset_MULTI_REWARD_paper'
+  project: 'ablations_CD_multi'
 dataset: 'crossdock' #(refers to the model's dataset_info_key)
 datadir: '/data/stat-cadd/wolf7055/PRISM/data/cross_dock/processed_crossdock_noH_full_temp'
 enable_progress_bar: False
@@ -66,16 +66,16 @@ reward_params:
     sucos: 0.0
     interaction_fingerprints: 0.0
     feature_density: 0.0
-    geometry_checks: 0.1
+    geometry_checks: 0.0
     flatness_checks: 0.0
     aromatic_counter: 0.0
     aromatic_anchor: 0.0
     multi_features: 0.0
     silly_walks: 0.0
     property_2d: 0.0
-    smina_docking: 0.4
-    custom_qed: 0.3
-    custom_sa_score: 0.2
+    smina_docking: 1.0
+    custom_qed: 0.0
+    custom_sa_score: 0.0
   reward_paths:
     feature_density: '/data/stat-cadd/wolf7055/PRISM/data/BRD4_BD1/hotspot_analysis/BRD4_BD1_hotspot_data.pkl'
     aromatic_anchor: 'src/prism/reward/scoring/reward_data/ampc_hotspot_global_centered_eps0.5_min10_aromatic5.pkl'
