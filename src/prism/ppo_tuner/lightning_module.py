@@ -14,6 +14,7 @@ from src.prism.data_modules.lightning_datamodule import LigandPocketDataModule #
 from src.prism.reward.factory import get_reward_manager
 from src.prism.utils import build_molecules_from_batch
 from src.prism.models.diffsbdd_policy import DiffSBDDPolicy
+from src.prism.models.targetdiff_factory import load_targetdiff_policy
 from val_analysis.smina_docking import SminaDocking
 from val_analysis.metrics import MoleculeMetrics
 
@@ -33,47 +34,25 @@ class PPOFineTuner(pl.LightningModule):
         
         device = torch.device("cuda" if self.config.gpus > 0 else "cpu")
 
-        # Filter out PPO-specific and Lightning-specific parameters
-        ddpm_config = {k: v for k, v in vars(self.config).items() 
-                    if k not in ['ppo_params', 
-                                'enable_progress_bar', 
-                                'num_sanity_val_steps', 
-                                'wandb_params',
-                                'gpus', 'n_epochs', 
-                                'logdir', 
-                                'fp16', 
-                                'run_identifier',
-                                'reward_params',
-                                'docking_params'
-                                ]}
+        model_type = getattr(self.config, 'model_type', 'diffsbdd')
 
-        ddpm_module = LigandPocketDDPM(
-            outdir=Path(self.config.logdir),
-            node_histogram=node_histogram,
-            **ddpm_config
-        )
-        ddpm_module.to(device)
+        if model_type == 'targetdiff':
+            self.policy, self.dataset_info = self._build_targetdiff_policy(
+                device, warm_start_checkpoint
+            )
+            self.ddpm_model = None  # no LigandPocketDDPM when using TargetDiff
+        else:
+            self.policy, self.ddpm_model, self.dataset_info = self._build_diffsbdd_policy(
+                device, node_histogram, warm_start_checkpoint
+            )
 
-        # Load pretrained weights if provided
-        if warm_start_checkpoint is not None:
-            checkpoint = torch.load(warm_start_checkpoint, map_location='cpu', weights_only=False)
-            state_dict = checkpoint.get('state_dict', checkpoint)
-            ddpm_module.load_state_dict(state_dict, strict=False)
-
-        # Wrap in the policy adapter so the PPO loop is model-agnostic.
-        self.policy = DiffSBDDPolicy(ddpm_module)
-
-        # Keep a direct reference for validation (which still uses LigandPocketDDPM).
-        self.ddpm_model = ddpm_module
-
-        self.dataset_info = ddpm_module.dataset_info.copy()
         self.dataset_info['datadir'] = self.config.datadir
 
-        # 3. Instantiate the RewardManager
+        # Instantiate the RewardManager
         self.reward_manager = get_reward_manager(
             config=self.config,
             dataset_info=self.dataset_info,
-            ddpm_module=ddpm_module,
+            ddpm_module=self.policy,  # policy satisfies the virtual-node interface
         )
 
         # 2. Instantiate our self-contained PPOAlgorithm
@@ -85,6 +64,61 @@ class PPOFineTuner(pl.LightningModule):
             checkpoint_dir=checkpoint_dir,
         )
         self.freeze_parameters()
+
+    # ------------------------------------------------------------------
+    # Private model builders
+    # ------------------------------------------------------------------
+
+    def _build_diffsbdd_policy(self, device, node_histogram, warm_start_checkpoint):
+        ddpm_config = {k: v for k, v in vars(self.config).items()
+                       if k not in ['ppo_params', 'enable_progress_bar',
+                                    'num_sanity_val_steps', 'wandb_params',
+                                    'gpus', 'n_epochs', 'logdir', 'fp16',
+                                    'run_identifier', 'reward_params',
+                                    'docking_params', 'model_type']}
+        ddpm_module = LigandPocketDDPM(
+            outdir=Path(self.config.logdir),
+            node_histogram=node_histogram,
+            **ddpm_config,
+        )
+        ddpm_module.to(device)
+        if warm_start_checkpoint is not None:
+            ckpt = torch.load(warm_start_checkpoint, map_location='cpu', weights_only=False)
+            ddpm_module.load_state_dict(ckpt.get('state_dict', ckpt), strict=False)
+        policy = DiffSBDDPolicy(ddpm_module)
+        dataset_info = ddpm_module.dataset_info.copy()
+        return policy, ddpm_module, dataset_info
+
+    def _build_targetdiff_policy(self, device, warm_start_checkpoint):
+        checkpoint_path = getattr(self.config, 'targetdiff_checkpoint', warm_start_checkpoint)
+        if checkpoint_path is None:
+            raise ValueError(
+                "TargetDiff requires a checkpoint. Set config.targetdiff_checkpoint "
+                "or pass warm_start_checkpoint to PPOFineTuner."
+            )
+        policy = load_targetdiff_policy(
+            checkpoint_path=checkpoint_path,
+            device=device,
+            protein_atom_feature_dim=getattr(self.config, 'targetdiff_protein_feat_dim', 27),
+            ligand_atom_feature_dim=getattr(self.config, 'targetdiff_ligand_atom_types', 13),
+        )
+        # TargetDiff uses CrossDocked atom type set (add_aromatic, 13 classes).
+        # We reuse the DiffSBDD dataset_info structure for reward scoring;
+        # the atom decoder below maps TargetDiff indices to element symbols.
+        dataset_info = {
+            'atom_decoder': ['H', 'C', 'C', 'C', 'C', 'N', 'N', 'N', 'N',
+                              'O', 'O', 'O', 'F', 'P', 'P', 'P', 'P',
+                              'S', 'S', 'S', 'S', 'S', 'Cl'],
+            'atom_encoder': {},   # populated from decoder below
+            'colors_dic': [],
+            'radius_dic': [],
+        }
+        dataset_info['atom_encoder'] = {
+            sym: i for i, sym in enumerate(dataset_info['atom_decoder'])
+        }
+        return policy, dataset_info
+
+    # ------------------------------------------------------------------
 
     def freeze_parameters(self):
         print("[Init] Applying freezing strategy...")
@@ -148,8 +182,10 @@ class PPOFineTuner(pl.LightningModule):
     # --- Delegate other essential methods to the original model ---
 
     def validation_step(self, batch, batch_idx):
-        # For validation, we use the original model's logic
-        return self.ddpm_model.validation_step(batch, batch_idx)
+        if self.ddpm_model is not None:
+            return self.ddpm_model.validation_step(batch, batch_idx)
+        # TargetDiff: molecule generation + metrics handled in _run_validation
+        return {}
     
     def _run_validation(self):
         """
