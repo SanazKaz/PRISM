@@ -106,9 +106,9 @@ class TargetDiffPolicy(BaseDiffusionPolicy):
         Latent z is stored as cat([pos, one_hot(v).float()], dim=-1).
         """
         device = pocket['x'].device
-        batch_protein = pocket['mask']           # [N_prot_atoms]  molecule idx
-        protein_pos   = pocket['x'].clone()      # [N_prot_atoms, 3]
-        protein_v     = pocket['one_hot']        # [N_prot_atoms, prot_nf]
+        batch_protein = pocket['mask']                    # [N_prot_atoms]  molecule idx
+        protein_pos   = pocket['x'].float().clone()       # [N_prot_atoms, 3]
+        protein_v     = pocket['one_hot'].float()         # [N_prot_atoms, prot_nf]
         n_samples     = int(batch_protein.max().item()) + 1
 
         # Centre protein; keep offset to restore coordinates afterwards
@@ -231,9 +231,9 @@ class TargetDiffPolicy(BaseDiffusionPolicy):
         pos_s = z_s[:, :self._n_dims]
         v_s   = z_s[:, self._n_dims:].argmax(dim=-1)
 
-        # Unpack pocket
-        protein_pos = xh_pock[:, :self._n_dims]
-        protein_v   = xh_pock[:, self._n_dims:]
+        # Unpack pocket (ensure float32 to match model weights)
+        protein_pos = xh_pock[:, :self._n_dims].float()
+        protein_v   = xh_pock[:, self._n_dims:].float()
 
         # Forward pass with current weights
         preds = self._model(
