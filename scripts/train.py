@@ -45,30 +45,31 @@ def dict_to_namespace(d):
 
 class PTModelCheckpoint(ModelCheckpoint):
     """
-    Custom Checkpoint class that saves a matching .pt file 
+    Custom Checkpoint class that saves a matching .pt file
     every time a .ckpt file is saved (and deletes it when the .ckpt is deleted).
+    Supports both DiffSBDD (saves ddpm_model state_dict) and TargetDiff
+    (saves the inner ScorePosNet3D state_dict via policy._model).
     """
     def _save_checkpoint(self, trainer, filepath):
-        # 1. Save the standard .ckpt file
         super()._save_checkpoint(trainer, filepath)
-        
-        # 2. Save the matching .pt file
+
         if trainer.is_global_zero:
-            # Swap extension to .pt
             pt_path = str(filepath).replace('.ckpt', '.pt')
-            
-            # Save the inner model only
-            # We access the trainer's model directly
-            if hasattr(trainer.lightning_module, 'ddpm_model'):
-                inner_model = trainer.lightning_module.ddpm_model
-                torch.save(inner_model.state_dict(), pt_path)
-                print(f"[PT Checkpoint] Saved matching .pt to {pt_path}")
+            lm = trainer.lightning_module
+
+            if hasattr(lm, 'ddpm_model') and lm.ddpm_model is not None:
+                # DiffSBDD path
+                torch.save(lm.ddpm_model.state_dict(), pt_path)
+                print(f"[PT Checkpoint] Saved DiffSBDD .pt to {pt_path}")
+            elif hasattr(lm, 'policy') and hasattr(lm.policy, '_model'):
+                # TargetDiff path – save in the native TargetDiff format so the
+                # checkpoint can be reloaded by load_targetdiff_policy()
+                torch.save({'model': lm.policy._model.state_dict()}, pt_path)
+                print(f"[PT Checkpoint] Saved TargetDiff .pt to {pt_path}")
 
     def _remove_checkpoint(self, trainer, filepath):
-        # 1. Delete the standard .ckpt file
         super()._remove_checkpoint(trainer, filepath)
-        
-        # 2. Delete the matching .pt file to keep folder clean
+
         if trainer.is_global_zero:
             pt_path = str(filepath).replace('.ckpt', '.pt')
             if os.path.exists(pt_path):
@@ -131,14 +132,19 @@ def main(args):
     print(f"[********* CHECKPOINT DIR **********] {checkpoint_dir}")
     
     # --- 3. Instantiate the LightningModule ---
-    histogram_file = Path(config.datadir, 'size_distribution.npy')
-    if not histogram_file.exists():
-        raise FileNotFoundError(f"Histogram file not found at {histogram_file}")
-    node_histogram = np.load(histogram_file).tolist()
-    
+    # node_histogram is only needed by DiffSBDD; skip for TargetDiff.
+    model_type = getattr(config, 'model_type', 'diffsbdd')
+    if model_type == 'targetdiff':
+        node_histogram = None
+    else:
+        histogram_file = Path(config.datadir, 'size_distribution.npy')
+        if not histogram_file.exists():
+            raise FileNotFoundError(f"Histogram file not found at {histogram_file}")
+        node_histogram = np.load(histogram_file).tolist()
+
     model = PPOFineTuner(
-        config=config, 
-        warm_start_checkpoint=args.warm_start_from_ddpm, 
+        config=config,
+        warm_start_checkpoint=args.warm_start_from_ddpm,
         node_histogram=node_histogram,
         checkpoint_dir=checkpoint_dir)
     
