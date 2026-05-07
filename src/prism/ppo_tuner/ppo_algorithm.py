@@ -10,7 +10,7 @@ from pathlib import Path
 from .rollout_collector import RolloutCollector
 from .rollout_buffer import RolloutBuffer
 from .loss import compute_ppo_loss
-from src.models.diffsbdd.lightning_modules import LigandPocketDDPM 
+from src.prism.models.base_policy import BaseDiffusionPolicy
 from utils import permute_timesteps
 from tests.ppo_debug_utils import assert_same_ids, assert_latent_alignment, reset_seen_mb_ids
 
@@ -19,11 +19,11 @@ class PPOAlgorithm:
     The main PPO algorithm class. It orchestrates the collector, buffer, and loss
     calculation to perform the PPO update. This is a framework-agnostic class.
     """
-    def __init__(self, 
-                 policy_network: LigandPocketDDPM, 
+    def __init__(self,
+                 policy_network: BaseDiffusionPolicy,
                  reward_function,
-                 config, 
-                 dataset_info, 
+                 config,
+                 dataset_info,
                  checkpoint_dir):
         self.policy_network = policy_network
         self.config = config
@@ -39,9 +39,9 @@ class PPOAlgorithm:
 
 
         self.collector = RolloutCollector(
-            policy_network=self.policy_network.ddpm,
-            reward_function=self.reward_function, 
-            config=config
+            policy_network=self.policy_network,
+            reward_function=self.reward_function,
+            config=config,
         )
         self.buffer = RolloutBuffer(config=config)
         
@@ -154,7 +154,7 @@ class PPOAlgorithm:
         self.buffer.timesteps = rollout_data_for_permute['timesteps']
         
         # --- 3. Run PPO Inner Epochs ---
-        self.policy_network.ddpm.train()
+        self.policy_network.train()
 
         # Initialize trackers for logs
         total_loss, total_kl, total_clipfrac, total_entropy = 0, 0, 0, 0
@@ -180,10 +180,10 @@ class PPOAlgorithm:
                 # NOW USE current_k INSTEAD OF num_train_timesteps!
                 for t_idx in range(current_k):  # <-- THIS IS KEY
                     policy_loss, approx_kl, clipfrac, entropy = compute_ppo_loss(
-                        policy_network=self.policy_network.ddpm,
+                        policy_network=self.policy_network,
                         minibatch=minibatch,
                         timestep_idx=t_idx,
-                        config=self.config
+                        config=self.config,
                     )
                     
                     scaled_loss = policy_loss / scale
@@ -194,8 +194,8 @@ class PPOAlgorithm:
                     # Only perform optimization after accumulating for specified steps
                     if accumulation_count % step_every == 0:
                         torch.nn.utils.clip_grad_norm_(
-                            self.policy_network.ddpm.parameters(),
-                            self.config.ppo_params.max_grad_norm
+                            self.policy_network.parameters(),
+                            self.config.ppo_params.max_grad_norm,
                         )
                         optimizer.step()
                         optimizer.zero_grad(set_to_none=True)

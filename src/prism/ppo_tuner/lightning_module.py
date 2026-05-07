@@ -13,6 +13,7 @@ from src.models.diffsbdd.lightning_modules import LigandPocketDDPM
 from src.prism.data_modules.lightning_datamodule import LigandPocketDataModule # You'll need to create this later
 from src.prism.reward.factory import get_reward_manager
 from src.prism.utils import build_molecules_from_batch
+from src.prism.models.diffsbdd_policy import DiffSBDDPolicy
 from val_analysis.smina_docking import SminaDocking
 from val_analysis.metrics import MoleculeMetrics
 
@@ -46,68 +47,64 @@ class PPOFineTuner(pl.LightningModule):
                                 'docking_params'
                                 ]}
 
-        self.ddpm_model = LigandPocketDDPM(
+        ddpm_module = LigandPocketDDPM(
             outdir=Path(self.config.logdir),
             node_histogram=node_histogram,
             **ddpm_config
         )
-        self.ddpm_model.to(device)
-        
+        ddpm_module.to(device)
+
         # Load pretrained weights if provided
         if warm_start_checkpoint is not None:
-            # print(f"Loading pretrained DDPM weights from: {warm_start_checkpoint}")
             checkpoint = torch.load(warm_start_checkpoint, map_location='cpu', weights_only=False)
-            # Extract state dict - handle both direct state_dict and lightning checkpoint formats
-            if 'state_dict' in checkpoint:
-                state_dict = checkpoint['state_dict']
-            else:
-                state_dict = checkpoint
-            
-            self.ddpm_model.load_state_dict(state_dict, strict=False)
-            # print("Successfully loaded pretrained weights!")
-        
-        self.dataset_info = self.ddpm_model.dataset_info.copy()
+            state_dict = checkpoint.get('state_dict', checkpoint)
+            ddpm_module.load_state_dict(state_dict, strict=False)
+
+        # Wrap in the policy adapter so the PPO loop is model-agnostic.
+        self.policy = DiffSBDDPolicy(ddpm_module)
+
+        # Keep a direct reference for validation (which still uses LigandPocketDDPM).
+        self.ddpm_model = ddpm_module
+
+        self.dataset_info = ddpm_module.dataset_info.copy()
         self.dataset_info['datadir'] = self.config.datadir
-    
-        
+
         # 3. Instantiate the RewardManager
         self.reward_manager = get_reward_manager(
             config=self.config,
             dataset_info=self.dataset_info,
-            ddpm_module=self.ddpm_model
+            ddpm_module=ddpm_module,
         )
 
         # 2. Instantiate our self-contained PPOAlgorithm
         self.ppo_algorithm = PPOAlgorithm(
-            policy_network=self.ddpm_model,
+            policy_network=self.policy,
             reward_function=self.reward_manager,
             config=self.config,
             dataset_info=self.dataset_info,
-            checkpoint_dir=checkpoint_dir
+            checkpoint_dir=checkpoint_dir,
         )
         self.freeze_parameters()
 
     def freeze_parameters(self):
-        print("[Init] Applying EGNN freezing strategy...")
+        print("[Init] Applying freezing strategy...")
         frozen_count = 0
         unfrozen_count = 0
-        
-        # Get trainable blocks from config, with a default fallback
+
         trainable_layers = self.config.ppo_params.freeze_except
         print(f"[Init] Trainable blocks: {trainable_layers}")
-        
-        for name, param in self.ppo_algorithm.policy_network.named_parameters():
+
+        for name, param in self.policy.named_parameters():
             if any(x in name for x in trainable_layers):
                 param.requires_grad = True
             else:
                 param.requires_grad = False
                 frozen_count += 1
-        
-        # Recount for verification
-        for param in self.ppo_algorithm.policy_network.parameters():
+
+        for param in self.policy.parameters():
             if param.requires_grad:
                 unfrozen_count += 1
-        
+
         print(f"[Init] {frozen_count} params frozen, {unfrozen_count} trainable.")
         
         
@@ -116,9 +113,7 @@ class PPOFineTuner(pl.LightningModule):
         """
         Define the optimizer here so Lightning can track it.
         """
-        # We access the internal DDPM parameters just like you did in the algorithm
-        # Ensure we only optimize parameters that require grad (the freezing logic)
-        params_to_optimize = filter(lambda p: p.requires_grad, self.ddpm_model.ddpm.parameters())
+        params_to_optimize = filter(lambda p: p.requires_grad, self.policy.parameters())
         
         optimizer = torch.optim.Adam(
             params_to_optimize,
@@ -184,7 +179,7 @@ class PPOFineTuner(pl.LightningModule):
                 
                 print(f"[Validation] Generating molecules for {actual_batch_size} pockets...")
                 # We pass the validation batch through the collector
-                get_ligand_and_pocket_fn = self.ddpm_model.get_ligand_and_pocket
+                get_ligand_and_pocket_fn = self.policy.get_ligand_and_pocket
                 
                 rollout_data = self.ppo_algorithm.collector.collect(
                     pocket_batch=val_batch,
@@ -206,7 +201,7 @@ class PPOFineTuner(pl.LightningModule):
                     xh_lig,
                     global_lig_mask,
                     self.dataset_info,
-                    self.ddpm_model
+                    self.policy,
                 )
                 
                 print(f"[Validation] Successfully built {len(molecules)} valid RDKit molecules")
