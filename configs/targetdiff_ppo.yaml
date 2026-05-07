@@ -55,7 +55,7 @@ ppo_params:
   entropy_coef: 0.001
   max_grad_norm: 1.0
   gradient_accumulation_steps: 10
-  num_train_timesteps: 100        # train on the last 100 of 1000 reverse steps
+  num_train_timesteps: 500        # train on the last 500 of 1000 reverse steps
   num_mini_batches: 1
   target_kl: 0.03
   lr: 3.0e-5
@@ -64,15 +64,16 @@ ppo_params:
   top_k: False
   progressive_training: False
 
-  # TargetDiff UniTransformer layer names.
+  # TargetDiff UniTransformer layer names (9 layers total, indices 0-8).
   # We freeze the bulk of the network and fine-tune:
   #   - protein_atom_emb / ligand_atom_emb  (re-initialised, must train)
   #   - v_inference head                    (atom type output)
-  #   - last two transformer layers (7 and 8) for geometric adaptation
+  #   - last three transformer layers (6, 7, 8) = 1/3 of the 9-layer stack
   freeze_except:
     - 'protein_atom_emb'
     - 'ligand_atom_emb'
     - 'v_inference'
+    - 'refine_net.blocks.0.layers.6'
     - 'refine_net.blocks.0.layers.7'
     - 'refine_net.blocks.0.layers.8'
 
