@@ -20,7 +20,7 @@ import torch
 # ---------------------------------------------------------------------------
 # Make the vendored TargetDiff source importable
 # ---------------------------------------------------------------------------
-_TARGETDIFF_ROOT = Path(__file__).resolve().parents[3] / 'models' / 'targetdiff'
+_TARGETDIFF_ROOT = Path(__file__).resolve().parents[2] / 'models' / 'targetdiff'
 _TARGETDIFF_ROOT_STR = str(_TARGETDIFF_ROOT)
 if _TARGETDIFF_ROOT_STR not in sys.path:
     sys.path.insert(0, _TARGETDIFF_ROOT_STR)

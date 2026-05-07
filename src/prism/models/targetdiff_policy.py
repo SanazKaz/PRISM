@@ -47,7 +47,7 @@ from src.prism.models.base_policy import BaseDiffusionPolicy
 # We insert its root on sys.path so that `from models.xxx import ...` works.
 # ---------------------------------------------------------------------------
 _TARGETDIFF_ROOT = os.path.join(
-    os.path.dirname(__file__), '..', '..', '..', 'models', 'targetdiff'
+    os.path.dirname(__file__), '..', '..', 'models', 'targetdiff'
 )
 _TARGETDIFF_ROOT = os.path.normpath(_TARGETDIFF_ROOT)
 if _TARGETDIFF_ROOT not in sys.path:
