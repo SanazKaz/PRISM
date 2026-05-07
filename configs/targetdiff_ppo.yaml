@@ -20,12 +20,12 @@ model_type: targetdiff
 # key 'model' containing the state_dict).
 targetdiff_checkpoint: 'checkpoints/targetdiff_pretrained_diffusion.pt'
 
-# PRISM's CrossDocked data encodes pocket atoms as 20-dim amino-acid
-# one-hots (DiffSBDD convention).  TargetDiff's pretrained protein_atom_emb
+# PRISM's CrossDocked data encodes pocket atoms as 10-dim element-type
+# one-hots (C,N,O,S,B,Br,Cl,P,I,F).  TargetDiff's pretrained protein_atom_emb
 # was trained on 27-dim features, so that layer is re-initialised when
-# loading the checkpoint (strict=False handles this silently).
+# loading the checkpoint (shape mismatch keys are stripped before load).
 # All UniTransformer weights load correctly.
-targetdiff_protein_feat_dim: 20
+targetdiff_protein_feat_dim: 10
 targetdiff_ligand_atom_types: 13   # add_aromatic encoding, 13 classes
 
 # -----------------------------------------------------------------------

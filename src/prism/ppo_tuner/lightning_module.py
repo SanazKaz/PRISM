@@ -281,8 +281,11 @@ class PPOFineTuner(pl.LightningModule):
         Triggers validation at specific intervals.
         """
         if (self.current_epoch + 1) % self.config.eval_epochs == 0:
+            if self.ddpm_model is None:
+                print(f"[Validation] Skipping DiffSBDD validation — TargetDiff mode.")
+                return
             print(f"\n{'='*80}")
             print(f"Running validation at epoch {self.current_epoch + 1}")
             print(f"{'='*80}\n")
-            self._run_validation() # custom method to handle validation
+            self._run_validation()
     
