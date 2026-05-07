@@ -22,7 +22,7 @@ export PROJECT_ROOT="/data/stat-cadd/wolf7055/PRISM"
 SEEDS=(42 976 123 789)
 
 # Single warm-start model for all datasets
-WARM_START_CKPT="${PROJECT_ROOT}/checkpoints/crossdocked_fa_cond_temp.ckpt"
+resume_from_checkpoint="${PROJECT_ROOT}/Log_Results/serious/short_crossdocked_dataset_geometry_training/checkpoints/7275716/seed=42/epoch=09-reward=0.68.pt"
 
 # Where checkpoints should be saved
 CHECKPOINT_OUTPUT_DIR="${PROJECT_ROOT}/Log_Results"

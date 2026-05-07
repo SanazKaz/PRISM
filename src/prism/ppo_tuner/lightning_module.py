@@ -53,18 +53,29 @@ class PPOFineTuner(pl.LightningModule):
         )
         self.ddpm_model.to(device)
         
-        # Load pretrained weights if provided
         if warm_start_checkpoint is not None:
-            # print(f"Loading pretrained DDPM weights from: {warm_start_checkpoint}")
             checkpoint = torch.load(warm_start_checkpoint, map_location='cpu', weights_only=False)
-            # Extract state dict - handle both direct state_dict and lightning checkpoint formats
-            if 'state_dict' in checkpoint:
-                state_dict = checkpoint['state_dict']
-            else:
-                state_dict = checkpoint
+            state_dict = checkpoint.get('state_dict', checkpoint)
             
-            self.ddpm_model.load_state_dict(state_dict, strict=False)
-            # print("Successfully loaded pretrained weights!")
+            # Strip 'ddpm_model.' prefix if loading from a PPOFineTuner Lightning checkpoint
+            stripped = {}
+            for k, v in state_dict.items():
+                if k.startswith('ddpm_model.'):
+                    stripped[k[len('ddpm_model.'):]] = v
+                else:
+                    stripped[k] = v
+            
+            missing, unexpected = self.ddpm_model.load_state_dict(stripped, strict=False)
+            print(f"[Weights] Missing: {len(missing)} | Unexpected: {len(unexpected)}")
+            if missing:
+                print(f"[Weights] First 5 missing: {missing[:5]}")
+            
+            # Hard check — if most keys are missing, something is still wrong
+            assert len(missing) < 10, (
+                f"Weight loading looks wrong — {len(missing)} missing keys. "
+                f"Check checkpoint format. First missing: {missing[:3]}"
+            )
+            print("[Weights] Checkpoint loaded successfully.")
         
         self.dataset_info = self.ddpm_model.dataset_info.copy()
         self.dataset_info['datadir'] = self.config.datadir
