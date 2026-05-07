@@ -120,7 +120,20 @@ def load_targetdiff_policy(
             "Expected a dict with key 'model' or 'state_dict'."
         )
 
-    missing, unexpected = model.load_state_dict(state_dict, strict=False)
+    # Strip any key whose tensor shape won't match the current model.
+    # This happens for protein_atom_emb when the checkpoint was trained with a
+    # different protein feature dim (e.g. 27) than what we instantiated (e.g. 20).
+    # Those layers are intentionally re-initialised and trained from scratch.
+    filtered, skipped = {}, []
+    for k, v in state_dict.items():
+        if k in model.state_dict() and model.state_dict()[k].shape != v.shape:
+            skipped.append(k)
+        else:
+            filtered[k] = v
+    if skipped:
+        print(f"[TargetDiff] Shape-mismatched keys skipped (will re-init): {skipped}")
+
+    missing, unexpected = model.load_state_dict(filtered, strict=False)
     if missing:
         print(f"[TargetDiff] Missing keys ({len(missing)}): {missing[:5]}{'...' if len(missing) > 5 else ''}")
     if unexpected:
