@@ -47,15 +47,15 @@ num_sanity_val_steps: 0
 ppo_params:
   num_outer_epochs: 60
   num_inner_epochs: 2
-  n_steps: 64                     # molecules generated per rollout
-  ligand_chunk_size: 32           # reduce if OOM
-  ppo_batch_size: 64
+  n_steps: 10                     # molecules generated per rollout
+  ligand_chunk_size: 10           # reduce if OOM
+  ppo_batch_size: 10
   clip_range: 0.1
   value_loss_coef: 0.0
   entropy_coef: 0.001
   max_grad_norm: 1.0
   gradient_accumulation_steps: 10
-  num_train_timesteps: 100        # train on the last 100 of 1000 reverse steps
+  num_train_timesteps: 500        # train on the last 100 of 1000 reverse steps
   num_mini_batches: 1
   target_kl: 0.03
   lr: 3.0e-5
