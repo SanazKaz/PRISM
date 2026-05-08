@@ -82,7 +82,6 @@ class RolloutCollector:
                 pocket_mask_base = global_offset + (pocket_idx * samples_per_pocket)
                 ligand_chunk_size = self.config.ppo_params.ligand_chunk_size
                 
-                # --- FIX START: Identify the specific name for this pocket ---
                 current_name = names[pocket_idx]
                 
                 pocket_mask_idx = (pocket_data['mask'] == pocket_idx)                
@@ -104,8 +103,6 @@ class RolloutCollector:
                             'mask': torch.zeros_like(pocket_data['mask'][pocket_mask_idx])
                         }
 
-                        # --- FIX CONTINUE: Create corrected name list ---
-                        # We repeat the correct name for every sample in this chunk
                         chunk_names = [current_name] * samples_in_chunk
 
                         chunk_results = self._generate_and_evaluate_chunk(
@@ -115,7 +112,6 @@ class RolloutCollector:
                             chunk_names,
                             current_epoch
                         )
-                        # ------------------------------------------------
 
                         # Append results
                         rollout_data['molecules'][0].append(chunk_results['xh_lig'])
@@ -167,30 +163,7 @@ class RolloutCollector:
                 dtype=torch.long
             )
 
-        num_nodes_lig = num_nodes_lig.clamp(min=20)
-        num_nodes_lig = num_nodes_lig.to(self.device)
-
-        # TODO: Needs a more permenant fix. Size dist is not working the way it should.\
-        # Fix is to just use a fixed number of nodes for the ligand OR random sampling from a druglike distribution.
-        
-                
-        # num_nodes_lig_config = self.config.ppo_params.num_nodes_lig
-        # if num_nodes_lig_config is None:
-        #     # leads to instability for training with size distribution 
-        # # num_nodes_lig = self.policy_network.size_distribution.sample_conditional(
-        #     # n1=None, n2=single_pocket_data['size']
-        # # ).repeat(samples_in_chunk)
-        #     # num_nodes_lig = torch.randint(15, 40, (samples_in_chunk,), dtype=torch.long)
-        # # print(f"num_nodes_lig sampled from size distribution: {num_nodes_lig}")
-        #     num_nodes_lig = torch.randint(
-        #         num_nodes_lig_config - 5,
-        #         num_nodes_lig_config + 10,
-        #         (samples_in_chunk,),
-        #         dtype=torch.long
-        #     )
-        # num_nodes_lig = num_nodes_lig.clamp(min=20)
-        # num_nodes_lig = num_nodes_lig.to(self.device)
-        # # print(f"num_nodes_lig: {num_nodes_lig}")
+        num_nodes_lig = num_nodes_lig.clamp(min=20).to(self.device)
 
 
         local_mask_base = torch.arange(samples_in_chunk, device=self.device)
@@ -208,11 +181,7 @@ class RolloutCollector:
         global_lig_mask = sample_mask[lig_mask]
         global_pocket_mask = sample_mask[pocket_mask]
         
-        ######################### DEBUGGING #########################
         assert_same_ids("collect_rollouts/post_sample", global_lig_mask, global_pocket_mask)
-        # dbg_tensor("collect_rollouts/global_lig_mask", global_lig_mask)
-        # dbg_tensor("collect_rollouts/global_pocket_mask", global_pocket_mask)
-        ######################### DEBUGGING #########################
 
         rewards, component_scores = self.reward_function(
             xh_lig, 
