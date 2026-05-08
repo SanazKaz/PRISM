@@ -20,6 +20,7 @@ load_diffsbdd_weights(ddpm_module, checkpoint_path)
 """
 
 import torch
+from argparse import Namespace
 from pathlib import Path
 
 from src.models.diffsbdd.lightning_modules import LigandPocketDDPM
@@ -246,24 +247,31 @@ def build_diffsbdd_policy(config, device, node_histogram, warm_start_checkpoint)
     # config.model is optional — standard CrossDocked runs omit it entirely.
     model_cfg = getattr(config, 'model', None)
 
+    # --- lr: LigandPocketDDPM requires lr even though PRISM replaces its optimizer.
+    # Use the PPO learning rate as a sensible stand-in.
+    if 'lr' not in ddpm_config:
+        ddpm_config['lr'] = config.ppo.lr
+
     # --- EGNN architecture ---
     # Merge CrossDocked defaults with any per-config overrides.  The override
     # dict is empty for standard configs, so defaults pass through unchanged.
+    # LigandPocketDDPM type-hints egnn_params as Namespace, so convert.
     if 'egnn_params' not in ddpm_config:
         override = _ns_to_dict(getattr(model_cfg, 'egnn_params', None))
-        ddpm_config['egnn_params'] = {**_DIFFSBDD_EGNN_DEFAULTS, **override}
+        ddpm_config['egnn_params'] = Namespace(**{**_DIFFSBDD_EGNN_DEFAULTS, **override})
 
     # --- Diffusion schedule ---
     # config.model.total_timesteps is the single source of truth for the chain
     # length; it drives both diffusion_steps here and the rollout collector.
+    # LigandPocketDDPM accesses diffusion_params as attributes, so use Namespace.
     if 'diffusion_params' not in ddpm_config:
         total_ts = getattr(model_cfg, 'total_timesteps', 500) if model_cfg else 500
         override = _ns_to_dict(getattr(model_cfg, 'diffusion_params', None))
-        ddpm_config['diffusion_params'] = {
+        ddpm_config['diffusion_params'] = Namespace(**{
             'diffusion_steps': total_ts,
             **_DIFFSBDD_DIFFUSION_DEFAULTS,
             **override,   # e.g. BindingMOAD changes diffusion_noise_precision
-        }
+        })
 
     # --- Training-mode flags ---
     # Only inject a default if the key is entirely absent from the config
