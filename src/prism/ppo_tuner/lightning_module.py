@@ -83,11 +83,47 @@ class PPOFineTuner(pl.LightningModule):
         )
         ddpm_module.to(device)
         if warm_start_checkpoint is not None:
-            ckpt = torch.load(warm_start_checkpoint, map_location='cpu', weights_only=False)
-            ddpm_module.load_state_dict(ckpt.get('state_dict', ckpt), strict=False)
+            self._load_diffsbdd_weights(ddpm_module, warm_start_checkpoint)
         policy = DiffSBDDPolicy(ddpm_module)
         dataset_info = ddpm_module.dataset_info.copy()
         return policy, ddpm_module, dataset_info
+
+    def _load_diffsbdd_weights(self, ddpm_module, checkpoint_path):
+        """
+        Load DiffSBDD model weights from any checkpoint format:
+          - PRISM .pt  : direct LigandPocketDDPM.state_dict() (no prefix)
+          - PRISM .ckpt: Lightning checkpoint; keys are prefixed with
+                         'ddpm_model.' or 'policy._ddpm_module.'
+          - DiffSBDD .pt: bare state dict (no prefix)
+
+        Only model weights are loaded — optimizer state is intentionally
+        ignored so a fresh optimizer is built for the new freeze config.
+        """
+        raw = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
+
+        if isinstance(raw, dict) and 'state_dict' in raw:
+            # Lightning .ckpt — find and strip the module prefix
+            full_sd = raw['state_dict']
+            for prefix in ('ddpm_model.', 'policy._ddpm_module.'):
+                stripped = {k[len(prefix):]: v
+                            for k, v in full_sd.items() if k.startswith(prefix)}
+                if stripped:
+                    missing, unexpected = ddpm_module.load_state_dict(stripped, strict=False)
+                    print(f"[WarmStart] Loaded from Lightning ckpt "
+                          f"(prefix='{prefix}', {len(stripped)} keys, "
+                          f"{len(missing)} missing, {len(unexpected)} unexpected)")
+                    return
+            # Fallback: no recognised prefix — try raw (e.g. already-stripped dict)
+            missing, unexpected = ddpm_module.load_state_dict(full_sd, strict=False)
+            print(f"[WarmStart] Loaded from state_dict (no prefix strip, "
+                  f"{len(missing)} missing, {len(unexpected)} unexpected)")
+        else:
+            # Direct .pt — either PRISM-saved or original DiffSBDD
+            state_dict = raw if isinstance(raw, dict) else {}
+            missing, unexpected = ddpm_module.load_state_dict(state_dict, strict=False)
+            print(f"[WarmStart] Loaded from .pt "
+                  f"({len(state_dict)} keys, {len(missing)} missing, "
+                  f"{len(unexpected)} unexpected)")
 
     def _build_targetdiff_policy(self, device, warm_start_checkpoint):
         checkpoint_path = getattr(self.config, 'targetdiff_checkpoint', warm_start_checkpoint)
