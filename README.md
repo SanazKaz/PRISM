@@ -186,40 +186,37 @@ Set `datadir` in your training config to the `03_final_dataset/` path.
 
 ## Generating Ligands
 
-We provide a standalone generation script that decouples inference from the training logic. This script automatically detects and supports both:
-
-- **Lightning Checkpoints (`.ckpt`)**: Useful for evaluating models directly after training.
-- **Clean Weights (`.pt`)**: Lightweight files containing only the model state dictionary (no optimizer/scheduler states).
+Two generation scripts are provided — `scripts/generate_diffsbdd.py` for DiffSBDD checkpoints and `scripts/generate_targetdiff.py` for TargetDiff checkpoints. Both accept the same required arguments and work with either the original pre-trained weights or a PRISM fine-tuned `.ckpt`.
 
 ### 1. Get Pre-trained Models
 
-Obtain the original diffusion model checkpoint from DiffSBDD:
+Obtain the original DiffSBDD checkpoint:
 
 ```bash
 wget -P checkpoints/ https://zenodo.org/record/8183747/files/crossdocked_fullatom_cond.ckpt
 ```
 
-Obtain our fine-tuned PRISM checkpoint:
-
-```
-# Zenodo link — coming soon
-```
+PRISM fine-tuned checkpoints: coming soon.
 
 ### 2. Generate Molecules
 
 ```bash
-python scripts/generate_ligands.py \
+# DiffSBDD
+python -m scripts.generate_diffsbdd \
     checkpoints/crossdocked_fullatom_cond.ckpt \
     --config configs/ppo_config.yaml \
     --pdbfile data/my_dataset/02_preprocessed/pocket_files/1cil_ETS_C_263_pocket.pdb \
-    --outfile results/generated_ligands.sdf \
-    --ref_ligand data/my_dataset/02_preprocessed/sdf_files/1cil_ETS_C_263.sdf \
+    --outfile results/generated.sdf \
     --n_samples 100 \
     --batch_size 25 \
-    --timesteps 500 \
-    --num_nodes_lig 25 \
-    --sanitize \
-    --relax
+    --sanitize
+
+# TargetDiff (identical required args, different script)
+python -m scripts.generate_targetdiff \
+    checkpoints/targetdiff.pt \
+    --config configs/targetdiff_ppo.yaml \
+    --pdbfile data/my_dataset/02_preprocessed/pocket_files/1cil_ETS_C_263_pocket.pdb \
+    --outfile results/generated.sdf
 ```
 
 ---
