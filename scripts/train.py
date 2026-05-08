@@ -170,7 +170,7 @@ def main(args):
     )
 
     trainer = pl.Trainer(
-        max_epochs=config.ppo_params.num_outer_epochs,
+        max_epochs=config.ppo.num_outer_epochs,
         accelerator='gpu',
         devices=config.gpus,
         callbacks=[checkpoint_callback],

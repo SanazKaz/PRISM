@@ -50,7 +50,7 @@ class RolloutCollector:
         # Determine Sampling Strategy
         # can add in a eval num steps instead but okay for now.
         
-        n_steps = self.config.ppo_params.n_steps
+        n_steps = self.config.ppo.n_steps
         
         samples_per_rank = math.ceil(n_steps / world_size)
         samples_per_pocket = math.ceil(samples_per_rank / max(1, local_batch_size))
@@ -80,7 +80,7 @@ class RolloutCollector:
 
             for pocket_idx, samples_to_generate in pocket_sample_counts:
                 pocket_mask_base = global_offset + (pocket_idx * samples_per_pocket)
-                ligand_chunk_size = self.config.ppo_params.ligand_chunk_size
+                ligand_chunk_size = self.config.ppo.ligand_chunk_size
                 
                 current_name = names[pocket_idx]
                 
@@ -151,7 +151,7 @@ class RolloutCollector:
                 single_pocket_data[key] = tensor.to(self.device) 
                 
 
-        num_nodes_lig_config = self.config.ppo_params.num_nodes_lig
+        num_nodes_lig_config = self.config.ppo.num_nodes_lig
 
         if num_nodes_lig_config is None:
             num_nodes_lig = torch.randint(15, 40, (samples_in_chunk,), dtype=torch.long)
@@ -236,7 +236,7 @@ class RolloutCollector:
             seq_length_minus1 = rollout_data['z_states'].shape[1] - 1
 
             # Determine timesteps
-            diffusion_steps_config = self.config.diffusion_params.diffusion_steps
+            diffusion_steps_config = self.config.model.total_timesteps
             
             if isinstance(diffusion_steps_config, int):
                 diffusion_steps = diffusion_steps_config

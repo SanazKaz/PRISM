@@ -35,7 +35,7 @@ def compute_ppo_loss(policy_network, minibatch, timestep_idx, config):
     # dbg_tensor("compute_loss/advantages", minibatch['advantages'])
                         
     # Forward pass through the policy network to get new log probabilities
-    new_log_probs = _get_log_probs(policy_network, timestep_batch, config.diffusion_params.diffusion_steps)
+    new_log_probs = _get_log_probs(policy_network, timestep_batch, config.model.total_timesteps)
     
     entropy = (-new_log_probs).mean()
     
@@ -43,7 +43,7 @@ def compute_ppo_loss(policy_network, minibatch, timestep_idx, config):
     advantages = minibatch['advantages']
     ratio = torch.exp(new_log_probs - old_log_probs)
     
-    clip_range = config.ppo_params.clip_range
+    clip_range = config.ppo.clip_range
     clipfrac = (torch.abs(ratio - 1.0) > clip_range).float().mean()
     
     surr1 = advantages * ratio
@@ -52,7 +52,7 @@ def compute_ppo_loss(policy_network, minibatch, timestep_idx, config):
     policy_loss = -torch.min(surr1, surr2).mean()
     
     # Add entropy bonus
-    policy_loss -= config.ppo_params.entropy_coef * entropy
+    policy_loss -= config.ppo.entropy_coef * entropy
     # print(f"policy_loss: {policy_loss.shape}")
     
     # --- KL Divergence for logging/diagnostics ---

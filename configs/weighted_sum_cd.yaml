@@ -1,63 +1,52 @@
 run_identifier: 'aromatic_SIZED_weighted_sum_multiobjective_CD'
 logdir: 'Log_Results'
 wandb_params:
-  mode: 'offline' # seeing if it will reduce overhead 
+  mode: 'offline'
   entity: 'sanazkazeminia97'
   project: 'Crossdocked_Dataset_MULTI_REWARD_paper'
-dataset: 'crossdock' #(refers to the model's dataset_info_key)
+dataset: 'crossdock'
 datadir: '/data/stat-cadd/wolf7055/PRISM/data/cross_dock/processed_crossdock_noH_full_temp'
 enable_progress_bar: False
 num_sanity_val_steps: 0
-batch_size: 64 # number of pockets to sample for (60)
-lr: 1.0e-6 
-num_workers: 4 # suggested by terminal for better parallelisations ???
+batch_size: 64
+lr: 1.0e-6
+num_workers: 4
 gpus: 1
-n_epochs: 1 # lightnings epoch which defines outer epochs using train_dataset size. Leave as 1
+n_epochs: 1
 
-mode: 'pocket_conditioning'
-pocket_representation: 'full-atom'
+# Layers to fine-tune; all others are frozen.
+# DiffSBDD layer names follow the pattern 'e_block_N' (0-indexed, 5 total).
+freeze_except: ['e_block_3', 'e_block_4']
 
-augment_noise: 0
-augment_rotation: False
-clip_grad: True
-auxiliary_loss: False
-loss_params:
-  max_weight: 0.001
-  schedule: 'linear'
-  clamp_lj: 3.0
+model:
+  total_timesteps: 500   # full DiffSBDD diffusion chain length
 
-ppo_params:
-  num_outer_epochs: 60          # num of PPO cycles (outer epochs)
-  num_inner_epochs: 2            # Updates per rollout (inner epochs)
-  n_steps: 128                    # Rollout length (mols generated)
-  ligand_chunk_size: 64         # GPU Memory management - more chunking means less memory usage but slower training
-  ppo_batch_size: 128             # Size of each PPO update batch
-  clip_range: 0.1                # PPO clipping parameter
-  value_loss_coef: 0.0           # Weight for value loss
-  entropy_coef: 0.001            # Weight for entropy bonus
-  max_grad_norm: 1.0             # Gradient clipping threshold
-  gradient_accumulation_steps: 42   # accumulate over train_timesteps
-  num_train_timesteps: 300 #increase from 150
-  num_mini_batches: 1            # Mini-batches per update
-  target_kl: 0.03                # Early stopping KL divergence
-  lr: 3.0e-5                     # Optimizer learning rate (0.001)
+ppo:
+  num_outer_epochs: 60
+  num_inner_epochs: 2
+  n_steps: 128
+  ligand_chunk_size: 64
+  batch_size: 128
+  clip_range: 0.1
+  value_loss_coef: 0.0
+  entropy_coef: 0.001
+  max_grad_norm: 1.0
+  gradient_accumulation_steps: 42
+  train_timesteps: 300
+  num_mini_batches: 1
+  target_kl: 0.03
+  lr: 3.0e-5
   mol_timeout_sec: 60
-  num_nodes_lig: 27              # fixed number of nodes for ligand
+  num_nodes_lig: 27
   top_k: False
-  # backward progressive training remove later
   progressive_training: True
   start_timesteps: 50
   end_timesteps: 350
   progressive_training_epochs: 100
-  freeze_except: ['e_block_3','e_block_4'] # e_block_3 and e_block_4 are the last two layers of the EGNN
-
-
 
 reward_params:
   target_name: 'BRD4_BD1'
-  aggregation: 'weighted_sum' # 'weighted_sum' or 'product'
-  # Map the reward name to its weight
-  # To disable a reward, simply remove it from this list or set weight to 0
+  aggregation: 'weighted_sum'
   rewards:
     qed: 0.0
     sa_score: 0.0
@@ -82,32 +71,6 @@ reward_params:
     multi_features: 'src/prism/reward/scoring/reward_data/ampc_hotspot_global_centered_eps0.5_min10_aromatic5.pkl'
     silly_walks: 'src/prism/reward/scoring/reward_data/chembl_drugs.smi'
     property_2d: 'src/prism/reward/scoring/reward_data/propeties_ref.json'
-    
-    
-#  (from diffsbdd original config)
-egnn_params:
-  device: 'cuda'
-  edge_cutoff_ligand: null
-  edge_cutoff_pocket: 5.0
-  edge_cutoff_interaction: 5.0
-  reflection_equivariant: False
-  joint_nf: 32
-  hidden_nf: 128 # change back to 256
-  n_layers: 5
-  attention: True
-  tanh: True
-  norm_constant: 1
-  inv_sublayers: 1
-  sin_embedding: False
-  aggregation_method: 'sum'
-  normalization_factor: 100
-
-diffusion_params:
-  diffusion_steps: 500
-  diffusion_noise_schedule: 'polynomial_2'
-  diffusion_noise_precision: 5.0e-4
-  diffusion_loss_type: 'l2'
-  normalize_factors: [1, 4]
 
 eval_epochs: 10
 visualize_sample_epoch: 99999

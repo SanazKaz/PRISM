@@ -82,7 +82,7 @@ class RolloutBuffer:
         self.advantages = torch.clamp(self.advantages, min=-3.0, max=3.0)
         
         # 4. Optional Gating (Keep your existing logic)
-        if self.config.ppo_params.top_k:
+        if self.config.ppo.top_k:
             self._apply_top_k_gating()
 
         # print(f"[Buffer] Advantages computed. Mean: {self.advantages.mean():.3f}, Std: {self.advantages.std():.3f}")
@@ -155,7 +155,7 @@ class RolloutBuffer:
             raise ValueError("Must load data and compute advantages before creating minibatches.")
             
         num_molecules = self.rewards.shape[0]
-        ppo_batch_size = self.config.ppo_params.ppo_batch_size
+        ppo_batch_size = self.config.ppo.batch_size
         
         xh_lig_full, xh_pocket_full = self.molecules
         lig_mask_full, pocket_mask_full = self.masks

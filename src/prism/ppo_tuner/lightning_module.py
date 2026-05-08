@@ -19,6 +19,45 @@ from val_analysis.smina_docking import SminaDocking
 from val_analysis.metrics import MoleculeMetrics
 
 
+# ---------------------------------------------------------------------------
+# DiffSBDD architecture defaults (CrossDocked checkpoint).
+# BindingMOAD and other non-standard checkpoints override these via
+# config.model.egnn_params / config.model.diffusion_params.
+# ---------------------------------------------------------------------------
+_DIFFSBDD_EGNN_DEFAULTS = {
+    'device': 'cuda',
+    'edge_cutoff_ligand': None,
+    'edge_cutoff_pocket': 5.0,
+    'edge_cutoff_interaction': 5.0,
+    'reflection_equivariant': False,
+    'joint_nf': 32,
+    'hidden_nf': 128,
+    'n_layers': 5,
+    'attention': True,
+    'tanh': True,
+    'norm_constant': 1,
+    'inv_sublayers': 1,
+    'sin_embedding': False,
+    'aggregation_method': 'sum',
+    'normalization_factor': 100,
+}
+_DIFFSBDD_DIFFUSION_DEFAULTS = {
+    'diffusion_noise_schedule': 'polynomial_2',
+    'diffusion_noise_precision': 5.0e-4,
+    'diffusion_loss_type': 'l2',
+    'normalize_factors': [1, 4],
+}
+_DIFFSBDD_TRAINING_DEFAULTS = {
+    'mode': 'pocket_conditioning',
+    'pocket_representation': 'full-atom',
+    'augment_noise': 0,
+    'augment_rotation': False,
+    'clip_grad': True,
+    'auxiliary_loss': False,
+    'loss_params': {'max_weight': 0.001, 'schedule': 'linear', 'clamp_lj': 3.0},
+}
+
+
 
 class PPOFineTuner(pl.LightningModule):
     """
@@ -70,12 +109,46 @@ class PPOFineTuner(pl.LightningModule):
     # ------------------------------------------------------------------
 
     def _build_diffsbdd_policy(self, device, node_histogram, warm_start_checkpoint):
-        ddpm_config = {k: v for k, v in vars(self.config).items()
-                       if k not in ['ppo_params', 'enable_progress_bar',
-                                    'num_sanity_val_steps', 'wandb_params',
-                                    'gpus', 'n_epochs', 'logdir', 'fp16',
-                                    'run_identifier', 'reward_params',
-                                    'docking_params', 'model_type']}
+        _EXCLUDE = {
+            'ppo', 'ppo_params',  # ppo_params kept for legacy compat
+            'enable_progress_bar', 'num_sanity_val_steps', 'wandb_params',
+            'gpus', 'n_epochs', 'logdir', 'fp16', 'run_identifier',
+            'reward_params', 'docking_params', 'model_type',
+            'freeze_except', 'model',
+        }
+        ddpm_config = {k: v for k, v in vars(self.config).items() if k not in _EXCLUDE}
+
+        # Resolve model: section (optional – used by BindingMOAD and similar
+        # non-standard checkpoints to override architecture defaults).
+        model_cfg = getattr(self.config, 'model', None)
+
+        def _ns_to_dict(val):
+            """Convert a Namespace or dict-like to a plain dict."""
+            if val is None:
+                return {}
+            return vars(val) if hasattr(val, '__dict__') else dict(val)
+
+        # Inject egnn_params (default CrossDocked; overrideable via model.egnn_params)
+        if 'egnn_params' not in ddpm_config:
+            override = _ns_to_dict(getattr(model_cfg, 'egnn_params', None))
+            ddpm_config['egnn_params'] = {**_DIFFSBDD_EGNN_DEFAULTS, **override}
+
+        # Inject diffusion_params (default CrossDocked; total_timesteps drives
+        # diffusion_steps, overrideable via model.diffusion_params)
+        if 'diffusion_params' not in ddpm_config:
+            total_ts = getattr(model_cfg, 'total_timesteps', 500) if model_cfg else 500
+            override = _ns_to_dict(getattr(model_cfg, 'diffusion_params', None))
+            ddpm_config['diffusion_params'] = {
+                'diffusion_steps': total_ts,
+                **_DIFFSBDD_DIFFUSION_DEFAULTS,
+                **override,
+            }
+
+        # Inject training-mode defaults (mode, pocket_representation, etc.)
+        for key, val in _DIFFSBDD_TRAINING_DEFAULTS.items():
+            if key not in ddpm_config:
+                ddpm_config[key] = val
+
         ddpm_module = LigandPocketDDPM(
             outdir=Path(self.config.logdir),
             node_histogram=node_histogram,
@@ -126,17 +199,27 @@ class PPOFineTuner(pl.LightningModule):
                   f"{len(unexpected)} unexpected)")
 
     def _build_targetdiff_policy(self, device, warm_start_checkpoint):
-        checkpoint_path = getattr(self.config, 'targetdiff_checkpoint', warm_start_checkpoint)
+        model_cfg = getattr(self.config, 'model', None)
+        # Support both new (config.model.checkpoint) and legacy (config.targetdiff_checkpoint)
+        checkpoint_path = (
+            getattr(model_cfg, 'checkpoint', None) if model_cfg else None
+        ) or getattr(self.config, 'targetdiff_checkpoint', None) or warm_start_checkpoint
         if checkpoint_path is None:
             raise ValueError(
-                "TargetDiff requires a checkpoint. Set config.targetdiff_checkpoint "
+                "TargetDiff requires a checkpoint. Set config.model.checkpoint "
                 "or pass warm_start_checkpoint to PPOFineTuner."
             )
+        protein_feat_dim = (
+            getattr(model_cfg, 'protein_feat_dim', None) if model_cfg else None
+        ) or getattr(self.config, 'targetdiff_protein_feat_dim', 27)
+        ligand_atom_types = (
+            getattr(model_cfg, 'ligand_atom_types', None) if model_cfg else None
+        ) or getattr(self.config, 'targetdiff_ligand_atom_types', 13)
         policy = load_targetdiff_policy(
             checkpoint_path=checkpoint_path,
             device=device,
-            protein_atom_feature_dim=getattr(self.config, 'targetdiff_protein_feat_dim', 27),
-            ligand_atom_feature_dim=getattr(self.config, 'targetdiff_ligand_atom_types', 13),
+            protein_atom_feature_dim=protein_feat_dim,
+            ligand_atom_feature_dim=ligand_atom_types,
         )
         # TargetDiff uses CrossDocked atom type set (add_aromatic, 13 classes).
         # We reuse the DiffSBDD dataset_info structure for reward scoring;
@@ -161,7 +244,7 @@ class PPOFineTuner(pl.LightningModule):
         frozen_count = 0
         unfrozen_count = 0
 
-        trainable_layers = self.config.ppo_params.freeze_except
+        trainable_layers = self.config.freeze_except
         print(f"[Init] Trainable blocks: {trainable_layers}")
 
         for name, param in self.policy.named_parameters():
@@ -187,7 +270,7 @@ class PPOFineTuner(pl.LightningModule):
         
         optimizer = torch.optim.Adam(
             params_to_optimize,
-            lr=self.config.ppo_params.lr,
+            lr=self.config.ppo.lr,
             eps=1e-8,
             weight_decay=1.0e-12,
             betas=(0.9, 0.999)

@@ -121,7 +121,7 @@ class PPOAlgorithm:
         }
         
         # --- 2.6. DETERMINE CURRENT K (from original code) ---
-        current_k = self.config.ppo_params.num_train_timesteps   # Default: 64 or whatever is in config
+        current_k = self.config.ppo.train_timesteps
         
         
         # --- 2.7. SLICE TO LAST K TIMESTEPS (from original: rollout_data[key] = rollout_data[key][:, -k:]) ---
@@ -160,13 +160,13 @@ class PPOAlgorithm:
         total_loss, total_kl, total_clipfrac, total_entropy = 0, 0, 0, 0
         update_count = 0
 
-        num_inner_epochs = self.config.ppo_params.num_inner_epochs
+        num_inner_epochs = self.config.ppo.num_inner_epochs
         for inner_epoch in range(num_inner_epochs):
             reset_seen_mb_ids() # reset the seen molecule ids for each inner epoch
             
             print(f"Outer epoch: {current_epoch}, Inner epoch: {inner_epoch}")
             
-            step_every = self.config.ppo_params.gradient_accumulation_steps
+            step_every = self.config.ppo.gradient_accumulation_steps
             scale = step_every  # matching original code
             
             accumulation_count = 0
@@ -195,7 +195,7 @@ class PPOAlgorithm:
                     if accumulation_count % step_every == 0:
                         torch.nn.utils.clip_grad_norm_(
                             self.policy_network.parameters(),
-                            self.config.ppo_params.max_grad_norm,
+                            self.config.ppo.max_grad_norm,
                         )
                         optimizer.step()
                         optimizer.zero_grad(set_to_none=True)
@@ -210,8 +210,8 @@ class PPOAlgorithm:
             # After the loop, flush leftovers if any
             if accumulation_count % step_every != 0:
                 torch.nn.utils.clip_grad_norm_(
-                    self.policy_network.ddpm.parameters(),
-                    self.config.ppo_params.max_grad_norm
+                    self.policy_network.parameters(),
+                    self.config.ppo.max_grad_norm
                 )
                 optimizer.step()
                 optimizer.zero_grad(set_to_none=True)
