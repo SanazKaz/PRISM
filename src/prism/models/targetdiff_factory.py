@@ -109,11 +109,20 @@ def load_targetdiff_policy(
     # Handle the three common checkpoint formats
     if isinstance(raw, dict):
         if 'model' in raw:
-            state_dict = raw['model']           # TargetDiff native format
+            state_dict = raw['model']       # TargetDiff native .pt format
         elif 'state_dict' in raw:
-            state_dict = raw['state_dict']      # PyTorch Lightning format
+            # Lightning .ckpt — PRISM stores TargetDiff under policy._model.*
+            # Strip that prefix so keys match ScorePosNet3D directly.
+            full_sd = raw['state_dict']
+            prefix = 'policy._model.'
+            stripped = {k[len(prefix):]: v
+                        for k, v in full_sd.items() if k.startswith(prefix)}
+            state_dict = stripped if stripped else full_sd
+            if stripped:
+                print(f"[TargetDiff] Loaded from Lightning ckpt "
+                      f"(stripped '{prefix}', {len(stripped)} keys)")
         else:
-            state_dict = raw                    # bare state_dict
+            state_dict = raw                # bare state_dict
     else:
         raise ValueError(
             f"Unrecognised checkpoint format in {checkpoint_path}. "
