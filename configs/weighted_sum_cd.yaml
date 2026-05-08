@@ -9,7 +9,6 @@ datadir: '/data/stat-cadd/wolf7055/PRISM/data/cross_dock/processed_crossdock_noH
 enable_progress_bar: False
 num_sanity_val_steps: 0
 batch_size: 64
-lr: 1.0e-6
 num_workers: 4
 gpus: 1
 n_epochs: 1
@@ -28,21 +27,13 @@ ppo:
   ligand_chunk_size: 64
   batch_size: 128
   clip_range: 0.1
-  value_loss_coef: 0.0
   entropy_coef: 0.001
   max_grad_norm: 1.0
   gradient_accumulation_steps: 42
   train_timesteps: 300
-  num_mini_batches: 1
   target_kl: 0.03
   lr: 3.0e-5
-  mol_timeout_sec: 60
   num_nodes_lig: 27
-  top_k: False
-  progressive_training: True
-  start_timesteps: 50
-  end_timesteps: 350
-  progressive_training_epochs: 100
 
 reward_params:
   target_name: 'BRD4_BD1'

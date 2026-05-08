@@ -63,18 +63,13 @@ ppo:
   ligand_chunk_size: 32           # reduce if OOM
   batch_size: 64
   clip_range: 0.1
-  value_loss_coef: 0.0
   entropy_coef: 0.001
   max_grad_norm: 1.0
   gradient_accumulation_steps: 10
   train_timesteps: 500            # PPO trains on the last 500 of 1000 reverse steps
-  num_mini_batches: 1
   target_kl: 0.03
   lr: 3.0e-5
-  mol_timeout_sec: 60
   num_nodes_lig: 25
-  top_k: False
-  progressive_training: False
 
 # -----------------------------------------------------------------------
 # Rewards  (same interface as DiffSBDD runs)
