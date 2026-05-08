@@ -31,16 +31,7 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 # Import our new, clean components from the src library
 from src.prism.data_modules.lightning_datamodule import LigandPocketDataModule
 from src.prism.ppo_tuner.lightning_module import PPOFineTuner
-
-def dict_to_namespace(d):
-    """ Recursively converts a dictionary to a namespace. """
-    namespace = Namespace()
-    for key, value in d.items():
-        if isinstance(value, dict):
-            setattr(namespace, key, dict_to_namespace(value))
-        else:
-            setattr(namespace, key, value)
-    return namespace
+from src.prism.utils import dict_to_namespace
 
 
 class PTModelCheckpoint(ModelCheckpoint):

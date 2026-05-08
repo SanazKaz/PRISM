@@ -2,6 +2,7 @@ import torch
 import numpy as np
 import os
 import functools
+from argparse import Namespace
 from pathlib import Path
 from typing import Tuple, Optional, List, Dict
 from Bio.PDB import PDBParser
@@ -9,6 +10,19 @@ from rdkit import Chem
 from rdkit.Chem import SDMolSupplier
 # --- IMPORTS FOR MOLECULE BUILDING ---
 from src.models.diffsbdd.analysis.molecule_builder import build_molecule, process_molecule
+
+
+def dict_to_namespace(d: dict) -> Namespace:
+    """Recursively convert a nested dict (e.g. from yaml.safe_load) to a Namespace.
+
+    This lets you write config.ppo.lr instead of config["ppo"]["lr"] everywhere
+    in the codebase. A single shared function avoids the RecursiveNamespace class
+    that the old generation scripts each defined for themselves.
+    """
+    ns = Namespace()
+    for key, value in d.items():
+        setattr(ns, key, dict_to_namespace(value) if isinstance(value, dict) else value)
+    return ns
 
 @functools.lru_cache(maxsize=4096)
 def find_gt_files(sample_name: str, root_dir: str) -> Tuple[Path, Path]:
