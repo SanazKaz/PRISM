@@ -22,9 +22,9 @@ freeze_except:
   - 'protein_atom_emb'
   - 'ligand_atom_emb'
   - 'v_inference'
-  - 'refine_net.blocks.0.layers.6'
-  - 'refine_net.blocks.0.layers.7'
-  - 'refine_net.blocks.0.layers.8'
+  - 'refine_net.base_block.6'
+  - 'refine_net.base_block.7'
+  - 'refine_net.base_block.8'
 
 model:
   # Path to the TargetDiff pretrained checkpoint (.pt, native format with
