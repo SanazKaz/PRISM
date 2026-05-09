@@ -143,6 +143,17 @@ def main():
              "By default, only one instance per pair is kept.",
     )
 
+    # --- Model target ---
+    parser.add_argument(
+        "--model", choices=["diffsbdd", "targetdiff"], default="diffsbdd",
+        help="Featurisation format for the final .npz dataset. "
+             "'diffsbdd' (default): 10-dim element one-hots for the pocket. "
+             "'targetdiff': 27-dim features (6 elements + 20 AA types + backbone flag) "
+             "matching TargetDiff's FeaturizeProteinAtom exactly. "
+             "Output goes to 03_final_dataset/ (diffsbdd) or "
+             "03_final_dataset_targetdiff/ (targetdiff).",
+    )
+
     args = parser.parse_args()
 
     # --- Validate arguments ---
@@ -165,9 +176,12 @@ def main():
     else:
         base_dir = Path(f"data/{job_name}_data")
 
-    pdb_dir       = Path(args.pdb_dir) if args.skip_fetch else base_dir / "01_raw_pdbs"
+    pdb_dir        = Path(args.pdb_dir) if args.skip_fetch else base_dir / "01_raw_pdbs"
     preprocess_dir = base_dir / "02_preprocessed"
-    final_dir      = base_dir / "03_final_dataset"
+    final_dir      = base_dir / (
+        "03_final_dataset_targetdiff" if args.model == "targetdiff"
+        else "03_final_dataset"
+    )
 
     base_dir.mkdir(exist_ok=True, parents=True)
 
@@ -239,6 +253,7 @@ def main():
             dataset_name=job_name,
             dataset_info_key=args.dataset_info_key,
             dist_cutoff=args.dataset_distance,
+            model=args.model,
         )
         create_dataset.main(dataset_args)
         print("[STEP 3/3] Dataset creation complete.")

@@ -324,10 +324,12 @@ def build_targetdiff_policy(config, device, warm_start_checkpoint):
     """
     model_cfg = getattr(config, 'model', None)
 
-    # Checkpoint path: new config key takes priority, then legacy key, then CLI arg.
+    # CLI arg takes priority over yaml config (consistent with --datadir / --logdir overrides).
     checkpoint_path = (
-        getattr(model_cfg, 'checkpoint', None) if model_cfg else None
-    ) or getattr(config, 'targetdiff_checkpoint', None) or warm_start_checkpoint
+        warm_start_checkpoint
+        or (getattr(model_cfg, 'checkpoint', None) if model_cfg else None)
+        or getattr(config, 'targetdiff_checkpoint', None)
+    )
 
     if checkpoint_path is None:
         raise ValueError(

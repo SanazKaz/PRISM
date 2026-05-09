@@ -32,6 +32,22 @@ from Bio.PDB.Polypeptide import protein_letters_3to1_extended, is_aa
 
 from rdkit import Chem
 
+# ---------------------------------------------------------------------------
+# TargetDiff protein featurisation constants
+# Matches FeaturizeProteinAtom in src/models/targetdiff/utils/transforms.py
+# exactly — do not change without updating the model config.
+# ---------------------------------------------------------------------------
+_TD_ELEMENT_TO_ATOMIC_NUM = {'H': 1, 'C': 6, 'N': 7, 'O': 8, 'S': 16, 'SE': 34}
+_TD_ATOMIC_NUMS = [1, 6, 7, 8, 16, 34]   # 6-dim element one-hot
+_TD_AA_ORDER = [
+    'ALA', 'CYS', 'ASP', 'GLU', 'PHE', 'GLY', 'HIS',
+    'ILE', 'LYS', 'LEU', 'MET', 'ASN', 'PRO', 'GLN',
+    'ARG', 'SER', 'THR', 'VAL', 'TRP', 'TYR',
+]                                          # 20-dim AA one-hot
+_TD_AA_INDEX = {aa: i for i, aa in enumerate(_TD_AA_ORDER)}
+_TD_BACKBONE = {'CA', 'C', 'N', 'O'}      # 1-dim backbone flag
+# Total: 6 + 20 + 1 = 27 dims
+
 project_root = os.getcwd()
 diffsbdd_path = os.path.join(project_root, 'src', 'models', 'diffsbdd')
 if diffsbdd_path not in sys.path:
@@ -281,11 +297,95 @@ def saveall(filename, pdb_and_mol_ids, lig_coords, lig_one_hot, lig_mask,
     return True
 
 
+def _targetdiff_atom_features(atom_element: str, res_name: str, atom_name: str) -> np.ndarray:
+    """27-dim feature vector matching TargetDiff's FeaturizeProteinAtom exactly."""
+    atomic_num = _TD_ELEMENT_TO_ATOMIC_NUM.get(atom_element.upper(), 0)
+    element_vec = [int(atomic_num == n) for n in _TD_ATOMIC_NUMS]      # 6-dim
+
+    aa_vec = [0] * 20                                                    # 20-dim
+    aa_idx = _TD_AA_INDEX.get(res_name)
+    if aa_idx is not None:
+        aa_vec[aa_idx] = 1
+
+    backbone_flag = [int(atom_name.strip() in _TD_BACKBONE)]            # 1-dim
+
+    return np.array(element_vec + aa_vec + backbone_flag, dtype=np.float32)
+
+
+def process_ligand_and_pocket_targetdiff(pdbfile, sdffile, dist_cutoff):
+    """
+    Like process_ligand_and_pocket but produces 27-dim TargetDiff protein
+    features instead of DiffSBDD element one-hots.
+
+    Ligand features remain DiffSBDD-style element one-hots (used only for
+    size sampling and SMILES computation, never fed to the TargetDiff model).
+    """
+    try:
+        pdb_struct = PDBParser(QUIET=True).get_structure('', pdbfile)
+    except Exception as e:
+        raise Exception(f"PDB structure parsing failed: {str(e)}")
+
+    ligand = robust_read_sdf(sdffile)
+    if ligand is None:
+        raise Exception(f'cannot read sdf mol ({sdffile})')
+
+    lig_coords = np.array([
+        list(ligand.GetConformer(0).GetAtomPosition(idx))
+        for idx in range(ligand.GetNumAtoms())
+        if ligand.GetAtomWithIdx(idx).GetSymbol() != 'H'
+    ])
+    # Ligand one-hot: simple 1-of-K over heavy atom elements (same as DiffSBDD)
+    # kept identical so reward/SMILES pipeline is unaffected.
+    _SIMPLE_ATOM_DICT = {'C': 0, 'N': 1, 'O': 2, 'S': 3, 'F': 4,
+                         'Cl': 5, 'Br': 6, 'I': 7, 'P': 8, 'B': 9}
+    lig_atoms = [a.GetSymbol() for a in ligand.GetAtoms() if a.GetSymbol() != 'H']
+    if not lig_atoms:
+        raise Exception("No valid heavy atoms found in ligand")
+
+    lig_one_hot = np.zeros((len(lig_atoms), len(_SIMPLE_ATOM_DICT) + 1), dtype=np.float32)
+    for i, sym in enumerate(lig_atoms):
+        idx = _SIMPLE_ATOM_DICT.get(sym, len(_SIMPLE_ATOM_DICT))  # unknown → last slot
+        lig_one_hot[i, idx] = 1.0
+
+    # Pocket residues within dist_cutoff of any ligand heavy atom
+    pocket_residues = []
+    for residue in pdb_struct[0].get_residues():
+        res_coords = np.array([a.get_coord() for a in residue.get_atoms()])
+        if is_aa(residue.get_resname(), standard=True) and \
+                (((res_coords[:, None, :] - lig_coords[None, :, :]) ** 2).sum(-1) ** 0.5).min() < dist_cutoff:
+            pocket_residues.append(residue)
+
+    pocket_ids = [f'{res.parent.id}:{res.id[1]}' for res in pocket_residues]
+
+    pocket_feats, pocket_coords_list = [], []
+    for res in pocket_residues:
+        res_name = res.get_resname()
+        for atom in res.get_atoms():
+            if atom.element == 'H':
+                continue
+            feat = _targetdiff_atom_features(atom.element, res_name, atom.get_name())
+            pocket_feats.append(feat)
+            pocket_coords_list.append(atom.get_coord())
+
+    if not pocket_feats:
+        raise Exception(f"No pocket atoms found within {dist_cutoff}Å of ligand ({pdbfile})")
+
+    pocket_one_hot = np.stack(pocket_feats)       # [N_pocket, 27]
+    pocket_coords  = np.array(pocket_coords_list) # [N_pocket, 3]
+
+    ligand_data = {'lig_coords': lig_coords, 'lig_one_hot': lig_one_hot}
+    pocket_data = {'pocket_coords': pocket_coords,
+                   'pocket_one_hot': pocket_one_hot,
+                   'pocket_ids': pocket_ids}
+    return ligand_data, pocket_data
+
+
 # =============================================================================
 # MAIN SCRIPT LOGIC
 # =============================================================================
 
 def main(args):
+    model = getattr(args, 'model', 'diffsbdd')
 
     base_input_dir = Path(args.input_dir)
     output_dir = Path(args.output_dir)
@@ -380,12 +480,18 @@ def main(args):
                 continue
 
             try:
-                ligand_data, pocket_data = process_ligand_and_pocket(
-                    str(pocket_fn), str(ligand_fn),
-                    atom_dict=atom_dict,
-                    aa_encoder=amino_acid_dict,
-                    dist_cutoff=dist_cutoff
-                )
+                if model == 'targetdiff':
+                    ligand_data, pocket_data = process_ligand_and_pocket_targetdiff(
+                        str(pocket_fn), str(ligand_fn),
+                        dist_cutoff=dist_cutoff,
+                    )
+                else:
+                    ligand_data, pocket_data = process_ligand_and_pocket(
+                        str(pocket_fn), str(ligand_fn),
+                        atom_dict=atom_dict,
+                        aa_encoder=amino_acid_dict,
+                        dist_cutoff=dist_cutoff,
+                    )
 
                 pdb_and_mol_ids.append(f"{pocket_fn.name}_{ligand_fn.name}")
                 lig_coords.append(ligand_data['lig_coords'])

@@ -31,11 +31,10 @@ model:
   # key 'model' containing the state_dict).
   checkpoint: 'checkpoints/targetdiff_pretrained_diffusion.pt'
 
-  # PRISM's CrossDocked data encodes pocket atoms as 10-dim element-type
-  # one-hots (C,N,O,S,B,Br,Cl,P,I,F).  TargetDiff's pretrained protein_atom_emb
-  # was trained on 27-dim features, so that layer is re-initialised when
-  # loading the checkpoint (shape-mismatched keys are stripped before load).
-  protein_feat_dim: 10
+  # Run process_data.py with --model targetdiff to produce this dataset.
+  # That pipeline uses FeaturizeProteinAtom (6 elements + 20 AA + backbone = 27 dims),
+  # matching the pretrained checkpoint exactly — no layer re-initialisation needed.
+  protein_feat_dim: 27
   ligand_atom_types: 13   # add_aromatic encoding, 13 classes
 
   total_timesteps: 1000   # full TargetDiff chain length (sigmoid beta schedule)
@@ -43,7 +42,7 @@ model:
 # -----------------------------------------------------------------------
 # Data
 # -----------------------------------------------------------------------
-datadir: '/data/stat-cadd/wolf7055/PRISM/data/cross_dock/processed_crossdock_noH_full_temp'
+datadir: '/data/stat-cadd/wolf7055/PRISM/data/cross_dock/processed_crossdock_noH_full_temp_targetdiff'
 dataset: 'crossdock'
 batch_size: 8
 num_workers: 4
