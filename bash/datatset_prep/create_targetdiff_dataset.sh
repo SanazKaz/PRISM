@@ -15,27 +15,25 @@ module load Anaconda3
 source activate /data/stat-cadd/wolf7055/conda/envs/PRISM_25
 
 export PROJECT_ROOT="/data/stat-cadd/wolf7055/PRISM"
-CROSSDOCKED_DIR="${PROJECT_ROOT}/data/cross_dock/processed_crossdock_noH_full_temp"
+
+CROSSDOCKED_DIR="${PROJECT_ROOT}/data/cross_dock/crossdocked_pocket10"
+SPLIT_PATH="${PROJECT_ROOT}/data/cross_dock/split_by_name.pt"
+OUTPUT_DIR="${PROJECT_ROOT}/data/cross_dock/processed_crossdock_targetdiff"
 
 echo "=========================================="
 echo "SLURM Job ID: $SLURM_JOB_ID"
-echo "Creating TargetDiff 27-dim dataset from:"
-echo "  $CROSSDOCKED_DIR"
-echo "Output will be:"
-echo "  ${CROSSDOCKED_DIR}/03_final_dataset_targetdiff"
+echo "Input:  $CROSSDOCKED_DIR"
+echo "Split:  $SPLIT_PATH"
+echo "Output: $OUTPUT_DIR"
 echo "=========================================="
 
 cd "$PROJECT_ROOT"
-
 which python
-python -c "import numpy; print('numpy:', numpy.__version__)"
 
-echo "Starting dataset creation..."
-python -m scripts.process_data \
-    --skip_fetch \
-    --pdb_dir "${CROSSDOCKED_DIR}/02_preprocessed" \
-    --output_dir "${CROSSDOCKED_DIR}" \
-    --model targetdiff
+python -m scripts.process_crossdock_targetdiff \
+    --crossdocked_dir "$CROSSDOCKED_DIR" \
+    --split_path      "$SPLIT_PATH" \
+    --output_dir      "$OUTPUT_DIR"
 
 echo "Done!"
-ls -lh "${CROSSDOCKED_DIR}/03_final_dataset_targetdiff/"
+ls -lh "$OUTPUT_DIR/"

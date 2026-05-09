@@ -42,7 +42,7 @@ model:
 # -----------------------------------------------------------------------
 # Data
 # -----------------------------------------------------------------------
-datadir: '/data/stat-cadd/wolf7055/PRISM/data/cross_dock/processed_crossdock_noH_full_temp_targetdiff'
+datadir: '/data/stat-cadd/wolf7055/PRISM/data/cross_dock/processed_crossdock_targetdiff'
 dataset: 'crossdock'
 batch_size: 8
 num_workers: 4
