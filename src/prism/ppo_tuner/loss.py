@@ -35,7 +35,7 @@ def compute_ppo_loss(policy_network, minibatch, timestep_idx, config):
     # dbg_tensor("compute_loss/advantages", minibatch['advantages'])
                         
     # Forward pass through the policy network to get new log probabilities
-    new_log_probs = _get_log_probs(policy_network, timestep_batch, config.diffusion_params.diffusion_steps)
+    new_log_probs = _get_log_probs(policy_network, timestep_batch, config.model.total_timesteps)
     
     entropy = (-new_log_probs).mean()
     
@@ -43,23 +43,25 @@ def compute_ppo_loss(policy_network, minibatch, timestep_idx, config):
     advantages = minibatch['advantages']
     ratio = torch.exp(new_log_probs - old_log_probs)
     
-    clip_range = config.ppo_params.clip_range
+    clip_range = config.ppo.clip_range
     clipfrac = (torch.abs(ratio - 1.0) > clip_range).float().mean()
     
     surr1 = advantages * ratio
     surr2 = advantages * torch.clamp(ratio, 1.0 - clip_range, 1.0 + clip_range)
     
     policy_loss = -torch.min(surr1, surr2).mean()
-    
+
     # Add entropy bonus
-    policy_loss -= config.ppo_params.entropy_coef * entropy
-    # print(f"policy_loss: {policy_loss.shape}")
-    
-    # --- KL Divergence for logging/diagnostics ---
-    with torch.no_grad():
-        approx_kl = (old_log_probs - new_log_probs).mean()
-    
-    return policy_loss, approx_kl, clipfrac, entropy
+    policy_loss -= config.ppo.entropy_coef * entropy
+
+    # --- KL penalty: E[log π_old - log π_θ] = KL(π_old || π_θ) ---
+    # Needs grad so it can propagate; approx_kl is also returned for logging.
+    approx_kl = (old_log_probs - new_log_probs).mean()
+    kl_coef = getattr(config.ppo, 'kl_coef', 0.0)
+    if kl_coef > 0.0:
+        policy_loss = policy_loss + kl_coef * approx_kl
+
+    return policy_loss, approx_kl.detach(), clipfrac, entropy
 
 def _get_log_probs(policy_network, timestep_batch, total_timesteps):
     """

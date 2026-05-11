@@ -1,19 +1,36 @@
 #!/usr/bin/env python
 
 """
-Main pipeline script to generate a complete dataset.
+Main pipeline script to generate a complete dataset from PDB IDs or local PDB files.
 
-Orchestrates the 3-step process:
-1.  Downloads PDBs from a text file list.
-2.  Pre-processes PDBs to extract pockets and ligands.
-3.  Converts pocket/ligand pairs into a final .npz dataset.
+Orchestrates a 3-step process:
+  1. Download PDB structures from RCSB (skippable with --skip_fetch).
+  2. Extract ligand-free binding pockets and paired ligand SDFs.
+  3. Convert pocket/ligand pairs into final .npz datasets.
+
+Quick-start examples
+--------------------
+From a list of PDB IDs (downloads from RCSB):
+    python -m scripts.process_data --pdb_list data/example_pdbs.txt --output_dir data/my_dataset
+
+From local PDB files you already have on disk:
+    python -m scripts.process_data --skip_fetch --pdb_dir /path/to/pdbs --output_dir data/my_dataset
+
+Reproduce the CrossDocked training set:
+    python -m scripts.process_data \\
+        --pdb_list data/crossdocked_train_pdbs.txt \\
+        --output_dir data/crossdocked
 """
 
 import argparse
 import sys
 from pathlib import Path
 
-from data.preprocessing import (fetch_pdbs, preprocess_data, create_dataset)
+from src.prism.data_processing import fetch_pdbs, preprocess_data, create_dataset
+
+# Bundled reference files that ship with the repo
+_REPO_ROOT = Path(__file__).parent.parent
+_DEFAULT_TEST_PDBS = _REPO_ROOT / "data" / "crossdocked_test_pdbs.txt"
 
 
 def filter_test_pdbs_from_split(
@@ -31,7 +48,7 @@ def filter_test_pdbs_from_split(
 
     Args:
         all_data_path: Path to all_data.txt from preprocessing.
-        test_pdbs_path: Path to test_pdbs.txt containing one PDB ID per line.
+        test_pdbs_path: Path to a file containing one PDB ID per line.
         output_path: Path to write the filtered train_data.txt.
 
     Returns:
@@ -58,36 +75,100 @@ def filter_test_pdbs_from_split(
 
     return output_path
 
+
 def main():
     parser = argparse.ArgumentParser(
-        description="Full data pipeline.", 
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+        description="Full data pipeline: PDB IDs → processed .npz dataset.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        epilog=__doc__,
     )
-    
-    # Input
-    parser.add_argument("--pdb_list", required=True, 
-                        help="Path to text file with PDB IDs")
-    
-    # Parameters
-    parser.add_argument("-o", "--output_dir", help="Main root directory for outputs")
-    parser.add_argument("--preprocess_distance", type=float, default=15.0, 
-                        help="Pocket cutoff distance (Angstroms)")
-    parser.add_argument("--include_common", action="store_true", 
-                        help="Include common additives (skip block list)")
-    parser.add_argument("--dataset_distance", type=float, default=5.0, 
-                        help="Final pocket distance (Angstroms)")
-    parser.add_argument("--dataset_info_key", default="crossdock_full", 
-                        help="Key for encoders")
-    
-    # Deduplication
-    parser.add_argument('--keep_duplicates', action='store_false', 
-                        dest='deduplicate', default=False, 
-                        help='Disable deduplication')
+
+    # --- Input ---
+    input_group = parser.add_mutually_exclusive_group()
+    input_group.add_argument(
+        "--pdb_list",
+        help="Path to a text file of PDB IDs (comma- or newline-separated). "
+             "The pipeline downloads these from RCSB.",
+    )
+    input_group.add_argument(
+        "--skip_fetch",
+        action="store_true",
+        help="Skip the RCSB download step. Requires --pdb_dir pointing at a "
+             "directory of existing .pdb / .cif files.",
+    )
+    parser.add_argument(
+        "--pdb_dir",
+        help="Directory of pre-downloaded .pdb/.cif files. "
+             "Used when --skip_fetch is set; otherwise ignored.",
+    )
+
+    # --- Output ---
+    parser.add_argument(
+        "-o", "--output_dir",
+        help="Root output directory. Sub-directories 01_raw_pdbs/, "
+             "02_preprocessed/, and 03_final_dataset/ are created inside it.",
+    )
+
+    # --- Processing parameters ---
+    parser.add_argument(
+        "--preprocess_distance", type=float, default=15.0,
+        help="Pocket extraction cutoff distance (Å). Residues within this "
+             "radius of any ligand atom are kept.",
+    )
+    parser.add_argument(
+        "--include_common", action="store_true",
+        help="Include common crystallographic additives (skips the block list).",
+    )
+    parser.add_argument(
+        "--dataset_distance", type=float, default=5.0,
+        help="Final pocket definition distance (Å) used when building .npz files.",
+    )
+    parser.add_argument(
+        "--dataset_info_key", default="crossdock_full",
+        help="Atom/AA encoder key from src/models/diffsbdd/constants.py.",
+    )
+
+    # --- Test-set filtering ---
+    parser.add_argument(
+        "--test_pdbs",
+        default=str(_DEFAULT_TEST_PDBS),
+        help="Path to a file of PDB IDs to exclude from the training split "
+             "(prevents data leakage). Pass 'none' to skip this step.",
+    )
+
+    # --- Deduplication ---
+    parser.add_argument(
+        "--keep_duplicates", action="store_true",
+        help="Keep all ligand instances per PDB/ligand pair. "
+             "By default, only one instance per pair is kept.",
+    )
+
+    # --- Model target ---
+    parser.add_argument(
+        "--model", choices=["diffsbdd", "targetdiff"], default="diffsbdd",
+        help="Featurisation format for the final .npz dataset. "
+             "'diffsbdd' (default): 10-dim element one-hots for the pocket. "
+             "'targetdiff': 27-dim features (6 elements + 20 AA types + backbone flag) "
+             "matching TargetDiff's FeaturizeProteinAtom exactly. "
+             "Output goes to 03_final_dataset/ (diffsbdd) or "
+             "03_final_dataset_targetdiff/ (targetdiff).",
+    )
 
     args = parser.parse_args()
 
-    # --- 1. Setup Directory Structure ---
-    list_name = Path(args.pdb_list).stem
+    # --- Validate arguments ---
+    if args.skip_fetch and not args.pdb_dir:
+        parser.error("--skip_fetch requires --pdb_dir")
+    if not args.skip_fetch and not args.pdb_list:
+        parser.error("Provide either --pdb_list (to download from RCSB) or "
+                     "--skip_fetch --pdb_dir (to use local files)")
+
+    # --- Directory structure ---
+    if args.skip_fetch:
+        list_name = Path(args.pdb_dir).stem
+    else:
+        list_name = Path(args.pdb_list).stem
+
     job_name = f"custom_{list_name}"
 
     if args.output_dir:
@@ -95,81 +176,97 @@ def main():
     else:
         base_dir = Path(f"data/{job_name}_data")
 
-    pdb_dir = base_dir / "01_raw_pdbs"
+    pdb_dir        = Path(args.pdb_dir) if args.skip_fetch else base_dir / "01_raw_pdbs"
     preprocess_dir = base_dir / "02_preprocessed"
-    final_dataset_dir = base_dir / "03_final_dataset"
-    
+    final_dir      = base_dir / (
+        "03_final_dataset_targetdiff" if args.model == "targetdiff"
+        else "03_final_dataset"
+    )
+
     base_dir.mkdir(exist_ok=True, parents=True)
-    
-    print("="*80)
-    print(f" Starting Pipeline: {job_name}")
-    print(f" Output Directory:  {base_dir.resolve()}")
-    print("="*80)
 
-    # --- 2. Run STEP 1: Download PDBs ---
-    print("\n[STEP 1/3] Fetching PDBs...")
-    try:
-        fetch_pdbs.get_pdbs_from_file(
-            file_path=args.pdb_list,
-            output_dir=str(pdb_dir)
-        )
-        print("[STEP 1/3] PDB Download Complete.")
-    except Exception as e:
-        print(f"[STEP 1/3] FAILED: {e}")
-        import traceback
-        traceback.print_exc()
-        sys.exit(1)
+    print("=" * 80)
+    print(f" Pipeline: {job_name}")
+    print(f" Output:   {base_dir.resolve()}")
+    print("=" * 80)
 
-    # --- 3. Run STEP 2: Preprocess ---
-    print("\n[STEP 2/3] Preprocessing PDBs (extracting pockets/ligands)...")
+    # --- STEP 1: Download PDBs ---
+    if args.skip_fetch:
+        print(f"\n[STEP 1/3] Skipped — using existing PDB files in: {pdb_dir.resolve()}")
+    else:
+        print("\n[STEP 1/3] Fetching PDBs from RCSB...")
+        try:
+            fetch_pdbs.get_pdbs_from_file(
+                file_path=args.pdb_list,
+                output_dir=str(pdb_dir),
+            )
+            print("[STEP 1/3] Download complete.")
+        except Exception as e:
+            print(f"[STEP 1/3] FAILED: {e}")
+            import traceback; traceback.print_exc()
+            sys.exit(1)
+
+    # --- STEP 2: Preprocess (extract pockets + ligands) ---
+    print("\n[STEP 2/3] Preprocessing: extracting pockets and ligands...")
     try:
         preprocess_args = argparse.Namespace(
             input_dir=str(pdb_dir),
             output_dir=str(preprocess_dir),
             distance=args.preprocess_distance,
-            include_common=args.include_common
+            include_common=args.include_common,
         )
         preprocess_data.create_binding_pockets(preprocess_args)
-        print("[STEP 2/3] Preprocessing Complete.")
+        print("[STEP 2/3] Preprocessing complete.")
     except Exception as e:
         print(f"[STEP 2/3] FAILED: {e}")
         sys.exit(1)
 
-    # --- 3.5: Filter test PDBs from split file ---
-    print("\n[STEP 2.5/3] Filtering test PDBs from training split...")
-    test_pdbs_path = Path("/data/stat-cadd/wolf7055/PRISM/data/preprocessing/test_pdbs.txt")
+    # --- STEP 2.5: Filter test PDBs from the split ---
     train_split_path = preprocess_dir / "train_data.txt"
+    if args.test_pdbs.lower() == "none":
+        print("\n[STEP 2.5/3] Skipped — no test-set filtering requested.")
+        # Use all_data.txt directly as the training split
+        train_split_path = preprocess_dir / "all_data.txt"
+    else:
+        test_pdbs_path = Path(args.test_pdbs)
+        if not test_pdbs_path.exists():
+            print(f"[STEP 2.5/3] WARNING: test PDB file not found at {test_pdbs_path}. "
+                  "Skipping filter step.")
+            train_split_path = preprocess_dir / "all_data.txt"
+        else:
+            print("\n[STEP 2.5/3] Filtering test PDBs from training split...")
+            filter_test_pdbs_from_split(
+                all_data_path=preprocess_dir / "all_data.txt",
+                test_pdbs_path=test_pdbs_path,
+                output_path=train_split_path,
+            )
+            print("[STEP 2.5/3] Filtering complete.")
 
-    filter_test_pdbs_from_split(
-        all_data_path=preprocess_dir / "all_data.txt",
-        test_pdbs_path=test_pdbs_path,
-        output_path=train_split_path
-    )
-    print("[STEP 2.5/3] Filtering Complete.")
-
-
-    # --- 4. Run STEP 3: Create Final Dataset ---
-    print("\n[STEP 3/3] Creating Final .npz Dataset...")
+    # --- STEP 3: Build final .npz dataset ---
+    print("\n[STEP 3/3] Creating final .npz dataset...")
     try:
         dataset_args = argparse.Namespace(
             input_dir=str(preprocess_dir),
-            output_dir=str(final_dataset_dir),
-            split_file="train_data.txt", 
-            deduplicate=args.deduplicate,
+            output_dir=str(final_dir),
+            split_file=train_split_path.name,
+            deduplicate=not args.keep_duplicates,
             dataset_name=job_name,
             dataset_info_key=args.dataset_info_key,
-            dist_cutoff=args.dataset_distance
+            dist_cutoff=args.dataset_distance,
+            model=args.model,
         )
         create_dataset.main(dataset_args)
-        print("[STEP 3/3] Final Dataset Created.")
+        print("[STEP 3/3] Dataset creation complete.")
     except Exception as e:
         print(f"[STEP 3/3] FAILED: {e}")
         sys.exit(1)
-        
-    print("\n" + "="*80)
-    print("Pipeline Finished Successfully!")
-    print(f"Final dataset is located in: {final_dataset_dir.resolve()}")
-    print("="*80)
+
+    print("\n" + "=" * 80)
+    print("Pipeline finished successfully!")
+    print(f"Final dataset: {final_dir.resolve()}")
+    print(f"Point 'datadir' in your config at: {final_dir.resolve()}")
+    print("=" * 80)
+
 
 if __name__ == "__main__":
     main()

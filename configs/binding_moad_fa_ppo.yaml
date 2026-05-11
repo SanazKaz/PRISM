@@ -5,52 +5,59 @@ wandb_params:
   entity: 'sanazkazeminia97'
   project: 'final_geometry_checks_BM'
 dataset: 'bindingmoad'
-datadir: '/data/stat-cadd/wolf7055/PRISM/data/BRD4_BD1/03_final_dataset'  # UPDATE THIS
+datadir: '/data/stat-cadd/wolf7055/PRISM/data/BRD4_BD1/03_final_dataset'
 enable_progress_bar: False
 num_sanity_val_steps: 0
 batch_size: 108
-lr: 1.0e-6
 num_workers: 4
 gpus: 1
 n_epochs: 1
 
-mode: 'pocket_conditioning'
-pocket_representation: 'full-atom'
+# BindingMOAD uses 6-layer EGNN (e_block_0..5); unfreeze the last two.
+freeze_except: ['e_block_4', 'e_block_5']
 
-augment_noise: 0
-augment_rotation: False
-clip_grad: True
-auxiliary_loss: False
-loss_params:
-  max_weight: 0.001
-  schedule: 'linear'
-  clamp_lj: 3.0
+model:
+  total_timesteps: 500
 
-ppo_params:
-  num_outer_epochs: 45          # num of PPO cycles (outer epochs)
-  num_inner_epochs: 2            # Updates per rollout (inner epochs)
-  n_steps: 216                    # Rollout length (mols generated)
+  # BindingMOAD checkpoint architecture — differs from CrossDocked defaults.
+  # These override the standard CrossDocked values in _build_diffsbdd_policy.
+  egnn_params:
+    device: 'cuda'
+    edge_cutoff_ligand: null
+    edge_cutoff_pocket: 4.0
+    edge_cutoff_interaction: 7.0
+    reflection_equivariant: False
+    edge_embedding_dim: 8
+    joint_nf: 128
+    hidden_nf: 192
+    n_layers: 6
+    attention: True
+    tanh: True
+    norm_constant: 1
+    inv_sublayers: 1
+    sin_embedding: False
+    aggregation_method: 'sum'
+    normalization_factor: 100
+
+  diffusion_params:
+    # All other diffusion settings are the standard defaults.
+    diffusion_noise_precision: 1.0e-5
+
+ppo:
+  num_outer_epochs: 45
+  num_inner_epochs: 2
+  n_steps: 216
   ligand_chunk_size: 108
-  ppo_batch_size: 108             # Size of each PPO update batch
-  clip_range: 0.1                # PPO clipping parameter
-  value_loss_coef: 0.0           # Weight for value loss
-  entropy_coef: 0.001            # Weight for entropy bonus
-  max_grad_norm: 1.0             # Gradient clipping threshold
-  gradient_accumulation_steps: 42   # accumulate over train_timesteps
-  num_train_timesteps: 300 #increase from 150
-  num_mini_batches: 1            # Mini-batches per update
-  target_kl: 0.03                # Early stopping KL divergence
-  lr: 4.0e-7                     # Optimizer learning rate (0.001)
-  mol_timeout_sec: 60
-  num_nodes_lig: 28              # fixed number of nodes for ligand
-  top_k: False
-  # backward progressive training remove later
-  progressive_training: True
-  start_timesteps: 50
-  end_timesteps: 350
-  progressive_training_epochs: 100
-  freeze_except: ['e_block_4','e_block_5'] # e_block_3 and e_block_4 are the last two layers of the EGNN
-
+  batch_size: 108
+  clip_range: 0.1
+  entropy_coef: 0.001
+  kl_coef: 0.0
+  max_grad_norm: 1.0
+  gradient_accumulation_steps: 42
+  train_timesteps: 300
+  target_kl: 0.03
+  lr: 4.0e-7
+  num_nodes_lig: 28
 
 reward_params:
   rewards:
@@ -74,32 +81,6 @@ reward_params:
     multi_features: 'src/prism/reward/scoring/reward_data/ampc_hotspot_global_centered_eps0.5_min10_aromatic5.pkl'
     silly_walks: 'src/prism/reward/scoring/reward_data/chembl_drugs.smi'
     silly_rings: 'src/prism/reward/scoring/reward_data/chembl_ring_systems.csv'
-
-# BindingMOAD full-atom architecture (must match checkpoint)
-egnn_params:
-  device: 'cuda'
-  edge_cutoff_ligand: null
-  edge_cutoff_pocket: 4.0
-  edge_cutoff_interaction: 7.0
-  reflection_equivariant: False
-  edge_embedding_dim: 8
-  joint_nf: 128
-  hidden_nf: 192
-  n_layers: 6
-  attention: True
-  tanh: True
-  norm_constant: 1
-  inv_sublayers: 1
-  sin_embedding: False
-  aggregation_method: 'sum'
-  normalization_factor: 100
-
-diffusion_params:
-  diffusion_steps: 500
-  diffusion_noise_schedule: 'polynomial_2'
-  diffusion_noise_precision: 1.0e-5
-  diffusion_loss_type: 'l2'
-  normalize_factors: [1, 4]
 
 eval_epochs: 5
 visualize_sample_epoch: 99999
