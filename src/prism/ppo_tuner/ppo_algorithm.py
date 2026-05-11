@@ -53,6 +53,7 @@ class PPOAlgorithm:
             'train/approx_kl_epoch',
             'train/clipfrac_epoch',
             'train/entropy_epoch',
+            'train/kl_penalty_epoch',
             'train/reward_mean',
             'train/reward_max',
             'train/reward_std',
@@ -157,7 +158,7 @@ class PPOAlgorithm:
         self.policy_network.train()
 
         # Initialize trackers for logs
-        total_loss, total_kl, total_clipfrac, total_entropy = 0, 0, 0, 0
+        total_loss, total_kl, total_clipfrac, total_entropy, total_kl_penalty = 0, 0, 0, 0, 0
         update_count = 0
 
         num_inner_epochs = self.config.ppo.num_inner_epochs
@@ -174,6 +175,7 @@ class PPOAlgorithm:
             epoch_total_approx_kl = 0.0
             epoch_total_clipfrac = 0.0
             epoch_total_entropy = 0.0
+            epoch_total_kl_penalty = 0.0
             epoch_accumulation_steps = 0
             
             for minibatch in self.buffer.get_minibatches():
@@ -205,6 +207,8 @@ class PPOAlgorithm:
                     epoch_total_approx_kl += approx_kl.item()
                     epoch_total_clipfrac += clipfrac.item()
                     epoch_total_entropy += entropy.item()
+                    kl_coef = getattr(self.config.ppo, 'kl_coef', 0.0)
+                    epoch_total_kl_penalty += (kl_coef * approx_kl.item())
                     epoch_accumulation_steps += 1
             
             # After the loop, flush leftovers if any
@@ -222,6 +226,7 @@ class PPOAlgorithm:
             "train/approx_kl_epoch": epoch_total_approx_kl / max(epoch_accumulation_steps, 1),
             "train/clipfrac_epoch": epoch_total_clipfrac / max(epoch_accumulation_steps, 1),
             "train/entropy_epoch": epoch_total_entropy / max(epoch_accumulation_steps, 1),
+            "train/kl_penalty_epoch": epoch_total_kl_penalty / max(epoch_accumulation_steps, 1),
             "train/reward_mean": self.buffer.rewards.mean().item(),
             "train/reward_max": self.buffer.rewards.max().item(),
             "train/reward_std": self.buffer.rewards.std().item(),

@@ -32,7 +32,8 @@ ppo_params:
   ligand_chunk_size: 64         # GPU Memory management - more chunking means less memory usage but slower training
   ppo_batch_size: 128             # Size of each PPO update batch
   clip_range: 0.1                # PPO clipping parameter
-  entropy_coef: 0.001            # Weight for entropy bonus
+  entropy_coef: 0.001
+  kl_coef: 0.0            # Weight for entropy bonus
   max_grad_norm: 1.0             # Gradient clipping threshold
   gradient_accumulation_steps: 42   # accumulate over train_timesteps
   num_train_timesteps: 300        #increase from 150

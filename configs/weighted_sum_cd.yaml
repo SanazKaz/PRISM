@@ -28,6 +28,7 @@ ppo:
   batch_size: 128
   clip_range: 0.1
   entropy_coef: 0.001
+  kl_coef: 0.0
   max_grad_norm: 1.0
   gradient_accumulation_steps: 42
   train_timesteps: 300
