@@ -46,9 +46,11 @@ _PROJECT_ROOT   = Path(__file__).resolve().parents[1]
 _TARGETDIFF_ROOT = _PROJECT_ROOT / 'src' / 'models' / 'targetdiff'
 _DIFFSBDD_ROOT   = _PROJECT_ROOT / 'src' / 'models' / 'diffsbdd'
 
-sys.path.insert(0, str(_PROJECT_ROOT))
+# DiffSBDD must be first so its bare `import utils` resolves to
+# src/models/diffsbdd/utils.py and not PRISM's utils package.
+sys.path.insert(0, str(_DIFFSBDD_ROOT))
 sys.path.insert(1, str(_TARGETDIFF_ROOT))
-sys.path.insert(2, str(_DIFFSBDD_ROOT))
+sys.path.insert(2, str(_PROJECT_ROOT))
 
 # TargetDiff's own parser — this is the canonical source of 27-dim features
 from utils.data import PDBProtein                              # noqa: E402
