@@ -1,0 +1,116 @@
+run_identifier: 'dundee_following_geom'
+logdir: 'Log_Results'
+wandb_params:
+  mode: 'offline' # seeing if it will reduce overhead 
+  entity: 'sanazkazeminia97'
+  project: 'DundeeFollowingGeom'
+dataset: 'crossdock' #(refers to the model's dataset_info_key)
+datadir: '/data/stat-cadd/wolf7055/PRISM/data/cross_dock/processed_crossdock_noH_full_temp'
+enable_progress_bar: False
+num_sanity_val_steps: 0
+batch_size: 64 # number of pockets to sample for (60)
+num_workers: 4 # suggested by terminal for better parallelisations ???
+gpus: 1
+n_epochs: 1 # lightnings epoch which defines outer epochs using train_dataset size. Leave as 1
+
+mode: 'pocket_conditioning'
+pocket_representation: 'full-atom'
+
+augment_noise: 0
+augment_rotation: False
+clip_grad: True
+auxiliary_loss: False
+loss_params:
+  max_weight: 0.001
+  schedule: 'linear'
+  clamp_lj: 3.0
+
+ppo_params:
+  num_outer_epochs: 60          # num of PPO cycles (outer epochs)
+  num_inner_epochs: 2            # Updates per rollout (inner epochs)
+  n_steps: 128                    # Rollout length (mols generated)
+  ligand_chunk_size: 64         # GPU Memory management - more chunking means less memory usage but slower training
+  ppo_batch_size: 128             # Size of each PPO update batch
+  clip_range: 0.1                # PPO clipping parameter
+  entropy_coef: 0.001            # Weight for entropy bonus
+  max_grad_norm: 1.0             # Gradient clipping threshold
+  gradient_accumulation_steps: 42   # accumulate over train_timesteps
+  num_train_timesteps: 300        #increase from 150
+  target_kl: 0.03                # Early stopping KL divergence
+  lr: 3.0e-5                     # Optimizer learning rate (0.001)
+  num_nodes_lig: 27              # fixed number of nodes for ligand
+  # backward progressive training remove later
+  freeze_except: ['e_block_3','e_block_4'] # e_block_3 and e_block_4 are the last two layers of the EGNN
+
+docking_params:
+  dataset_info: custom # or crossdock - for path finding
+
+
+reward_params:
+  target_name: 'BRD4_BD1'
+  aggregation: 'weighted_sum' # 'weighted_sum' or 'product'
+  # Map the reward name to its weight
+  # To disable a reward, simply remove it from this list or set weight to 0
+  rewards:
+    qed: 0.0
+    sa_score: 0.0
+    lipinski: 0.0
+    bertz: 0.0
+    sucos: 0.0
+    interaction_fingerprints: 0.0
+    feature_density: 0.0
+    geometry_checks: 0.1 # as before
+    flatness_checks: 0.0
+    aromatic_counter: 0.0
+    aromatic_anchor: 0.0
+    multi_features: 0.0
+    silly_walks: 0.0
+    property_2d: 0.0
+    smina_docking: 0.4 # as before
+    custom_qed: 0.2 # was 0.3
+    custom_sa_score: 0.15 # was 0.2
+    penalised_logp: 0.0
+    dundee_score: 0.15 # new
+
+  reward_paths:
+    feature_density: '/data/stat-cadd/wolf7055/PRISM/data/BRD4_BD1/hotspot_analysis/BRD4_BD1_hotspot_data.pkl'
+    aromatic_anchor: 'src/prism/reward/scoring/reward_data/ampc_hotspot_global_centered_eps0.5_min10_aromatic5.pkl'
+    multi_features: 'src/prism/reward/scoring/reward_data/ampc_hotspot_global_centered_eps0.5_min10_aromatic5.pkl'
+    silly_walks: 'src/prism/reward/scoring/reward_data/chembl_drugs.smi'
+    property_2d: 'src/prism/reward/scoring/reward_data/propeties_ref.json'
+    
+    
+#  (from diffsbdd original config)
+egnn_params:
+  device: 'cuda'
+  edge_cutoff_ligand: null
+  edge_cutoff_pocket: 5.0
+  edge_cutoff_interaction: 5.0
+  reflection_equivariant: False
+  joint_nf: 32
+  hidden_nf: 128 # change back to 256
+  n_layers: 5
+  attention: True
+  tanh: True
+  norm_constant: 1
+  inv_sublayers: 1
+  sin_embedding: False
+  aggregation_method: 'sum'
+  normalization_factor: 100
+
+diffusion_params:
+  diffusion_steps: 500
+  diffusion_noise_schedule: 'polynomial_2'
+  diffusion_noise_precision: 5.0e-4
+  diffusion_loss_type: 'l2'
+  normalize_factors: [1, 4]
+
+eval_epochs: 10
+visualize_sample_epoch: 99999
+visualize_chain_epoch: 999999
+eval_params:
+  n_eval_samples: 20
+  eval_batch_size: 20
+  smiles_file: '/data/stat-cadd/wolf7055/PRISM/data/cross_dock/processed_crossdock_noH_full_temp/train_smiles.npy'
+  n_visualize_samples: 0
+  keep_frames: 0

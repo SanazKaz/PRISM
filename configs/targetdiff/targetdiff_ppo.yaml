@@ -1,0 +1,120 @@
+# TargetDiff PPO fine-tuning config
+# Run with:
+#   python scripts/train.py --config configs/targetdiff_ppo.yaml \
+#       --datadir /path/to/crossdocked_data --seed 42
+
+run_identifier: 'targetdiff_ppo_cd'
+logdir: 'Log_Results'
+
+wandb_params:
+  mode: 'offline'
+  entity: 'sanazkazeminia97'
+  project: 'TargetDiff-PRISM'
+
+model_type: targetdiff
+
+# TargetDiff UniTransformer layer names (9 layers total, indices 0-8).
+# We freeze the bulk of the network and fine-tune:
+#   - protein_atom_emb / ligand_atom_emb  (re-initialised, must train)
+#   - v_inference head                    (atom type output)
+#   - last three transformer layers (6, 7, 8) = 1/3 of the 9-layer stack
+freeze_except:
+  - 'protein_atom_emb'
+  - 'ligand_atom_emb'
+  - 'v_inference'
+  - 'refine_net.blocks.0.layers.6'
+  - 'refine_net.blocks.0.layers.7'
+  - 'refine_net.blocks.0.layers.8'
+
+model:
+  # Path to the TargetDiff pretrained checkpoint (.pt, native format with
+  # key 'model' containing the state_dict).
+  checkpoint: 'checkpoints/targetdiff_pretrained_diffusion.pt'
+
+  # PRISM's CrossDocked data encodes pocket atoms as 10-dim element-type
+  # one-hots (C,N,O,S,B,Br,Cl,P,I,F).  TargetDiff's pretrained protein_atom_emb
+  # was trained on 27-dim features, so that layer is re-initialised when
+  # loading the checkpoint (shape-mismatched keys are stripped before load).
+  protein_feat_dim: 10
+  ligand_atom_types: 13   # add_aromatic encoding, 13 classes
+
+  total_timesteps: 1000   # full TargetDiff chain length (sigmoid beta schedule)
+
+# -----------------------------------------------------------------------
+# Data
+# -----------------------------------------------------------------------
+datadir: '/data/stat-cadd/wolf7055/PRISM/data/cross_dock/processed_crossdock_noH_full_temp'
+dataset: 'crossdock'
+batch_size: 8
+num_workers: 4
+gpus: 1
+n_epochs: 1
+
+enable_progress_bar: False
+num_sanity_val_steps: 0
+
+# -----------------------------------------------------------------------
+# PPO algorithm knobs
+# -----------------------------------------------------------------------
+ppo:
+  num_outer_epochs: 60
+  num_inner_epochs: 2
+  n_steps: 64                     # molecules generated per rollout
+  ligand_chunk_size: 32           # reduce if OOM
+  batch_size: 64
+  clip_range: 0.1
+  entropy_coef: 0.001
+  max_grad_norm: 1.0
+  gradient_accumulation_steps: 10
+  train_timesteps: 500            # PPO trains on the last 500 of 1000 reverse steps
+  target_kl: 0.03
+  lr: 3.0e-5
+  num_nodes_lig: 25
+
+# -----------------------------------------------------------------------
+# Rewards  (same interface as DiffSBDD runs)
+# -----------------------------------------------------------------------
+docking_params:
+  dataset_info: custom
+
+reward_params:
+  target_name: 'BRD4_BD1'
+  aggregation: 'weighted_sum'
+  rewards:
+    qed: 0.0
+    sa_score: 0.0
+    lipinski: 0.0
+    bertz: 0.0
+    sucos: 0.0
+    interaction_fingerprints: 0.0
+    feature_density: 0.0
+    geometry_checks: 0.0
+    flatness_checks: 0.0
+    aromatic_counter: 0.0
+    aromatic_anchor: 0.0
+    multi_features: 0.0
+    silly_walks: 0.0
+    property_2d: 0.0
+    smina_docking: 0.0
+    custom_qed: 0.0
+    custom_sa_score: 0.0
+    penalised_logp: 1.0
+  reward_paths:
+    feature_density: '/data/stat-cadd/wolf7055/PRISM/data/BRD4_BD1/hotspot_analysis/BRD4_BD1_hotspot_data.pkl'
+    aromatic_anchor: 'src/prism/reward/scoring/reward_data/ampc_hotspot_global_centered_eps0.5_min10_aromatic5.pkl'
+    multi_features: 'src/prism/reward/scoring/reward_data/ampc_hotspot_global_centered_eps0.5_min10_aromatic5.pkl'
+    silly_walks: 'src/prism/reward/scoring/reward_data/chembl_drugs.smi'
+    property_2d: 'src/prism/reward/scoring/reward_data/propeties_ref.json'
+
+# -----------------------------------------------------------------------
+# Evaluation
+# -----------------------------------------------------------------------
+eval_epochs: 10
+visualize_sample_epoch: 99999
+visualize_chain_epoch: 999999
+eval_params:
+  n_eval_samples: 20
+  eval_batch_size: 20
+  smiles_file: '/data/stat-cadd/wolf7055/PRISM/data/cross_dock/processed_crossdock_noH_full_temp/train_smiles.npy'
+  n_visualize_samples: 0
+  keep_frames: 0
