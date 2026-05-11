@@ -86,6 +86,9 @@ def featurize_pocket_targetdiff(pdb_path: str) -> tuple:
     is_backbone    = np.atleast_1d(d['is_backbone'].astype(np.float32))     # [N]
     pos            = np.atleast_2d(d['pos'].astype(np.float32))             # [N, 3]
 
+    if pos.shape[0] < 10:
+        raise Exception(f"Degenerate pocket: only {pos.shape[0]} atoms parsed — likely a malformed PDB")
+
     # 6-dim element one-hot
     elem_feat = (element[:, None] == _TD_ATOMIC_NUMS[None, :]).astype(np.float32)
 
