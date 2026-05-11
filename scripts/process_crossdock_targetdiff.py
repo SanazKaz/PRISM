@@ -81,10 +81,10 @@ def featurize_pocket_targetdiff(pdb_path: str) -> tuple:
     protein = PDBProtein(pdb_path)
     d = protein.to_dict_atom()
 
-    element        = d['element'].astype(np.int64)           # [N] atomic numbers
-    atom_to_aa     = d['atom_to_aa_type'].astype(np.int64)   # [N] 0-19
-    is_backbone    = d['is_backbone'].astype(np.float32)     # [N] bool→float
-    pos            = d['pos'].astype(np.float32)             # [N, 3]
+    element        = np.atleast_1d(d['element'].astype(np.int64))           # [N]
+    atom_to_aa     = np.atleast_1d(d['atom_to_aa_type'].astype(np.int64))   # [N]
+    is_backbone    = np.atleast_1d(d['is_backbone'].astype(np.float32))     # [N]
+    pos            = np.atleast_2d(d['pos'].astype(np.float32))             # [N, 3]
 
     # 6-dim element one-hot
     elem_feat = (element[:, None] == _TD_ATOMIC_NUMS[None, :]).astype(np.float32)
@@ -314,6 +314,68 @@ def main(args):
     print(f"Point targetdiff_ppo.yaml datadir at: {output_dir.resolve()}")
 
 
+def smoke_test(args):
+    """
+    Run featurization on the first 2 train pairs and verify shapes.
+    Catches dimension bugs before a full multi-hour run.
+    Remove this function (and the --smoke_test flag) once confirmed working.
+    """
+    datadir = Path(args.crossdocked_dir)
+    dataset_info = dataset_params['crossdock_full']
+    atom_dict    = dataset_info['atom_encoder']
+
+    print("Loading split...")
+    data_split = torch.load(args.split_path)
+    pairs = data_split['train'][:2]
+
+    print(f"Smoke-testing on {len(pairs)} pairs:")
+    poc_coords_list, poc_one_hot_list = [], []
+    lig_coords_list, lig_one_hot_list = [], []
+
+    for i, (pocket_fn, ligand_fn) in enumerate(pairs):
+        pdb_path = str(datadir / pocket_fn)
+        sdf_path = str(datadir / ligand_fn)
+        print(f"\n  [{i}] pocket: {pocket_fn}")
+        print(f"      ligand: {ligand_fn}")
+
+        poc_coords, poc_one_hot = featurize_pocket_targetdiff(pdb_path)
+        lig_coords, lig_one_hot = featurize_ligand_diffsbdd(sdf_path, atom_dict)
+
+        print(f"      poc_coords  shape={poc_coords.shape}  dtype={poc_coords.dtype}")
+        print(f"      poc_one_hot shape={poc_one_hot.shape}  dtype={poc_one_hot.dtype}")
+        print(f"      lig_coords  shape={lig_coords.shape}  dtype={lig_coords.dtype}")
+        print(f"      lig_one_hot shape={lig_one_hot.shape}  dtype={lig_one_hot.dtype}")
+
+        assert poc_coords.ndim == 2 and poc_coords.shape[1] == 3, \
+            f"poc_coords must be [N,3], got {poc_coords.shape}"
+        assert poc_one_hot.ndim == 2 and poc_one_hot.shape[1] == 27, \
+            f"poc_one_hot must be [N,27], got {poc_one_hot.shape}"
+        assert lig_coords.ndim == 2 and lig_coords.shape[1] == 3, \
+            f"lig_coords must be [M,3], got {lig_coords.shape}"
+        assert poc_coords.shape[0] == poc_one_hot.shape[0], \
+            "poc_coords and poc_one_hot atom count mismatch"
+
+        poc_coords_list.append(poc_coords)
+        poc_one_hot_list.append(poc_one_hot)
+        lig_coords_list.append(lig_coords)
+        lig_one_hot_list.append(lig_one_hot)
+
+    # Verify concatenation — this is exactly what main() does before saving
+    print("\nVerifying np.concatenate across pairs...")
+    poc_coords_np  = np.concatenate(poc_coords_list,  axis=0)
+    poc_one_hot_np = np.concatenate(poc_one_hot_list, axis=0)
+    lig_coords_np  = np.concatenate(lig_coords_list,  axis=0)
+    lig_one_hot_np = np.concatenate(lig_one_hot_list, axis=0)
+
+    print(f"  poc_coords_np  : {poc_coords_np.shape}")
+    print(f"  poc_one_hot_np : {poc_one_hot_np.shape}")
+    print(f"  lig_coords_np  : {lig_coords_np.shape}")
+    print(f"  lig_one_hot_np : {lig_one_hot_np.shape}")
+
+    print("\nSmoke test PASSED — shapes are correct, concatenation works.")
+    print("You can now submit the full job.\n")
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description='Build TargetDiff-featurised NPZ from CrossDocked pocket10.',
@@ -327,7 +389,12 @@ if __name__ == '__main__':
                         help='Output directory for NPZ files')
     parser.add_argument('--seed', type=int, default=42,
                         help='Random seed for val split sampling')
+    parser.add_argument('--smoke_test', action='store_true',
+                        help='Run on 2 pairs only to verify shapes before a full run')
     args = parser.parse_args()
 
     random.seed(args.seed)
-    main(args)
+    if args.smoke_test:
+        smoke_test(args)
+    else:
+        main(args)
