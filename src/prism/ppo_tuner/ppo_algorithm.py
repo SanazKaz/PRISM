@@ -10,7 +10,7 @@ from pathlib import Path
 from .rollout_collector import RolloutCollector
 from .rollout_buffer import RolloutBuffer
 from .loss import compute_ppo_loss
-from src.models.diffsbdd.lightning_modules import LigandPocketDDPM 
+from src.prism.models.base_policy import BaseDiffusionPolicy
 from utils import permute_timesteps
 from tests.ppo_debug_utils import assert_same_ids, assert_latent_alignment, reset_seen_mb_ids
 
@@ -19,11 +19,11 @@ class PPOAlgorithm:
     The main PPO algorithm class. It orchestrates the collector, buffer, and loss
     calculation to perform the PPO update. This is a framework-agnostic class.
     """
-    def __init__(self, 
-                 policy_network: LigandPocketDDPM, 
+    def __init__(self,
+                 policy_network: BaseDiffusionPolicy,
                  reward_function,
-                 config, 
-                 dataset_info, 
+                 config,
+                 dataset_info,
                  checkpoint_dir):
         self.policy_network = policy_network
         self.config = config
@@ -39,9 +39,9 @@ class PPOAlgorithm:
 
 
         self.collector = RolloutCollector(
-            policy_network=self.policy_network.ddpm,
-            reward_function=self.reward_function, 
-            config=config
+            policy_network=self.policy_network,
+            reward_function=self.reward_function,
+            config=config,
         )
         self.buffer = RolloutBuffer(config=config)
         
@@ -53,6 +53,7 @@ class PPOAlgorithm:
             'train/approx_kl_epoch',
             'train/clipfrac_epoch',
             'train/entropy_epoch',
+            'train/kl_penalty_epoch',
             'train/reward_mean',
             'train/reward_max',
             'train/reward_std',
@@ -121,7 +122,7 @@ class PPOAlgorithm:
         }
         
         # --- 2.6. DETERMINE CURRENT K (from original code) ---
-        current_k = self.config.ppo_params.num_train_timesteps   # Default: 64 or whatever is in config
+        current_k = self.config.ppo.train_timesteps
         
         
         # --- 2.7. SLICE TO LAST K TIMESTEPS (from original: rollout_data[key] = rollout_data[key][:, -k:]) ---
@@ -154,19 +155,19 @@ class PPOAlgorithm:
         self.buffer.timesteps = rollout_data_for_permute['timesteps']
         
         # --- 3. Run PPO Inner Epochs ---
-        self.policy_network.ddpm.train()
+        self.policy_network.train()
 
         # Initialize trackers for logs
-        total_loss, total_kl, total_clipfrac, total_entropy = 0, 0, 0, 0
+        total_loss, total_kl, total_clipfrac, total_entropy, total_kl_penalty = 0, 0, 0, 0, 0
         update_count = 0
 
-        num_inner_epochs = self.config.ppo_params.num_inner_epochs
+        num_inner_epochs = self.config.ppo.num_inner_epochs
         for inner_epoch in range(num_inner_epochs):
             reset_seen_mb_ids() # reset the seen molecule ids for each inner epoch
             
             print(f"Outer epoch: {current_epoch}, Inner epoch: {inner_epoch}")
             
-            step_every = self.config.ppo_params.gradient_accumulation_steps
+            step_every = self.config.ppo.gradient_accumulation_steps
             scale = step_every  # matching original code
             
             accumulation_count = 0
@@ -174,16 +175,17 @@ class PPOAlgorithm:
             epoch_total_approx_kl = 0.0
             epoch_total_clipfrac = 0.0
             epoch_total_entropy = 0.0
+            epoch_total_kl_penalty = 0.0
             epoch_accumulation_steps = 0
             
             for minibatch in self.buffer.get_minibatches():
                 # NOW USE current_k INSTEAD OF num_train_timesteps!
                 for t_idx in range(current_k):  # <-- THIS IS KEY
                     policy_loss, approx_kl, clipfrac, entropy = compute_ppo_loss(
-                        policy_network=self.policy_network.ddpm,
+                        policy_network=self.policy_network,
                         minibatch=minibatch,
                         timestep_idx=t_idx,
-                        config=self.config
+                        config=self.config,
                     )
                     
                     scaled_loss = policy_loss / scale
@@ -194,8 +196,8 @@ class PPOAlgorithm:
                     # Only perform optimization after accumulating for specified steps
                     if accumulation_count % step_every == 0:
                         torch.nn.utils.clip_grad_norm_(
-                            self.policy_network.ddpm.parameters(),
-                            self.config.ppo_params.max_grad_norm
+                            self.policy_network.parameters(),
+                            self.config.ppo.max_grad_norm,
                         )
                         optimizer.step()
                         optimizer.zero_grad(set_to_none=True)
@@ -205,13 +207,15 @@ class PPOAlgorithm:
                     epoch_total_approx_kl += approx_kl.item()
                     epoch_total_clipfrac += clipfrac.item()
                     epoch_total_entropy += entropy.item()
+                    kl_coef = getattr(self.config.ppo, 'kl_coef', 0.0)
+                    epoch_total_kl_penalty += (kl_coef * approx_kl.item())
                     epoch_accumulation_steps += 1
             
             # After the loop, flush leftovers if any
             if accumulation_count % step_every != 0:
                 torch.nn.utils.clip_grad_norm_(
-                    self.policy_network.ddpm.parameters(),
-                    self.config.ppo_params.max_grad_norm
+                    self.policy_network.parameters(),
+                    self.config.ppo.max_grad_norm
                 )
                 optimizer.step()
                 optimizer.zero_grad(set_to_none=True)
@@ -222,6 +226,7 @@ class PPOAlgorithm:
             "train/approx_kl_epoch": epoch_total_approx_kl / max(epoch_accumulation_steps, 1),
             "train/clipfrac_epoch": epoch_total_clipfrac / max(epoch_accumulation_steps, 1),
             "train/entropy_epoch": epoch_total_entropy / max(epoch_accumulation_steps, 1),
+            "train/kl_penalty_epoch": epoch_total_kl_penalty / max(epoch_accumulation_steps, 1),
             "train/reward_mean": self.buffer.rewards.mean().item(),
             "train/reward_max": self.buffer.rewards.max().item(),
             "train/reward_std": self.buffer.rewards.std().item(),
