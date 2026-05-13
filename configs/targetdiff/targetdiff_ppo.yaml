@@ -15,7 +15,7 @@ model_type: targetdiff
 
 # TargetDiff UniTransformer layer names (9 layers total, indices 0-8).
 # We freeze the bulk of the network and fine-tune:
-#   - protein_atom_emb / ligand_atom_emb  (re-initialised, must train)
+#   - protein_atom_emb / ligand_atom_emb  (pretrained weights, loaded from checkpoint)
 #   - v_inference head                    (atom type output)
 #   - last three transformer layers (6, 7, 8) = 1/3 of the 9-layer stack
 freeze_except:
@@ -31,11 +31,10 @@ model:
   # key 'model' containing the state_dict).
   checkpoint: 'checkpoints/targetdiff_pretrained_diffusion.pt'
 
-  # PRISM's CrossDocked data encodes pocket atoms as 10-dim element-type
-  # one-hots (C,N,O,S,B,Br,Cl,P,I,F).  TargetDiff's pretrained protein_atom_emb
-  # was trained on 27-dim features, so that layer is re-initialised when
-  # loading the checkpoint (shape-mismatched keys are stripped before load).
-  protein_feat_dim: 10
+  # Data processed with --model targetdiff uses FeaturizeProteinAtom:
+  # 6 element one-hots + 20 AA one-hots + 1 backbone flag = 27 dims,
+  # matching the pretrained checkpoint exactly — no re-initialisation.
+  protein_feat_dim: 27
   ligand_atom_types: 13   # add_aromatic encoding, 13 classes
 
   total_timesteps: 1000   # full TargetDiff chain length (sigmoid beta schedule)
