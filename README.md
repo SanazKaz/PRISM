@@ -20,14 +20,16 @@ For GPU support (Linux/Windows with CUDA):
 
 ```bash
 pip install torch==2.6.0 --index-url https://download.pytorch.org/whl/cu124
-pip install torch-scatter==2.1.2 -f https://data.pyg.org/whl/torch-2.6.0+cu124.html
+pip install torch-scatter==2.1.2 torch-cluster==1.6.3 torch-geometric==2.7.0 \
+    -f https://data.pyg.org/whl/torch-2.6.0+cu124.html
 ```
 
 For Mac (Metal/MPS):
 
 ```bash
 # torch already installed via environment.yml
-pip install torch-scatter==2.1.2 -f https://data.pyg.org/whl/torch-2.6.0+cpu.html
+pip install torch-scatter==2.1.2 torch-cluster==1.6.3 torch-geometric==2.7.0 \
+    -f https://data.pyg.org/whl/torch-2.6.0+cpu.html
 ```
 
 #### Option 2: pip with toml (CPU or custom CUDA setup)
@@ -40,8 +42,9 @@ source prism_env/bin/activate  # On Windows: prism_env\Scripts\activate
 # Install base package
 pip install -e .
 
-# Install torch-scatter (required, not in pyproject.toml due to build dependencies)
-pip install torch-scatter==2.1.2 -f https://data.pyg.org/whl/torch-2.6.0+cpu.html
+# Install PyG packages (required, version-specific — not in pyproject.toml)
+pip install torch-scatter==2.1.2 torch-cluster==1.6.3 torch-geometric==2.7.0 \
+    -f https://data.pyg.org/whl/torch-2.6.0+cpu.html
 ```
 
 #### Option 3: uv (Fast alternative to pip)
@@ -54,15 +57,17 @@ source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 # Install base package
 uv pip install -e .
 
-# Install torch-scatter
-uv pip install torch-scatter==2.1.2 -f https://data.pyg.org/whl/torch-2.6.0+cpu.html
+# Install PyG packages (required, version-specific — not in pyproject.toml)
+uv pip install torch-scatter==2.1.2 torch-cluster==1.6.3 torch-geometric==2.7.0 \
+    -f https://data.pyg.org/whl/torch-2.6.0+cpu.html
 ```
 
 For GPU support with uv:
 
 ```bash
 uv pip install torch==2.6.0 --index-url https://download.pytorch.org/whl/cu124
-uv pip install torch-scatter==2.1.2 -f https://data.pyg.org/whl/torch-2.6.0+cu124.html
+uv pip install torch-scatter==2.1.2 torch-cluster==1.6.3 torch-geometric==2.7.0 \
+    -f https://data.pyg.org/whl/torch-2.6.0+cu124.html
 ```
 
 #### Verify Installation
@@ -72,7 +77,11 @@ python -c "import torch; print(f'PyTorch version: {torch.__version__}')"
 python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}')"
 python -c "import torch; print(f'MPS available: {torch.backends.mps.is_available()}')"
 python -c "import torch_scatter; print('torch-scatter imported successfully')"
+python -c "import torch_geometric; print('torch-geometric imported successfully')"
 python -c "import prism; print('PRISM imported successfully')"
+
+# Run unit tests
+python -m pytest tests/unit/ -v
 ```
 
 ---
