@@ -24,6 +24,8 @@ class RolloutCollector:
         """
         Generates molecule rollouts for a batch of pockets.
         """
+        # Refresh device in case Lightning moved the model after __init__ (e.g. DDP wrapping).
+        self.device = next(self.policy_network.parameters()).device
         self.policy_network.eval()
         
         rollout_data = {
