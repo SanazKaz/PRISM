@@ -162,14 +162,18 @@ class PPOAlgorithm:
         update_count = 0
 
         num_inner_epochs = self.config.ppo.num_inner_epochs
+        target_kl = getattr(self.config.ppo, 'target_kl', None)
+        kl_early_stop = False
+
         for inner_epoch in range(num_inner_epochs):
-            reset_seen_mb_ids() # reset the seen molecule ids for each inner epoch
-            
-            print(f"Outer epoch: {current_epoch}, Inner epoch: {inner_epoch}")
-            
+            if kl_early_stop:
+                break
+
+            reset_seen_mb_ids()
+
             step_every = self.config.ppo.gradient_accumulation_steps
             scale = step_every  # matching original code
-            
+
             accumulation_count = 0
             epoch_total_loss = 0.0
             epoch_total_approx_kl = 0.0
@@ -177,23 +181,25 @@ class PPOAlgorithm:
             epoch_total_entropy = 0.0
             epoch_total_kl_penalty = 0.0
             epoch_accumulation_steps = 0
-            
+
             for minibatch in self.buffer.get_minibatches():
-                # NOW USE current_k INSTEAD OF num_train_timesteps!
-                for t_idx in range(current_k):  # <-- THIS IS KEY
+                for t_idx in range(current_k):
                     policy_loss, approx_kl, clipfrac, entropy = compute_ppo_loss(
                         policy_network=self.policy_network,
                         minibatch=minibatch,
                         timestep_idx=t_idx,
                         config=self.config,
                     )
-                    
+
+                    # Sync KL across ranks so every rank makes the same early-stop decision.
+                    if dist.is_initialized():
+                        dist.all_reduce(approx_kl, op=dist.ReduceOp.AVG)
+
                     scaled_loss = policy_loss / scale
                     backward_fn(scaled_loss)
-                    
+
                     accumulation_count += 1
-                    
-                    # Only perform optimization after accumulating for specified steps
+
                     if accumulation_count % step_every == 0:
                         torch.nn.utils.clip_grad_norm_(
                             self.policy_network.parameters(),
@@ -201,8 +207,7 @@ class PPOAlgorithm:
                         )
                         optimizer.step()
                         optimizer.zero_grad(set_to_none=True)
-                    
-                    # Accumulate metrics
+
                     epoch_total_loss += policy_loss.detach().item()
                     epoch_total_approx_kl += approx_kl.item()
                     epoch_total_clipfrac += clipfrac.item()
@@ -210,8 +215,15 @@ class PPOAlgorithm:
                     kl_coef = getattr(self.config.ppo, 'kl_coef', 0.0)
                     epoch_total_kl_penalty += (kl_coef * approx_kl.item())
                     epoch_accumulation_steps += 1
-            
-            # After the loop, flush leftovers if any
+
+                    if target_kl is not None and approx_kl.item() > target_kl:
+                        kl_early_stop = True
+                        break
+
+                if kl_early_stop:
+                    break
+
+            # Flush any remaining accumulated gradients.
             if accumulation_count % step_every != 0:
                 torch.nn.utils.clip_grad_norm_(
                     self.policy_network.parameters(),

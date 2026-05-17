@@ -52,9 +52,9 @@ class LigandPocketDataModule(pl.LightningDataModule):
         if torch.distributed.is_initialized():
             sampler = torch.utils.data.distributed.DistributedSampler(
                 self.train_dataset,
-                shuffle=False
+                shuffle=True  # re-shuffles each epoch via set_epoch (called by Lightning)
             )
-            shuffle = False  # sampler handles sharding; keep order deterministic
+            shuffle = False  # sampler owns the shuffling; DataLoader must not also shuffle
         else:
             sampler = None
             shuffle = True # careful in distributed training
