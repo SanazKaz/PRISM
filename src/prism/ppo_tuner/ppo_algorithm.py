@@ -1,10 +1,11 @@
 # src/prism/ppo_tuner/ppo_algorithm.py
 
 import torch
+import torch.distributed as dist
 from torch.optim import Adam
 import csv
 import os
-from pathlib import Path  
+from pathlib import Path
 
 # Import the clean components we just built
 from .rollout_collector import RolloutCollector
@@ -31,11 +32,12 @@ class PPOAlgorithm:
         self.reward_function = reward_function
         self.checkpoint_dir = checkpoint_dir
         
-        # Initialize CSV logging
         self.log_dir = Path(checkpoint_dir) / "training_logs"
-        self.log_dir.mkdir(parents=True, exist_ok=True)
         self.csv_path = self.log_dir / "training_metrics.csv"
-        self._initialize_csv()
+        _rank = dist.get_rank() if dist.is_initialized() else 0
+        if _rank == 0:
+            self.log_dir.mkdir(parents=True, exist_ok=True)
+            self._initialize_csv()
 
 
         self.collector = RolloutCollector(
@@ -70,13 +72,9 @@ class PPOAlgorithm:
                 writer.writeheader()
     
     def _log_to_csv(self, epoch, metrics):
-        """
-        Append metrics for the current epoch to CSV.
-        
-        Args:
-            epoch: Current training epoch
-            metrics: Dictionary of metric names to values
-        """
+        _rank = dist.get_rank() if dist.is_initialized() else 0
+        if _rank != 0:
+            return
         row = {'epoch': epoch}
         row.update(metrics)
         
@@ -90,10 +88,12 @@ class PPOAlgorithm:
             writer = csv.DictWriter(f, fieldnames=all_fieldnames)
             writer.writerow(row)
     
-    def train_step(self, pocket_batch, current_epoch, optimizer):
+    def train_step(self, pocket_batch, current_epoch, optimizer, backward_fn=None):
         """
         Performs one full step of the PPO outer loop.
         """
+        if backward_fn is None:
+            backward_fn = lambda loss: loss.backward()
         # --- 1. Collect Experience ---
         get_ligand_and_pocket_fn = self.policy_network.get_ligand_and_pocket
         rollout_data = self.collector.collect(pocket_batch, current_epoch, get_ligand_and_pocket_fn)
@@ -189,7 +189,7 @@ class PPOAlgorithm:
                     )
                     
                     scaled_loss = policy_loss / scale
-                    scaled_loss.backward()
+                    backward_fn(scaled_loss)
                     
                     accumulation_count += 1
                     

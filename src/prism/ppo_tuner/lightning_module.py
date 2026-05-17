@@ -14,6 +14,7 @@ Everything about *how* a model is built (architecture constants, checkpoint
 loading, dataset_info construction) lives in policy_factory.py, not here.
 """
 
+import os
 import pytorch_lightning as pl
 import torch
 
@@ -38,7 +39,8 @@ class PPOFineTuner(pl.LightningModule):
         self.config = config
         self.automatic_optimization = False  # PPO manages its own optimiser steps
 
-        device = torch.device("cuda" if self.config.gpus > 0 else "cpu")
+        local_rank = int(os.environ.get('LOCAL_RANK', 0))
+        device = torch.device(f'cuda:{local_rank}' if self.config.gpus > 0 else 'cpu')
         model_type = getattr(self.config, 'model_type', 'diffsbdd')
 
         if model_type == 'targetdiff':
@@ -130,6 +132,7 @@ class PPOFineTuner(pl.LightningModule):
             pocket_batch=batch,
             current_epoch=self.current_epoch,
             optimizer=opt,
+            backward_fn=self.manual_backward,
         )
         self.log_dict(logs, on_step=False, on_epoch=True, prog_bar=True)
         return logs
