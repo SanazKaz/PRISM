@@ -94,6 +94,8 @@ class PPOAlgorithm:
         """
         if backward_fn is None:
             backward_fn = lambda loss: loss.backward()
+        # Refresh device — Lightning may have moved the model after __init__ (DDP wrapping).
+        self.device = next(self.policy_network.parameters()).device
         # --- 1. Collect Experience ---
         get_ligand_and_pocket_fn = self.policy_network.get_ligand_and_pocket
         rollout_data = self.collector.collect(pocket_batch, current_epoch, get_ligand_and_pocket_fn)
