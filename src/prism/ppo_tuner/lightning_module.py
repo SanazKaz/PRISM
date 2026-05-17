@@ -41,6 +41,7 @@ class PPOFineTuner(pl.LightningModule):
 
         local_rank = int(os.environ.get('LOCAL_RANK', 0))
         device = torch.device(f'cuda:{local_rank}' if self.config.gpus > 0 else 'cpu')
+        print(f"[INIT] PPOFineTuner | LOCAL_RANK={local_rank} | device={device}")
         model_type = getattr(self.config, 'model_type', 'diffsbdd')
 
         if model_type == 'targetdiff':
@@ -126,7 +127,10 @@ class PPOFineTuner(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         """Delegates one full PPO outer step (collect → advantage → update) to PPOAlgorithm."""
         opt = self.optimizers()
-        print(f"[DEBUG] Global Step: {self.global_step} | Current Epoch: {self.current_epoch}")
+        import torch.distributed as _dist
+        rank = self.trainer.global_rank
+        print(f"[RANK {rank}] training_step | dist.is_initialized={_dist.is_initialized()} | "
+              f"world_size={self.trainer.world_size} | device={self.device} | epoch={self.current_epoch}")
 
         logs = self.ppo_algorithm.train_step(
             pocket_batch=batch,
