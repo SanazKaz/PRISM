@@ -1,6 +1,6 @@
 # PRISM: Policy-Reinforced Iterative Structure-Based Molecular Diffusion
 
-A reinforcement learning framework for structure-based molecular generation.
+A reinforcement learning framework for structure-based _de novo_ diffusion models
 
 ## Setup
 
