@@ -15,12 +15,9 @@ model_type: targetdiff
 
 # TargetDiff UniTransformer layer names (9 layers total, indices 0-8).
 # We freeze the bulk of the network and fine-tune:
-#   - protein_atom_emb / ligand_atom_emb  (re-initialised, must train)
 #   - v_inference head                    (atom type output)
 #   - last three transformer layers (6, 7, 8) = 1/3 of the 9-layer stack
 freeze_except:
-  - 'protein_atom_emb'
-  - 'ligand_atom_emb'
   - 'v_inference'
   - 'refine_net.base_block.6'
   - 'refine_net.base_block.7'
