@@ -32,6 +32,9 @@ dependencies = [
     "selfies==2.2.0",
     "medchem==2.0.5",
     
+    # TargetDiff dependency
+    "easydict==1.13",
+
     # Utilities
     "pyyaml==6.0.3",
     "tqdm==4.67.1",
@@ -41,6 +44,15 @@ dependencies = [
     
     # Logging & tracking
     "wandb==0.25.1",
+]
+
+# PyTorch Geometric packages (torch-scatter, torch-geometric, torch-cluster) must
+# be installed separately — their wheels are CUDA-version-specific and not on PyPI.
+# See README.md for the correct pip install commands.
+
+[project.optional-dependencies]
+dev = [
+    "pytest==9.0.3",
 ]
 
 [build-system]
