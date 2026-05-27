@@ -150,7 +150,9 @@ class PPOFineTuner(pl.LightningModule):
                 f"keys_in_logs={list(logs.keys())}"
             )
 
-        self.log_dict(logs, on_step=False, on_epoch=True, prog_bar=True)
+        # sync_dist=True all-reduces each metric across DDP ranks before PL logs it,
+        # so both WandB and ModelCheckpoint see the global mean (not rank 0 only).
+        self.log_dict(logs, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
         return logs
 
     def validation_step(self, batch, batch_idx):
