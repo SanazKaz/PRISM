@@ -42,7 +42,49 @@ class PTModelCheckpoint(ModelCheckpoint):
     Supports both DiffSBDD (saves ddpm_model state_dict) and TargetDiff
     (saves the inner ScorePosNet3D state_dict via policy._model).
     """
+
+    # ------------------------------------------------------------------
+    # Diagnostic hooks — print key internal state at every epoch end so
+    # we can see exactly why top-k / last.ckpt saves do or don't fire.
+    # ------------------------------------------------------------------
+
+    def on_train_epoch_end(self, trainer, pl_module):
+        if trainer.is_global_zero:
+            cb_metrics = trainer.callback_metrics
+            monitored = cb_metrics.get(self.monitor, 'NOT FOUND')
+            print(
+                f"[CKPT-DBG epoch={trainer.current_epoch}] "
+                f"global_step={trainer.global_step} | "
+                f"_last_global_step_saved={self._last_global_step_saved} | "
+                f"monitor='{self.monitor}' value={monitored} | "
+                f"kth_value={self.kth_value} | "
+                f"best_k_models={list(self.best_k_models.values())} | "
+                f"skip={self._should_skip_saving_checkpoint(trainer)}"
+            )
+        super().on_train_epoch_end(trainer, pl_module)
+
+    def _save_topk_checkpoint(self, trainer, monitor_candidates):
+        current = monitor_candidates.get(self.monitor)
+        if trainer.is_global_zero:
+            print(
+                f"[CKPT-DBG _save_topk epoch={trainer.current_epoch}] "
+                f"current={current} | kth_value={self.kth_value} | "
+                f"best_k_models count={len(self.best_k_models)}"
+            )
+        super()._save_topk_checkpoint(trainer, monitor_candidates)
+
+    def _save_last_checkpoint(self, trainer, monitor_candidates):
+        if trainer.is_global_zero:
+            print(
+                f"[CKPT-DBG _save_last epoch={trainer.current_epoch}] "
+                f"_save_last_checkpoint CALLED | "
+                f"last_model_path={self.last_model_path}"
+            )
+        super()._save_last_checkpoint(trainer, monitor_candidates)
+
     def _save_checkpoint(self, trainer, filepath):
+        if trainer.is_global_zero:
+            print(f"[CKPT-DBG _save_checkpoint epoch={trainer.current_epoch}] writing {filepath}")
         super()._save_checkpoint(trainer, filepath)
 
         if trainer.is_global_zero:

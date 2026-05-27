@@ -11,6 +11,7 @@ os.environ["DEBUG_PPO"] = "0"  # disable global-state tracking in debug utils
 import torch
 import unittest
 from types import SimpleNamespace
+from unittest.mock import patch
 from tests.ppo_debug_utils import reset_seen_mb_ids
 
 from src.prism.ppo_tuner.rollout_buffer import RolloutBuffer

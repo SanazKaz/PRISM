@@ -138,6 +138,18 @@ class PPOFineTuner(pl.LightningModule):
             optimizer=opt,
             backward_fn=self.manual_backward,
         )
+
+        # Diagnostic: print what reward value is being handed to PL's metric system.
+        # Compare this against [CKPT-DBG] prints to see if callback_metrics matches.
+        if rank == 0:
+            reward_val = logs.get('train/reward_mean', 'MISSING')
+            print(
+                f"[STEP-DBG epoch={self.current_epoch}] "
+                f"global_step={self.trainer.global_step} | "
+                f"reward_mean logged to PL={reward_val} | "
+                f"keys_in_logs={list(logs.keys())}"
+            )
+
         self.log_dict(logs, on_step=False, on_epoch=True, prog_bar=True)
         return logs
 
@@ -149,6 +161,18 @@ class PPOFineTuner(pl.LightningModule):
 
     def on_train_epoch_end(self):
         """Trigger periodic validation at intervals set by config.eval_epochs."""
+        # Diagnostic: show what PL put in callback_metrics after the epoch.
+        # This is exactly what ModelCheckpoint reads when deciding to save.
+        if self.trainer.is_global_zero:
+            cb = self.trainer.callback_metrics
+            reward_in_cb = cb.get('train/reward_mean', 'NOT IN callback_metrics')
+            print(
+                f"[EPOCH-END-DBG epoch={self.current_epoch}] "
+                f"callback_metrics['train/reward_mean']={reward_in_cb} | "
+                f"global_step={self.trainer.global_step} | "
+                f"all_cb_keys={list(cb.keys())}"
+            )
+
         if (self.current_epoch + 1) % self.config.eval_epochs == 0:
             if self.ddpm_model is None:
                 # TargetDiff does not use DiffSBDD's validation loop.
