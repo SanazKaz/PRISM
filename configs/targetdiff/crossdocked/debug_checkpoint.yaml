@@ -1,18 +1,27 @@
-# Minimal config for interactive checkpoint debugging.
-# Run on a single interactive node (1 GPU) to reproduce the checkpoint
-# save behaviour quickly — see [CKPT-DBG] / [STEP-DBG] / [EPOCH-END-DBG]
-# prints in the log.
+# Diagnostic config for checkpoint debugging under 4-GPU DDP.
+# Same diagnostic prints as the 1-GPU baseline (see [CKPT-DBG] / [STEP-DBG] / [EPOCH-END-DBG]).
+# Goal: observe whether global_step, _last_global_step_saved, skip, and
+# callback_metrics['train/reward_mean'] behave differently under DDP compared
+# to the 1-GPU run.
 #
-# Usage:
-#   python scripts/train.py \
+# Key things to watch in the log:
+#   [STEP-DBG]      — reward_mean value returned by training_step (per rank 0)
+#   [EPOCH-END-DBG] — callback_metrics['train/reward_mean'] at epoch end (rank 0)
+#   [CKPT-DBG]      — what ModelCheckpoint sees: global_step, _last_global_step_saved,
+#                     monitor value, kth_value, skip flag
+#   [CKPT-DBG _save_last] — absent in epochs where skip fires or top-k doesn't save
+#
+# Usage (4-GPU interactive node):
+#   srun --ntasks-per-node=4 --gpus-per-task=1 \
+#     python scripts/train.py \
 #       --config configs/targetdiff/crossdocked/debug_checkpoint.yaml \
 #       --warm_start_from_ddpm checkpoints/targetdiff_pretrained_models/targetdiff_pretrained_diffusion.pt \
 #       --datadir /data/stat-cadd/wolf7055/PRISM/data/cross_dock/processed_crossdock_targetdiff \
-#       --logdir /tmp/prism_debug \
+#       --logdir /tmp/prism_debug_4gpu \
 #       --seed 42
 
-run_identifier: 'debug_checkpoint'
-logdir: '/tmp/prism_debug'
+run_identifier: 'debug_checkpoint_4gpu'
+logdir: '/tmp/prism_debug_4gpu'
 
 wandb_params:
   mode: 'disabled'
@@ -33,27 +42,27 @@ model:
   total_timesteps: 1000
 
 # -----------------------------------------------------------------------
-# Data — single GPU, small batch so each epoch is fast
+# Data — 4 GPUs, small batch; each GPU gets its own disjoint pocket shard
 # -----------------------------------------------------------------------
 datadir: '/data/stat-cadd/wolf7055/PRISM/data/cross_dock/processed_crossdock_targetdiff'
 dataset: 'crossdock'
-batch_size: 2       # 2 pockets per training step
+batch_size: 4       # 1 pocket per GPU per step (4 GPUs × 1 = 4 total per step)
 num_workers: 0
-gpus: 1             # single GPU — no DDP, clean baseline
+gpus: 4             # 4-GPU DDP diagnostic
 n_epochs: 1
 
 enable_progress_bar: True
 num_sanity_val_steps: 0
 
 # -----------------------------------------------------------------------
-# PPO — tiny values so each epoch completes in seconds
+# PPO — 1 molecule per GPU per rollout; keeps each epoch fast under DDP
 # -----------------------------------------------------------------------
 ppo:
-  num_outer_epochs: 10      # 10 epochs is enough to see whether last.ckpt updates
+  num_outer_epochs: 10      # 10 epochs to observe skip / global_step / kth_value behaviour
   num_inner_epochs: 1
-  n_steps: 2                # 2 molecules per rollout
-  ligand_chunk_size: 2
-  batch_size: 2
+  n_steps: 1                # 1 molecule per GPU per rollout (4 total across 4 GPUs)
+  ligand_chunk_size: 1
+  batch_size: 1             # 1 molecule per minibatch per GPU
   clip_range: 0.1
   entropy_coef: 0.001
   kl_coef: 0.0
@@ -106,8 +115,8 @@ eval_epochs: 99999
 visualize_sample_epoch: 99999
 visualize_chain_epoch: 999999
 eval_params:
-  n_eval_samples: 2
-  eval_batch_size: 2
+  n_eval_samples: 4
+  eval_batch_size: 4
   smiles_file: '/data/stat-cadd/wolf7055/PRISM/data/cross_dock/processed_crossdock_targetdiff/train_smiles.npy'
   n_visualize_samples: 0
   keep_frames: 0
