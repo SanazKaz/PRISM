@@ -3,7 +3,7 @@
 #   python scripts/train.py --config configs/targetdiff_ppo.yaml \
 #       --datadir /path/to/crossdocked_data --seed 42
 
-run_identifier: 'TargetDiff_CD_plogp'
+run_identifier: 'cont_e36_128_batch_700T_2_gpu_TargetDiff_CD_plogp'
 logdir: 'Log_Results'
 
 wandb_params:
@@ -15,12 +15,9 @@ model_type: targetdiff
 
 # TargetDiff UniTransformer layer names (9 layers total, indices 0-8).
 # We freeze the bulk of the network and fine-tune:
-#   - protein_atom_emb / ligand_atom_emb  (re-initialised, must train)
 #   - v_inference head                    (atom type output)
 #   - last three transformer layers (6, 7, 8) = 1/3 of the 9-layer stack
 freeze_except:
-  - 'protein_atom_emb'
-  - 'ligand_atom_emb'
   - 'v_inference'
   - 'refine_net.base_block.6'
   - 'refine_net.base_block.7'
@@ -44,9 +41,9 @@ model:
 # -----------------------------------------------------------------------
 datadir: '/data/stat-cadd/wolf7055/PRISM/data/cross_dock/processed_crossdock_targetdiff'
 dataset: 'crossdock'
-batch_size: 8
+batch_size: 42
 num_workers: 4
-gpus: 1
+gpus: 2
 n_epochs: 1
 
 enable_progress_bar: False
@@ -65,10 +62,10 @@ ppo:
   entropy_coef: 0.001
   kl_coef: 0.0
   max_grad_norm: 1.0
-  gradient_accumulation_steps: 10
-  train_timesteps: 500            # PPO trains on the last 500 of 1000 reverse steps
-  target_kl: 0.03
-  lr: 3.0e-5
+  gradient_accumulation_steps: 42 
+  train_timesteps: 700            # PPO trains on the last 500 of 1000 reverse steps
+  target_kl: null
+  lr: 3.0e-5 # reduced from 3.0e-5 to avoid instability
   num_nodes_lig: 27
 
 # -----------------------------------------------------------------------

@@ -1,6 +1,7 @@
 # src/prism/ppo_tuner/rollout_buffer.py
 
 import torch
+import torch.distributed as dist
 import numpy as np
 from tests.ppo_debug_utils import validate_minibatch, reset_seen_mb_ids
 import hashlib
@@ -65,17 +66,29 @@ class RolloutBuffer:
         if not self.data_loaded:
             raise ValueError("Cannot compute advantages before loading data.")
 
-        batch_mean = self.rewards.mean()
-        batch_std  = self.rewards.std()
+        if dist.is_initialized():
+            # Compute global mean/std across all ranks so advantages are
+            # comparable when DDP averages gradients.
+            local_sum    = self.rewards.sum()
+            local_sum_sq = (self.rewards ** 2).sum()
+            local_count  = torch.tensor(float(self.rewards.numel()),
+                                        device=self.rewards.device)
+            dist.all_reduce(local_sum,    op=dist.ReduceOp.SUM)
+            dist.all_reduce(local_sum_sq, op=dist.ReduceOp.SUM)
+            dist.all_reduce(local_count,  op=dist.ReduceOp.SUM)
+            global_mean = local_sum / local_count
+            global_var  = (local_sum_sq / local_count) - global_mean ** 2
+            global_std  = (global_var.clamp(min=0.0) + 1e-8).sqrt()
+            batch_mean, batch_std = global_mean, global_std
+        else:
+            batch_mean = self.rewards.mean()
+            batch_std  = self.rewards.std()
 
-        # Guard against degenerate batches (size 1, or all-identical rewards).
         if self.rewards.numel() > 1 and batch_std > 1e-6:
             self.advantages = (self.rewards - batch_mean) / (batch_std + 1e-8)
         else:
-            # If std is zero every gradient would be zero anyway; just centre.
             self.advantages = self.rewards - batch_mean
 
-        # Clip to keep the policy update magnitude bounded.
         self.advantages = torch.clamp(self.advantages, min=-3.0, max=3.0)
 
 

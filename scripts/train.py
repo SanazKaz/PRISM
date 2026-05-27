@@ -27,6 +27,7 @@ import torch
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import Callback
 from pytorch_lightning.callbacks import ModelCheckpoint
+from pytorch_lightning.strategies import DDPStrategy
 
 # Import our new, clean components from the src library
 from src.prism.data_modules.lightning_datamodule import LigandPocketDataModule
@@ -160,15 +161,19 @@ def main(args):
         config=config_dict,
     )
 
+    num_gpus = config.gpus if isinstance(config.gpus, int) else len(config.gpus)
+    strategy = DDPStrategy(find_unused_parameters=False) if num_gpus > 1 else 'auto'
+
     trainer = pl.Trainer(
         max_epochs=config.ppo.num_outer_epochs,
         accelerator='gpu',
         devices=config.gpus,
+        strategy=strategy,
         callbacks=[checkpoint_callback],
         enable_progress_bar=config.enable_progress_bar,
         num_sanity_val_steps=config.num_sanity_val_steps,
         logger=wandb_logger,
-        limit_train_batches=1, 
+        limit_train_batches=1,
     )
 
     # --- 5. Start Training ---

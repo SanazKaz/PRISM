@@ -14,6 +14,7 @@ Everything about *how* a model is built (architecture constants, checkpoint
 loading, dataset_info construction) lives in policy_factory.py, not here.
 """
 
+import os
 import pytorch_lightning as pl
 import torch
 
@@ -38,7 +39,9 @@ class PPOFineTuner(pl.LightningModule):
         self.config = config
         self.automatic_optimization = False  # PPO manages its own optimiser steps
 
-        device = torch.device("cuda" if self.config.gpus > 0 else "cpu")
+        local_rank = int(os.environ.get('LOCAL_RANK', 0))
+        device = torch.device(f'cuda:{local_rank}' if self.config.gpus > 0 else 'cpu')
+        print(f"[INIT] PPOFineTuner | LOCAL_RANK={local_rank} | device={device}")
         model_type = getattr(self.config, 'model_type', 'diffsbdd')
 
         if model_type == 'targetdiff':
@@ -124,12 +127,16 @@ class PPOFineTuner(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         """Delegates one full PPO outer step (collect → advantage → update) to PPOAlgorithm."""
         opt = self.optimizers()
-        print(f"[DEBUG] Global Step: {self.global_step} | Current Epoch: {self.current_epoch}")
+        import torch.distributed as _dist
+        rank = self.trainer.global_rank
+        print(f"[RANK {rank}] training_step | dist.is_initialized={_dist.is_initialized()} | "
+              f"world_size={self.trainer.world_size} | device={self.device} | epoch={self.current_epoch}")
 
         logs = self.ppo_algorithm.train_step(
             pocket_batch=batch,
             current_epoch=self.current_epoch,
             optimizer=opt,
+            backward_fn=self.manual_backward,
         )
         self.log_dict(logs, on_step=False, on_epoch=True, prog_bar=True)
         return logs

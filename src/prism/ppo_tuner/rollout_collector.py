@@ -24,6 +24,8 @@ class RolloutCollector:
         """
         Generates molecule rollouts for a batch of pockets.
         """
+        # Refresh device in case Lightning moved the model after __init__ (e.g. DDP wrapping).
+        self.device = next(self.policy_network.parameters()).device
         self.policy_network.eval()
         
         rollout_data = {
@@ -56,6 +58,9 @@ class RolloutCollector:
         samples_per_pocket = math.ceil(samples_per_rank / max(1, local_batch_size))
         total_target_samples = min(samples_per_rank, local_batch_size * samples_per_pocket)
 
+        print(f"[RANK {rank}] RolloutCollector | world_size={world_size} | "
+              f"pockets={local_batch_size} | samples_per_pocket={samples_per_pocket} | "
+              f"first_pocket={names[0] if names else 'N/A'}")
         total_samples, valid_samples = 0, 0
         max_pockets_per_rank = max(1, local_batch_size)
         global_offset = rank * max_pockets_per_rank * samples_per_pocket

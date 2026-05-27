@@ -14,7 +14,7 @@ gpus: 1
 n_epochs: 1
 
 # Unfreeze all 5 EGNN blocks (e_block_0 through e_block_4).
-freeze_except: ['e_block_0', 'e_block_1', 'e_block_2', 'e_block_3', 'e_block_4']
+freeze_except: ['e_block_2', 'e_block_3', 'e_block_4']
 
 model:
   total_timesteps: 500

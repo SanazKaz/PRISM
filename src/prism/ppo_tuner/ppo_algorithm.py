@@ -1,10 +1,11 @@
 # src/prism/ppo_tuner/ppo_algorithm.py
 
 import torch
+import torch.distributed as dist
 from torch.optim import Adam
 import csv
 import os
-from pathlib import Path  
+from pathlib import Path
 
 # Import the clean components we just built
 from .rollout_collector import RolloutCollector
@@ -31,11 +32,12 @@ class PPOAlgorithm:
         self.reward_function = reward_function
         self.checkpoint_dir = checkpoint_dir
         
-        # Initialize CSV logging
         self.log_dir = Path(checkpoint_dir) / "training_logs"
-        self.log_dir.mkdir(parents=True, exist_ok=True)
         self.csv_path = self.log_dir / "training_metrics.csv"
-        self._initialize_csv()
+        _rank = dist.get_rank() if dist.is_initialized() else 0
+        if _rank == 0:
+            self.log_dir.mkdir(parents=True, exist_ok=True)
+            self._initialize_csv()
 
 
         self.collector = RolloutCollector(
@@ -70,13 +72,9 @@ class PPOAlgorithm:
                 writer.writeheader()
     
     def _log_to_csv(self, epoch, metrics):
-        """
-        Append metrics for the current epoch to CSV.
-        
-        Args:
-            epoch: Current training epoch
-            metrics: Dictionary of metric names to values
-        """
+        _rank = dist.get_rank() if dist.is_initialized() else 0
+        if _rank != 0:
+            return
         row = {'epoch': epoch}
         row.update(metrics)
         
@@ -90,10 +88,14 @@ class PPOAlgorithm:
             writer = csv.DictWriter(f, fieldnames=all_fieldnames)
             writer.writerow(row)
     
-    def train_step(self, pocket_batch, current_epoch, optimizer):
+    def train_step(self, pocket_batch, current_epoch, optimizer, backward_fn=None):
         """
         Performs one full step of the PPO outer loop.
         """
+        if backward_fn is None:
+            backward_fn = lambda loss: loss.backward()
+        # Refresh device — Lightning may have moved the model after __init__ (DDP wrapping).
+        self.device = next(self.policy_network.parameters()).device
         # --- 1. Collect Experience ---
         get_ligand_and_pocket_fn = self.policy_network.get_ligand_and_pocket
         rollout_data = self.collector.collect(pocket_batch, current_epoch, get_ligand_and_pocket_fn)
@@ -162,14 +164,18 @@ class PPOAlgorithm:
         update_count = 0
 
         num_inner_epochs = self.config.ppo.num_inner_epochs
+        target_kl = getattr(self.config.ppo, 'target_kl', None)
+        kl_early_stop = False
+
         for inner_epoch in range(num_inner_epochs):
-            reset_seen_mb_ids() # reset the seen molecule ids for each inner epoch
-            
-            print(f"Outer epoch: {current_epoch}, Inner epoch: {inner_epoch}")
-            
+            if kl_early_stop:
+                break
+
+            reset_seen_mb_ids()
+
             step_every = self.config.ppo.gradient_accumulation_steps
             scale = step_every  # matching original code
-            
+
             accumulation_count = 0
             epoch_total_loss = 0.0
             epoch_total_approx_kl = 0.0
@@ -177,23 +183,25 @@ class PPOAlgorithm:
             epoch_total_entropy = 0.0
             epoch_total_kl_penalty = 0.0
             epoch_accumulation_steps = 0
-            
+
             for minibatch in self.buffer.get_minibatches():
-                # NOW USE current_k INSTEAD OF num_train_timesteps!
-                for t_idx in range(current_k):  # <-- THIS IS KEY
+                for t_idx in range(current_k):
                     policy_loss, approx_kl, clipfrac, entropy = compute_ppo_loss(
                         policy_network=self.policy_network,
                         minibatch=minibatch,
                         timestep_idx=t_idx,
                         config=self.config,
                     )
-                    
+
+                    # Sync KL across ranks so every rank makes the same early-stop decision.
+                    if dist.is_initialized():
+                        dist.all_reduce(approx_kl, op=dist.ReduceOp.AVG)
+
                     scaled_loss = policy_loss / scale
-                    scaled_loss.backward()
-                    
+                    backward_fn(scaled_loss)
+
                     accumulation_count += 1
-                    
-                    # Only perform optimization after accumulating for specified steps
+
                     if accumulation_count % step_every == 0:
                         torch.nn.utils.clip_grad_norm_(
                             self.policy_network.parameters(),
@@ -201,8 +209,7 @@ class PPOAlgorithm:
                         )
                         optimizer.step()
                         optimizer.zero_grad(set_to_none=True)
-                    
-                    # Accumulate metrics
+
                     epoch_total_loss += policy_loss.detach().item()
                     epoch_total_approx_kl += approx_kl.item()
                     epoch_total_clipfrac += clipfrac.item()
@@ -210,8 +217,15 @@ class PPOAlgorithm:
                     kl_coef = getattr(self.config.ppo, 'kl_coef', 0.0)
                     epoch_total_kl_penalty += (kl_coef * approx_kl.item())
                     epoch_accumulation_steps += 1
-            
-            # After the loop, flush leftovers if any
+
+                    if target_kl is not None and approx_kl.item() > target_kl:
+                        kl_early_stop = True
+                        break
+
+                if kl_early_stop:
+                    break
+
+            # Flush any remaining accumulated gradients.
             if accumulation_count % step_every != 0:
                 torch.nn.utils.clip_grad_norm_(
                     self.policy_network.parameters(),

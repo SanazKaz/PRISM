@@ -207,5 +207,106 @@ class TestGetMinibatches(unittest.TestCase):
         self.assertFalse(buf.data_loaded)
 
 
+# ---------------------------------------------------------------------------
+# Tests: compute_advantages — distributed path (mocked dist)
+# ---------------------------------------------------------------------------
+
+class TestComputeAdvantagesDistributed(unittest.TestCase):
+    """
+    Verify that compute_advantages calls dist.all_reduce when
+    dist.is_initialized() returns True, and produces globally-consistent
+    normalisation across ranks.
+
+    We mock dist so no real process group is needed.  The mock simulates two
+    ranks each holding half the rewards; all_reduce SUM is emulated by
+    filling each tensor with the pre-computed global aggregate.
+    """
+
+    def _make_buf(self, rewards):
+        cfg = _make_config(batch_size=2)
+        buf = RolloutBuffer(cfg)
+        buf.load_rollout_data(_make_rollout_data(n_mols=len(rewards), rewards=rewards))
+        return buf
+
+    def _side_effect_for(self, rank0_rewards, rank1_rewards):
+        """Return a side_effect for all_reduce that fills tensors with global aggregates."""
+        all_r = torch.cat([rank0_rewards, rank1_rewards])
+        expected = [all_r.sum(), (all_r ** 2).sum(), torch.tensor(float(len(all_r)))]
+        call_count = [0]
+
+        def _se(tensor, op):
+            tensor.fill_(expected[call_count[0]].item())
+            call_count[0] += 1
+
+        return _se
+
+    def test_all_reduce_called_when_distributed(self):
+        """all_reduce must be invoked exactly 3 times (sum, sum_sq, count)."""
+        rewards = torch.tensor([0.1, 0.5, 0.3, 0.9])
+        buf = self._make_buf(rewards)
+
+        with patch("src.prism.ppo_tuner.rollout_buffer.dist") as mock_dist:
+            mock_dist.is_initialized.return_value = True
+            mock_dist.ReduceOp.SUM = "SUM"
+            mock_dist.all_reduce.side_effect = self._side_effect_for(rewards, rewards)
+
+            buf.compute_advantages()
+
+        self.assertEqual(mock_dist.all_reduce.call_count, 3)
+
+    def test_global_normalisation_matches_combined(self):
+        """Advantages produced under mocked DDP must match single-GPU result
+        computed on the full combined reward set."""
+        r0 = torch.tensor([0.2, 0.4])
+        r1 = torch.tensor([0.6, 0.8])
+        all_r = torch.cat([r0, r1])
+        expected_mean = all_r.mean()
+        expected_std  = (((all_r ** 2).mean() - expected_mean ** 2).clamp(min=0.0) + 1e-8).sqrt()
+        expected_adv  = ((r0 - expected_mean) / expected_std).clamp(-3, 3)
+
+        buf = self._make_buf(r0)
+
+        with patch("src.prism.ppo_tuner.rollout_buffer.dist") as mock_dist:
+            mock_dist.is_initialized.return_value = True
+            mock_dist.ReduceOp.SUM = "SUM"
+            mock_dist.all_reduce.side_effect = self._side_effect_for(r0, r1)
+
+            buf.compute_advantages()
+
+        self.assertTrue(
+            torch.allclose(buf.advantages, expected_adv, atol=1e-4),
+            f"Expected {expected_adv}, got {buf.advantages}",
+        )
+
+    def test_single_gpu_fallback_no_all_reduce(self):
+        """When dist.is_initialized() is False, all_reduce must NOT be called."""
+        rewards = torch.tensor([0.1, 0.5, 0.3, 0.9])
+        buf = self._make_buf(rewards)
+
+        with patch("src.prism.ppo_tuner.rollout_buffer.dist") as mock_dist:
+            mock_dist.is_initialized.return_value = False
+
+            buf.compute_advantages()
+
+        mock_dist.all_reduce.assert_not_called()
+        self.assertFalse(buf.advantages.isnan().any())
+
+    def test_distributed_advantages_clamped(self):
+        """Clamping to [-3, 3] still applies on the distributed path."""
+        r0 = torch.tensor([0.0, 0.0])
+        r1 = torch.tensor([0.0, 1e6])
+        buf = self._make_buf(r0)
+
+        with patch("src.prism.ppo_tuner.rollout_buffer.dist") as mock_dist:
+            mock_dist.is_initialized.return_value = True
+            mock_dist.ReduceOp.SUM = "SUM"
+            mock_dist.all_reduce.side_effect = self._side_effect_for(r0, r1)
+
+            buf.compute_advantages()
+
+        self.assertLessEqual(buf.advantages.max().item(),  3.0 + 1e-6)
+        self.assertGreaterEqual(buf.advantages.min().item(), -3.0 - 1e-6)
+
+
 if __name__ == "__main__":
     unittest.main()
