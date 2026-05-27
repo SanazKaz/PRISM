@@ -1,0 +1,113 @@
+# Minimal config for interactive checkpoint debugging.
+# Run on a single interactive node (1 GPU) to reproduce the checkpoint
+# save behaviour quickly — see [CKPT-DBG] / [STEP-DBG] / [EPOCH-END-DBG]
+# prints in the log.
+#
+# Usage:
+#   python scripts/train.py \
+#       --config configs/targetdiff/crossdocked/debug_checkpoint.yaml \
+#       --warm_start_from_ddpm checkpoints/targetdiff_pretrained_models/targetdiff_pretrained_diffusion.pt \
+#       --datadir /data/stat-cadd/wolf7055/PRISM/data/cross_dock/processed_crossdock_targetdiff \
+#       --logdir /tmp/prism_debug \
+#       --seed 42
+
+run_identifier: 'debug_checkpoint'
+logdir: '/tmp/prism_debug'
+
+wandb_params:
+  mode: 'disabled'
+  entity: 'sanazkazeminia97'
+  project: 'PRISM-debug'
+
+model_type: targetdiff
+
+freeze_except:
+  - 'v_inference'
+  - 'refine_net.base_block.7'
+  - 'refine_net.base_block.8'
+
+model:
+  checkpoint: 'checkpoints/targetdiff_pretrained_models/targetdiff_pretrained_diffusion.pt'
+  protein_feat_dim: 27
+  ligand_atom_types: 13
+  total_timesteps: 1000
+
+# -----------------------------------------------------------------------
+# Data — single GPU, small batch so each epoch is fast
+# -----------------------------------------------------------------------
+datadir: '/data/stat-cadd/wolf7055/PRISM/data/cross_dock/processed_crossdock_targetdiff'
+dataset: 'crossdock'
+batch_size: 2       # 2 pockets per training step
+num_workers: 0
+gpus: 1             # single GPU — no DDP, clean baseline
+n_epochs: 1
+
+enable_progress_bar: True
+num_sanity_val_steps: 0
+
+# -----------------------------------------------------------------------
+# PPO — tiny values so each epoch completes in seconds
+# -----------------------------------------------------------------------
+ppo:
+  num_outer_epochs: 10      # 10 epochs is enough to see whether last.ckpt updates
+  num_inner_epochs: 1
+  n_steps: 2                # 2 molecules per rollout
+  ligand_chunk_size: 2
+  batch_size: 2
+  clip_range: 0.1
+  entropy_coef: 0.001
+  kl_coef: 0.0
+  max_grad_norm: 1.0
+  gradient_accumulation_steps: 1
+  train_timesteps: 10       # only 10 diffusion steps so rollout is fast
+  target_kl: null
+  lr: 3.0e-5
+  num_nodes_lig: 27
+
+# -----------------------------------------------------------------------
+# Rewards — penalised logP only (no external files needed)
+# -----------------------------------------------------------------------
+docking_params:
+  dataset_info: custom
+
+reward_params:
+  target_name: 'BRD4_BD1'
+  aggregation: 'weighted_sum'
+  rewards:
+    qed: 0.0
+    sa_score: 0.0
+    lipinski: 0.0
+    bertz: 0.0
+    sucos: 0.0
+    interaction_fingerprints: 0.0
+    feature_density: 0.0
+    geometry_checks: 0.0
+    flatness_checks: 0.0
+    aromatic_counter: 0.0
+    aromatic_anchor: 0.0
+    multi_features: 0.0
+    silly_walks: 0.0
+    property_2d: 0.0
+    smina_docking: 0.0
+    custom_qed: 0.0
+    custom_sa_score: 0.0
+    penalised_logp: 1.0
+  reward_paths:
+    feature_density: 'src/prism/reward/scoring/reward_data/ampc_hotspot_global_centered_eps0.5_min10_aromatic5.pkl'
+    aromatic_anchor: 'src/prism/reward/scoring/reward_data/ampc_hotspot_global_centered_eps0.5_min10_aromatic5.pkl'
+    multi_features: 'src/prism/reward/scoring/reward_data/ampc_hotspot_global_centered_eps0.5_min10_aromatic5.pkl'
+    silly_walks: 'src/prism/reward/scoring/reward_data/chembl_drugs.smi'
+    property_2d: 'src/prism/reward/scoring/reward_data/propeties_ref.json'
+
+# -----------------------------------------------------------------------
+# Evaluation — disabled for speed
+# -----------------------------------------------------------------------
+eval_epochs: 99999
+visualize_sample_epoch: 99999
+visualize_chain_epoch: 999999
+eval_params:
+  n_eval_samples: 2
+  eval_batch_size: 2
+  smiles_file: '/data/stat-cadd/wolf7055/PRISM/data/cross_dock/processed_crossdock_targetdiff/train_smiles.npy'
+  n_visualize_samples: 0
+  keep_frames: 0
