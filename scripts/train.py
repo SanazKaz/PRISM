@@ -43,25 +43,7 @@ class PTModelCheckpoint(ModelCheckpoint):
     (saves the inner ScorePosNet3D state_dict via policy._model).
     """
 
-    # ------------------------------------------------------------------
-    # Diagnostic hooks — print key internal state at every epoch end so
-    # we can see exactly why top-k / last.ckpt saves do or don't fire.
-    # ------------------------------------------------------------------
-
     def on_train_epoch_end(self, trainer, pl_module):
-        if trainer.is_global_zero:
-            cb_metrics = trainer.callback_metrics
-            monitored = cb_metrics.get(self.monitor, 'NOT FOUND')
-            print(
-                f"[CKPT-DBG epoch={trainer.current_epoch}] "
-                f"global_step={trainer.global_step} | "
-                f"_last_global_step_saved={self._last_global_step_saved} | "
-                f"monitor='{self.monitor}' value={monitored} | "
-                f"kth_value={self.kth_value} | "
-                f"best_k_models={list(self.best_k_models.values())} | "
-                f"skip={self._should_skip_saving_checkpoint(trainer)}"
-            )
-
         # Fix 1 — PL 2.6.0 regression: _save_topk_checkpoint internally compares
         # current against best_model_score (all-time best) rather than kth_value
         # (worst of the current top-k). Once rewards plateau, this means nothing
@@ -74,13 +56,6 @@ class PTModelCheckpoint(ModelCheckpoint):
                 and getattr(self, 'best_model_score', None) is not None):
             _saved_bms = self.best_model_score
             self.best_model_score = self.kth_value
-            if trainer.is_global_zero:
-                print(
-                    f"[CKPT-FIX epoch={trainer.current_epoch}] "
-                    f"top-k buffer full — temporarily lowered best_model_score "
-                    f"{float(_saved_bms):.4f} → kth_value {float(self.kth_value):.4f} "
-                    f"so top-k compares against worst-of-top-k, not all-time best"
-                )
 
         _step_before = self._last_global_step_saved
         super().on_train_epoch_end(trainer, pl_module)
@@ -100,27 +75,18 @@ class PTModelCheckpoint(ModelCheckpoint):
             self._save_last_checkpoint(trainer, monitor_candidates)
 
     def _save_topk_checkpoint(self, trainer, monitor_candidates):
-        current = monitor_candidates.get(self.monitor)
-        if trainer.is_global_zero:
-            print(
-                f"[CKPT-DBG _save_topk epoch={trainer.current_epoch}] "
-                f"current={current} | kth_value={self.kth_value} | "
-                f"best_k_models count={len(self.best_k_models)}"
-            )
+        _step_before = self._last_global_step_saved
         super()._save_topk_checkpoint(trainer, monitor_candidates)
-
-    def _save_last_checkpoint(self, trainer, monitor_candidates):
-        if trainer.is_global_zero:
+        if trainer.is_global_zero and self._last_global_step_saved != _step_before:
+            current = monitor_candidates.get(self.monitor)
+            scores = sorted(self.best_k_models.values(), reverse=True)
             print(
-                f"[CKPT-DBG _save_last epoch={trainer.current_epoch}] "
-                f"_save_last_checkpoint CALLED | "
-                f"last_model_path={self.last_model_path}"
+                f"[Checkpoint] New top-k saved | epoch={trainer.current_epoch} | "
+                f"{self.monitor}={float(current):.4f} | "
+                f"top-k={[f'{v:.4f}' for v in scores]}"
             )
-        super()._save_last_checkpoint(trainer, monitor_candidates)
 
     def _save_checkpoint(self, trainer, filepath):
-        if trainer.is_global_zero:
-            print(f"[CKPT-DBG _save_checkpoint epoch={trainer.current_epoch}] writing {filepath}")
         super()._save_checkpoint(trainer, filepath)
 
         if trainer.is_global_zero:
