@@ -42,6 +42,50 @@ class PTModelCheckpoint(ModelCheckpoint):
     Supports both DiffSBDD (saves ddpm_model state_dict) and TargetDiff
     (saves the inner ScorePosNet3D state_dict via policy._model).
     """
+
+    def on_train_epoch_end(self, trainer, pl_module):
+        # Fix 1 — PL 2.6.0 regression: _save_topk_checkpoint internally compares
+        # current against best_model_score (all-time best) rather than kth_value
+        # (worst of the current top-k). Once rewards plateau, this means nothing
+        # ever replaces the lower models in the top-k.
+        # Workaround: temporarily lower best_model_score to kth_value before calling
+        # super() so the comparison becomes current > kth_value, as intended.
+        _saved_bms = None
+        if (self.save_top_k > 0
+                and len(self.best_k_models) >= self.save_top_k
+                and getattr(self, 'best_model_score', None) is not None):
+            _saved_bms = self.best_model_score
+            self.best_model_score = self.kth_value
+
+        _step_before = self._last_global_step_saved
+        super().on_train_epoch_end(trainer, pl_module)
+
+        # Restore best_model_score if PL didn't save anything (current < kth_value).
+        # If PL did save, it will have updated best_model_score itself — don't overwrite.
+        if _saved_bms is not None and self._last_global_step_saved == _step_before:
+            self.best_model_score = _saved_bms
+
+        # Fix 2 — PL 2.6.0 regression: _save_last_checkpoint is only called from
+        # on_train_epoch_end when a top-k checkpoint also saved. Force it every epoch
+        # so last.ckpt always reflects the most recent model state.
+        if (self.save_last
+                and self._last_global_step_saved == _step_before
+                and not self._should_skip_saving_checkpoint(trainer)):
+            monitor_candidates = self._monitor_candidates(trainer)
+            self._save_last_checkpoint(trainer, monitor_candidates)
+
+    def _save_topk_checkpoint(self, trainer, monitor_candidates):
+        _step_before = self._last_global_step_saved
+        super()._save_topk_checkpoint(trainer, monitor_candidates)
+        if trainer.is_global_zero and self._last_global_step_saved != _step_before:
+            current = monitor_candidates.get(self.monitor)
+            scores = sorted(self.best_k_models.values(), reverse=True)
+            print(
+                f"[Checkpoint] New top-k saved | epoch={trainer.current_epoch} | "
+                f"{self.monitor}={float(current):.4f} | "
+                f"top-k={[f'{v:.4f}' for v in scores]}"
+            )
+
     def _save_checkpoint(self, trainer, filepath):
         super()._save_checkpoint(trainer, filepath)
 

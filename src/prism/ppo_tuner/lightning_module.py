@@ -127,18 +127,15 @@ class PPOFineTuner(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         """Delegates one full PPO outer step (collect → advantage → update) to PPOAlgorithm."""
         opt = self.optimizers()
-        import torch.distributed as _dist
-        rank = self.trainer.global_rank
-        print(f"[RANK {rank}] training_step | dist.is_initialized={_dist.is_initialized()} | "
-              f"world_size={self.trainer.world_size} | device={self.device} | epoch={self.current_epoch}")
-
         logs = self.ppo_algorithm.train_step(
             pocket_batch=batch,
             current_epoch=self.current_epoch,
             optimizer=opt,
             backward_fn=self.manual_backward,
         )
-        self.log_dict(logs, on_step=False, on_epoch=True, prog_bar=True)
+        # sync_dist=True all-reduces each metric across DDP ranks before PL logs it,
+        # so both WandB and ModelCheckpoint see the global mean (not rank 0 only).
+        self.log_dict(logs, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
         return logs
 
     def validation_step(self, batch, batch_idx):

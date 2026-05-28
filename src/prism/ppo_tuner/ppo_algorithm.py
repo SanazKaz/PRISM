@@ -57,7 +57,7 @@ class PPOAlgorithm:
             'train/entropy_epoch',
             'train/kl_penalty_epoch',
             'train/reward_mean',
-            'train/reward_max',
+            'train/reward_top10_mean',
             'train/reward_std',
             'train/advantages_mean',
             'train/advantages_std',
@@ -234,6 +234,28 @@ class PPOAlgorithm:
                 optimizer.step()
                 optimizer.zero_grad(set_to_none=True)
 
+        # All-gather rewards and advantages so every rank computes metrics from
+        # the full global sample, not just its local shard.  With sync_dist=True
+        # in log_dict, PL will mean-reduce across ranks — since every rank now
+        # holds the identical global value that reduction is a no-op, giving
+        # correct statistics even for non-linear aggregates (max, std, top-k).
+        if dist.is_initialized():
+            _world = dist.get_world_size()
+            _g_rew = [torch.zeros_like(self.buffer.rewards) for _ in range(_world)]
+            _g_adv = [torch.zeros_like(self.buffer.advantages) for _ in range(_world)]
+            dist.all_gather(_g_rew, self.buffer.rewards)
+            dist.all_gather(_g_adv, self.buffer.advantages)
+            global_rewards = torch.cat(_g_rew)
+            global_advantages = torch.cat(_g_adv)
+        else:
+            global_rewards = self.buffer.rewards
+            global_advantages = self.buffer.advantages
+
+        # Top-10 mean: mean of the best min(10, N) rewards in the global rollout.
+        _sorted, _ = torch.sort(global_rewards, descending=True)
+        _top_k = min(10, len(_sorted))
+        reward_top10_mean = _sorted[:_top_k].mean().item()
+
         # Final logs for the entire outer step
         final_logs = {
             "train/total_loss_epoch": epoch_total_loss / max(epoch_accumulation_steps, 1),
@@ -241,13 +263,13 @@ class PPOAlgorithm:
             "train/clipfrac_epoch": epoch_total_clipfrac / max(epoch_accumulation_steps, 1),
             "train/entropy_epoch": epoch_total_entropy / max(epoch_accumulation_steps, 1),
             "train/kl_penalty_epoch": epoch_total_kl_penalty / max(epoch_accumulation_steps, 1),
-            "train/reward_mean": self.buffer.rewards.mean().item(),
-            "train/reward_max": self.buffer.rewards.max().item(),
-            "train/reward_std": self.buffer.rewards.std().item(),
-            "train/advantages_mean": self.buffer.advantages.mean().item(),
-            "train/advantages_std": self.buffer.advantages.std().item(),
-            "train/advantages_min": self.buffer.advantages.min().item(),
-            "train/advantages_max": self.buffer.advantages.max().item(),
+            "train/reward_mean": global_rewards.mean().item(),
+            "train/reward_top10_mean": reward_top10_mean,
+            "train/reward_std": global_rewards.std().item(),
+            "train/advantages_mean": global_advantages.mean().item(),
+            "train/advantages_std": global_advantages.std().item(),
+            "train/advantages_min": global_advantages.min().item(),
+            "train/advantages_max": global_advantages.max().item(),
         }
 
         # --- Log individual reward components (QED, SuCOS, etc.) ---
