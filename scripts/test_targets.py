@@ -2,18 +2,21 @@
 test_targets.py — Generate ligands for PRISM's held-out evaluation targets.
 
 Loops over a fixed set of six protein targets (18 structures total) and
-generates n_samples valid molecules per pocket.
+generates n_samples valid molecules per pocket. Works with both DiffSBDD
+(--model diffsbdd) and TargetDiff (--model targetdiff) checkpoints.
 
 Usage
 -----
     python -m scripts.test_targets \\
         checkpoints/my_run.ckpt \\
+        --model diffsbdd \\
         --config configs/ppo_config.yaml \\
         --targets_dir /data/my_project/data \\
         --outdir results/test_targets \\
-        --n_samples 10000 \\
-        --batch_size 200 \\
-        --sanitize
+        --n_samples 10000 --batch_size 200 --sanitize
+
+Run a single target (useful for parallel job submission):
+    python -m scripts.test_targets ... --target BRD4_BD1_4whw
 
 The expected directory layout under --targets_dir is:
     <targets_dir>/
@@ -21,9 +24,6 @@ The expected directory layout under --targets_dir is:
         └── 02_preprocessed/
             ├── pocket_files/<pdb>_<lig>_<chain>_<resid>_pocket.pdb
             └── sdf_files/<pdb>_<lig>_<chain>_<resid>.sdf
-
-Run a single target (useful for parallel job submission):
-    python -m scripts.test_targets ... --target BRD4_BD1_4whw
 """
 
 import argparse
@@ -41,21 +41,24 @@ from openbabel import openbabel
 
 openbabel.obErrorLog.StopLogging()
 
-_PROJECT_ROOT = Path(__file__).resolve().parents[1]
-_DIFFSBDD_ROOT = _PROJECT_ROOT / "src" / "models" / "diffsbdd"
+_PROJECT_ROOT    = Path(__file__).resolve().parents[1]
+_DIFFSBDD_ROOT   = _PROJECT_ROOT / "src" / "models" / "diffsbdd"
+_TARGETDIFF_ROOT = _PROJECT_ROOT / "src" / "models" / "targetdiff"
 sys.path.insert(0, str(_PROJECT_ROOT))
 sys.path.insert(1, str(_DIFFSBDD_ROOT))
+sys.path.insert(2, str(_TARGETDIFF_ROOT))
 
 from src.prism.utils import dict_to_namespace, write_sdf_file
 from src.prism.models.policy_factory import build_diffsbdd_policy
+from src.prism.models.targetdiff_inference import (
+    load_targetdiff_model, pocket_from_pdb, reconstruct_molecules,
+)
 from src.models.diffsbdd.analysis.molecule_builder import process_molecule
 
 
 # ---------------------------------------------------------------------------
 # Target definitions — paths are relative to --targets_dir
 # ---------------------------------------------------------------------------
-# Each entry maps a short target key to (pocket_pdb, ligand_sdf) relative paths
-# within the standard 02_preprocessed layout.
 
 _TARGET_SPECS = {
     "BRD4_BD1_4whw":            ("BRD4_BD1",          "4whw_3OT_B_201"),
@@ -93,8 +96,11 @@ def _build_targets(targets_dir: Path) -> dict:
     return targets
 
 
+# ---------------------------------------------------------------------------
+# Model loading
+# ---------------------------------------------------------------------------
+
 def load_diffsbdd(checkpoint_path: Path, config_path: Path, device: str):
-    """Build DiffSBDD via the shared factory and return the raw ddpm_module."""
     with open(config_path) as f:
         config = dict_to_namespace(yaml.safe_load(f))
 
@@ -113,7 +119,11 @@ def load_diffsbdd(checkpoint_path: Path, config_path: Path, device: str):
     return ddpm_module
 
 
-def generate_for_target(
+# ---------------------------------------------------------------------------
+# Per-target generation — DiffSBDD
+# ---------------------------------------------------------------------------
+
+def generate_for_target_diffsbdd(
     ddpm_module,
     target_name: str,
     pocket_path: Path,
@@ -132,12 +142,6 @@ def generate_for_target(
     n_nodes_min: int,
     skip_existing: bool,
 ) -> dict | None:
-    """
-    Generate n_samples valid molecules for a single target pocket.
-
-    Keeps generating in batches until we have enough valid molecules or hit
-    MAXITER iterations. Returns a stats dict on success, None if skipped.
-    """
     target_outdir = outdir / target_name
     target_outdir.mkdir(parents=True, exist_ok=True)
 
@@ -154,10 +158,7 @@ def generate_for_target(
     if not ligand_path.exists():
         raise FileNotFoundError(f"Ligand not found: {ligand_path}")
 
-    print(f"\n{'='*60}")
-    print(f"Target: {target_name}")
-    print(f"Pocket: {pocket_path.name}")
-    print(f"{'='*60}")
+    print(f"\n{'='*60}\nTarget: {target_name}\nPocket: {pocket_path.name}\n{'='*60}")
 
     if fix_n_nodes:
         suppl = Chem.SDMolSupplier(str(ligand_path), sanitize=False)
@@ -170,11 +171,8 @@ def generate_for_target(
         num_nodes_lig = None
 
     t_start = time()
-    all_molecules: list  = []
-    valid_molecules: list = []
-    processed_molecules: list = []
-    n_generated = 0
-    n_valid = 0
+    all_molecules, valid_molecules, processed_molecules = [], [], []
+    n_generated = n_valid = 0
 
     pbar = tqdm(total=n_samples, desc=target_name, unit="mol")
     iter_count = 0
@@ -182,32 +180,25 @@ def generate_for_target(
     while len(valid_molecules) < n_samples:
         iter_count += 1
         if iter_count > MAXITER:
-            warnings.warn(f"Max iterations reached for {target_name} "
+            warnings.warn(f"Max iterations for {target_name} "
                           f"({len(valid_molecules)}/{n_samples} valid).")
             break
 
         num_nodes_batch = (
             torch.ones(batch_size, dtype=torch.int) * num_nodes_lig
-            if num_nodes_lig is not None
-            else None
+            if num_nodes_lig is not None else None
         )
-
         try:
             with torch.no_grad():
                 mols_batch = ddpm_module.generate_ligands(
-                    pocket_path,
-                    batch_size,
+                    pocket_path, batch_size,
                     resi_list=None,
                     ref_ligand=str(ligand_path),
                     num_nodes_lig=num_nodes_batch,
                     timesteps=timesteps,
-                    sanitize=False,
-                    largest_frag=False,
-                    relax_iter=0,
-                    n_nodes_bias=n_nodes_bias,
-                    n_nodes_min=n_nodes_min,
-                    resamplings=resamplings,
-                    jump_length=jump_length,
+                    sanitize=False, largest_frag=False, relax_iter=0,
+                    n_nodes_bias=n_nodes_bias, n_nodes_min=n_nodes_min,
+                    resamplings=resamplings, jump_length=jump_length,
                 )
         except Exception as e:
             import traceback
@@ -216,52 +207,41 @@ def generate_for_target(
             continue
 
         all_molecules.extend(mols_batch)
-
         batch_processed = [
-            process_molecule(
-                m,
-                sanitize=sanitize,
-                relax_iter=(200 if relax else 0),
-                largest_frag=not all_frags,
-            )
+            process_molecule(m, sanitize=sanitize,
+                             relax_iter=(200 if relax else 0),
+                             largest_frag=not all_frags)
             for m in mols_batch
         ]
         processed_molecules.extend(batch_processed)
-
         valid_batch = [m for m in batch_processed if m is not None]
         n_generated += batch_size
-        n_valid += len(valid_batch)
+        n_valid     += len(valid_batch)
         valid_molecules.extend(valid_batch)
 
         pbar.n = min(len(valid_molecules), n_samples)
         pbar.set_postfix({
             "valid": f"{n_valid}/{n_generated}",
-            "rate": f"{n_valid/n_generated*100:.1f}%" if n_generated else "N/A",
+            "rate":  f"{n_valid/n_generated*100:.1f}%" if n_generated else "N/A",
         })
         pbar.refresh()
 
     pbar.close()
     valid_molecules = valid_molecules[:n_samples]
 
-    # Reorder SDF: valid molecules first, then invalid (for easier downstream use)
     all_molecules = (
         [all_molecules[i] for i, m in enumerate(processed_molecules) if m is not None] +
         [all_molecules[i] for i, m in enumerate(processed_molecules) if m is None]
     )
-
     write_sdf_file(raw_sdf, all_molecules)
     write_sdf_file(processed_sdf, valid_molecules)
 
     elapsed = time() - t_start
     validity_rate = n_valid / n_generated if n_generated else 0
 
-    stats = {
-        "target":        target_name,
-        "n_valid":       len(valid_molecules),
-        "n_generated":   n_generated,
-        "validity_rate": validity_rate,
-        "time_seconds":  elapsed,
-    }
+    stats = {"target": target_name, "n_valid": len(valid_molecules),
+             "n_generated": n_generated, "validity_rate": validity_rate,
+             "time_seconds": elapsed}
     with open(stats_file, "w") as f:
         for k, v in stats.items():
             f.write(f"{k}: {v}\n")
@@ -271,6 +251,81 @@ def generate_for_target(
     return stats
 
 
+# ---------------------------------------------------------------------------
+# Per-target generation — TargetDiff
+# ---------------------------------------------------------------------------
+
+def generate_for_target_targetdiff(
+    model,
+    protein_featurizer,
+    target_name: str,
+    pocket_path: Path,
+    ligand_path: Path,
+    outdir: Path,
+    n_samples: int,
+    batch_size: int,
+    num_steps: int,
+    center_pos_mode: str,
+    skip_existing: bool,
+) -> dict | None:
+    from scripts.sample_diffusion import sample_diffusion_ligand   # noqa: E402
+
+    target_outdir = outdir / target_name
+    target_outdir.mkdir(parents=True, exist_ok=True)
+
+    processed_sdf = target_outdir / f"{target_name}_processed.sdf"
+    stats_file    = target_outdir / f"{target_name}_stats.txt"
+
+    if skip_existing and processed_sdf.exists() and stats_file.exists():
+        print(f"[SKIP] {target_name} — output already exists.")
+        return None
+
+    if not pocket_path.exists():
+        raise FileNotFoundError(f"Pocket not found: {pocket_path}")
+
+    print(f"\n{'='*60}\nTarget: {target_name}\nPocket: {pocket_path.name}\n{'='*60}")
+
+    t_start = time()
+    device  = next(model.parameters()).device
+
+    pocket_data = pocket_from_pdb(str(pocket_path), protein_featurizer)
+
+    with torch.no_grad():
+        all_pred_pos, all_pred_v, *_ = sample_diffusion_ligand(
+            model=model,
+            data=pocket_data,
+            num_samples=n_samples,
+            batch_size=batch_size,
+            device=str(device),
+            num_steps=num_steps,
+            pos_only=False,
+            center_pos_mode=center_pos_mode,
+            sample_num_atoms='prior',
+        )
+
+    molecules     = reconstruct_molecules(all_pred_pos, all_pred_v)
+    valid         = [m for m in molecules if m is not None]
+    elapsed       = time() - t_start
+    validity_rate = len(valid) / len(molecules) if molecules else 0
+
+    write_sdf_file(processed_sdf, valid)
+
+    stats = {"target": target_name, "n_valid": len(valid),
+             "n_generated": len(molecules), "validity_rate": validity_rate,
+             "time_seconds": elapsed}
+    with open(stats_file, "w") as f:
+        for k, v in stats.items():
+            f.write(f"{k}: {v}\n")
+
+    print(f"[DONE] {target_name}: {len(valid)} valid | "
+          f"validity {validity_rate*100:.1f}% | {elapsed/60:.1f} min")
+    return stats
+
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
 def main():
     parser = argparse.ArgumentParser(
         description="Generate ligands for PRISM evaluation targets.",
@@ -278,37 +333,46 @@ def main():
     )
     parser.add_argument("checkpoint", type=Path,
                         help="Path to model checkpoint (.pt or .ckpt)")
+    parser.add_argument("--model", choices=["diffsbdd", "targetdiff"], default="diffsbdd",
+                        help="Which model architecture the checkpoint belongs to")
     parser.add_argument("--config", type=Path, required=True,
                         help="PRISM YAML config")
     parser.add_argument("--targets_dir", type=Path, required=True,
                         help="Root data directory containing per-target subdirectories")
-    parser.add_argument("--outdir", type=Path, required=True,
-                        help="Output directory")
-    parser.add_argument("--n_samples", type=int, default=10000,
-                        help="Valid molecules to generate per target")
+    parser.add_argument("--outdir", type=Path, required=True)
+    parser.add_argument("--n_samples", type=int, default=10000)
     parser.add_argument("--batch_size", type=int, default=200)
-    parser.add_argument("--target", type=str, default=None,
-                        help="Run a single target by key (for parallel submission)")
+    parser.add_argument("--target",  type=str, default=None,
+                        help="Run a single target by key")
     parser.add_argument("--targets", type=str, nargs="+", default=None,
                         help="Subset of target keys to run")
-    parser.add_argument("--sanitize", action="store_true")
-    parser.add_argument("--relax",    action="store_true")
-    parser.add_argument("--all_frags", action="store_true")
-    parser.add_argument("--fix_n_nodes", action="store_true",
-                        help="Fix atom count to the reference ligand size")
-    parser.add_argument("--timesteps", type=int, default=None)
+    # DiffSBDD options
+    parser.add_argument("--sanitize",    action="store_true")
+    parser.add_argument("--relax",       action="store_true")
+    parser.add_argument("--all_frags",   action="store_true")
+    parser.add_argument("--fix_n_nodes", action="store_true")
+    parser.add_argument("--timesteps",   type=int, default=None)
     parser.add_argument("--resamplings", type=int, default=10)
     parser.add_argument("--jump_length", type=int, default=1)
     parser.add_argument("--n_nodes_bias", type=int, default=0)
     parser.add_argument("--n_nodes_min",  type=int, default=0)
-    parser.add_argument("--skip_existing", action="store_true",
-                        help="Skip targets whose output files already exist")
+    # TargetDiff options
+    parser.add_argument("--num_steps", type=int, default=1000)
+    parser.add_argument("--center_pos_mode", type=str, default="protein")
+    parser.add_argument("--skip_existing", action="store_true")
     args = parser.parse_args()
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    print(f"Device: {device}")
+    print(f"Device: {device}  |  Model: {args.model}")
 
-    ddpm_module = load_diffsbdd(args.checkpoint, args.config, device)
+    if args.model == "diffsbdd":
+        diffsbdd_model = load_diffsbdd(args.checkpoint, args.config, device)
+        td_model = td_featurizer = None
+    elif args.model == "targetdiff":
+        td_model = load_targetdiff_model(args.checkpoint, args.config, device)
+        from utils import transforms as trans                          # noqa: E402
+        td_featurizer  = trans.FeaturizeProteinAtom()
+        diffsbdd_model = None
 
     all_targets = _build_targets(args.targets_dir)
 
@@ -329,34 +393,51 @@ def main():
     all_stats = []
     for name, paths in targets.items():
         try:
-            stats = generate_for_target(
-                ddpm_module=ddpm_module,
-                target_name=name,
-                pocket_path=paths["pocket"],
-                ligand_path=paths["ligand"],
-                outdir=args.outdir,
-                n_samples=args.n_samples,
-                batch_size=args.batch_size,
-                sanitize=args.sanitize,
-                relax=args.relax,
-                all_frags=args.all_frags,
-                fix_n_nodes=args.fix_n_nodes,
-                timesteps=args.timesteps,
-                resamplings=args.resamplings,
-                jump_length=args.jump_length,
-                n_nodes_bias=args.n_nodes_bias,
-                n_nodes_min=args.n_nodes_min,
-                skip_existing=args.skip_existing,
-            )
+            if args.model == "diffsbdd":
+                stats = generate_for_target_diffsbdd(
+                    ddpm_module=diffsbdd_model,
+                    target_name=name,
+                    pocket_path=paths["pocket"],
+                    ligand_path=paths["ligand"],
+                    outdir=args.outdir,
+                    n_samples=args.n_samples,
+                    batch_size=args.batch_size,
+                    sanitize=args.sanitize,
+                    relax=args.relax,
+                    all_frags=args.all_frags,
+                    fix_n_nodes=args.fix_n_nodes,
+                    timesteps=args.timesteps,
+                    resamplings=args.resamplings,
+                    jump_length=args.jump_length,
+                    n_nodes_bias=args.n_nodes_bias,
+                    n_nodes_min=args.n_nodes_min,
+                    skip_existing=args.skip_existing,
+                )
+            elif args.model == "targetdiff":
+                stats = generate_for_target_targetdiff(
+                    model=td_model,
+                    protein_featurizer=td_featurizer,
+                    target_name=name,
+                    pocket_path=paths["pocket"],
+                    ligand_path=paths["ligand"],
+                    outdir=args.outdir,
+                    n_samples=args.n_samples,
+                    batch_size=args.batch_size,
+                    num_steps=args.num_steps,
+                    center_pos_mode=args.center_pos_mode,
+                    skip_existing=args.skip_existing,
+                )
+
             if stats:
                 all_stats.append(stats)
+
         except Exception as e:
             print(f"[ERROR] {name}: {e}")
             continue
 
     if all_stats:
-        total_mols  = sum(s["n_valid"] for s in all_stats)
-        total_time  = sum(s["time_seconds"] for s in all_stats)
+        total_mols   = sum(s["n_valid"] for s in all_stats)
+        total_time   = sum(s["time_seconds"] for s in all_stats)
         avg_validity = np.mean([s["validity_rate"] for s in all_stats])
 
         print(f"\n{'='*60}")
@@ -368,6 +449,7 @@ def main():
         with open(summary, "w") as f:
             f.write(f"checkpoint: {args.checkpoint}\n")
             f.write(f"config:     {args.config}\n")
+            f.write(f"model:      {args.model}\n")
             f.write(f"n_samples:  {args.n_samples}\n\n")
             for s in all_stats:
                 f.write(f"{s['target']}: {s['n_valid']} mols, "

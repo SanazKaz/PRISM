@@ -312,13 +312,14 @@ def _targetdiff_atom_features(atom_element: str, res_name: str, atom_name: str) 
     return np.array(element_vec + aa_vec + backbone_flag, dtype=np.float32)
 
 
-def process_ligand_and_pocket_targetdiff(pdbfile, sdffile, dist_cutoff):
+def process_ligand_and_pocket_targetdiff(pdbfile, sdffile, dist_cutoff, atom_dict):
     """
     Like process_ligand_and_pocket but produces 27-dim TargetDiff protein
     features instead of DiffSBDD element one-hots.
 
-    Ligand features remain DiffSBDD-style element one-hots (used only for
-    size sampling and SMILES computation, never fed to the TargetDiff model).
+    Ligand features use the same DiffSBDD atom_dict encoding as the DiffSBDD
+    path so that compute_smiles and size_distribution statistics are consistent.
+    The TargetDiff model never consumes ligand features from the NPZ directly.
     """
     try:
         pdb_struct = PDBParser(QUIET=True).get_structure('', pdbfile)
@@ -334,18 +335,17 @@ def process_ligand_and_pocket_targetdiff(pdbfile, sdffile, dist_cutoff):
         for idx in range(ligand.GetNumAtoms())
         if ligand.GetAtomWithIdx(idx).GetSymbol() != 'H'
     ])
-    # Ligand one-hot: simple 1-of-K over heavy atom elements (same as DiffSBDD)
-    # kept identical so reward/SMILES pipeline is unaffected.
-    _SIMPLE_ATOM_DICT = {'C': 0, 'N': 1, 'O': 2, 'S': 3, 'F': 4,
-                         'Cl': 5, 'Br': 6, 'I': 7, 'P': 8, 'B': 9}
     lig_atoms = [a.GetSymbol() for a in ligand.GetAtoms() if a.GetSymbol() != 'H']
     if not lig_atoms:
         raise Exception("No valid heavy atoms found in ligand")
 
-    lig_one_hot = np.zeros((len(lig_atoms), len(_SIMPLE_ATOM_DICT) + 1), dtype=np.float32)
-    for i, sym in enumerate(lig_atoms):
-        idx = _SIMPLE_ATOM_DICT.get(sym, len(_SIMPLE_ATOM_DICT))  # unknown → last slot
-        lig_one_hot[i, idx] = 1.0
+    try:
+        lig_one_hot = np.stack([
+            np.eye(1, len(atom_dict), atom_dict[a.capitalize()]).squeeze()
+            for a in lig_atoms
+        ]).astype(np.float32)
+    except KeyError as e:
+        raise KeyError(f'Atom {e} not in atom dict ({sdffile})')
 
     # Pocket residues within dist_cutoff of any ligand heavy atom
     pocket_residues = []
@@ -484,6 +484,7 @@ def main(args):
                     ligand_data, pocket_data = process_ligand_and_pocket_targetdiff(
                         str(pocket_fn), str(ligand_fn),
                         dist_cutoff=dist_cutoff,
+                        atom_dict=atom_dict,
                     )
                 else:
                     ligand_data, pocket_data = process_ligand_and_pocket(
