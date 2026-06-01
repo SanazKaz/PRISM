@@ -239,6 +239,7 @@ def create_binding_pockets(args):
 
     for pdb_path in pdb_files:
         pdb_id = pdb_path.stem.lower()
+        pdb_id_upper = pdb_id.upper()   # RCSB REST API requires uppercase IDs
         suffix = pdb_path.suffix.lower()
         print(f"\n--- Processing {pdb_id} ({suffix.upper()}) ---")
 
@@ -252,7 +253,7 @@ def create_binding_pockets(args):
             continue
 
         try:
-            entry_url = f"https://data.rcsb.org/rest/v1/core/entry/{pdb_id}/"
+            entry_url = f"https://data.rcsb.org/rest/v1/core/entry/{pdb_id_upper}/"
             response = requests.get(entry_url)
             response.raise_for_status()
             data = response.json()
@@ -269,7 +270,7 @@ def create_binding_pockets(args):
                 continue
 
             for entity_id in entity_ids:
-                entity_url = f"https://data.rcsb.org/rest/v1/core/nonpolymer_entity/{pdb_id}/{entity_id}"
+                entity_url = f"https://data.rcsb.org/rest/v1/core/nonpolymer_entity/{pdb_id_upper}/{entity_id}"
                 response = requests.get(entity_url)
                 response.raise_for_status()
                 entity_data = response.json()
@@ -286,7 +287,7 @@ def create_binding_pockets(args):
 
                 for chain in asym_ids:
                     try:
-                        instance_url = f"https://data.rcsb.org/rest/v1/core/nonpolymer_entity_instance/{pdb_id}/{chain}"
+                        instance_url = f"https://data.rcsb.org/rest/v1/core/nonpolymer_entity_instance/{pdb_id_upper}/{chain}"
                         response = requests.get(instance_url)
                         response.raise_for_status()
                         instance_data = response.json()
@@ -294,7 +295,7 @@ def create_binding_pockets(args):
 
                         base_name = f"{pdb_id}_{comp_id}_{chain}_{seq_id}"
 
-                        ligand_url = f"https://models.rcsb.org/v1/{pdb_id}/ligand?auth_seq_id={seq_id}&label_asym_id={chain}&encoding=sdf"
+                        ligand_url = f"https://models.rcsb.org/v1/{pdb_id_upper}/ligand?auth_seq_id={seq_id}&label_asym_id={chain}&encoding=sdf"
                         response = requests.get(ligand_url)
                         response.raise_for_status()
 
