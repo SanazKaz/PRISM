@@ -209,8 +209,10 @@ def _extract_ligands_local(pdb_id, structure, args, block_list,
     """Fallback when data.rcsb.org/rest/v1/ is unreachable.
 
     Identifies ligand residues directly from the Biopython structure (HETATM
-    records), then downloads the SDF with in-complex coordinates from
-    models.rcsb.org (same endpoint used by the primary path).
+    records). Bond topology is fetched from files.rcsb.org/ligands/download/
+    (confirmed accessible); actual 3D coordinates come from the Biopython
+    atoms, avoiding the label_asym_id / auth_asym_id mismatch that breaks
+    the models.rcsb.org URL when both sides are not on the same HPC network.
     """
     from rdkit.Chem import AllChem
 
@@ -236,18 +238,38 @@ def _extract_ligands_local(pdb_id, structure, args, block_list,
                 continue
 
             try:
-                ligand_url = (
-                    f"https://models.rcsb.org/v1/{pdb_id}/ligand"
-                    f"?auth_seq_id={seq_id}&label_asym_id={chain_id}&encoding=sdf"
-                )
-                response = requests.get(ligand_url, timeout=15)
-                response.raise_for_status()
-
-                if not response.content:
-                    print(f"    [WARN] No SDF content for {pdb_id}_{comp_id}_{chain_id}_{seq_id}. Skipping.")
+                # Bond topology: ideal-geometry SDF from files.rcsb.org (accessible on HPC).
+                ideal_url = f"https://files.rcsb.org/ligands/download/{comp_id}_ideal.sdf"
+                resp = requests.get(ideal_url, timeout=15)
+                resp.raise_for_status()
+                ideal_mol = Chem.MolFromMolBlock(resp.text, removeHs=True)
+                if ideal_mol is None:
+                    print(f"    [SKIP] {pdb_id}_{comp_id}_{chain_id}_{seq_id}: could not parse ideal SDF")
                     continue
 
-                mol = Chem.MolFromMolBlock(response.content.decode('utf-8'), removeHs=False)
+                # Actual 3D coordinates: write just this residue's HETATM atoms as a
+                # minimal PDB block and parse with RDKit, then assign bond orders from
+                # the ideal template so we get correct connectivity + real coords.
+                pdb_lines = []
+                for i, atom in enumerate(residue.get_atoms(), start=1):
+                    x, y, z = atom.get_coord()
+                    aname = atom.get_name()
+                    elem  = (atom.element or aname[0]).strip()
+                    pdb_lines.append(
+                        f"HETATM{i:5d} {aname:<4s} {comp_id:3s} {chain_id:1s}{int(seq_id):4d}    "
+                        f"{x:8.3f}{y:8.3f}{z:8.3f}  1.00  0.00          {elem:>2s}  "
+                    )
+                pdb_lines.append("END")
+                pdb_mol = Chem.MolFromPDBBlock("\n".join(pdb_lines), removeHs=True, sanitize=False)
+                if pdb_mol is None:
+                    print(f"    [SKIP] {pdb_id}_{comp_id}_{chain_id}_{seq_id}: could not parse residue atoms")
+                    continue
+
+                try:
+                    mol = AllChem.AssignBondOrdersFromTemplate(ideal_mol, pdb_mol)
+                except Exception:
+                    mol = pdb_mol  # bond-order assignment failed; proceed without explicit orders
+
                 is_valid, reason = is_valid_small_molecule(mol)
                 if not is_valid:
                     print(f"    [SKIP] {pdb_id}_{comp_id}_{chain_id}_{seq_id}: {reason}")
@@ -257,7 +279,9 @@ def _extract_ligands_local(pdb_id, structure, args, block_list,
                 base_name = f"{pdb_id}_{comp_id}_{chain_id}_{seq_id}"
 
                 sdf_path = sdf_output_dir / f"{base_name}.sdf"
-                sdf_path.write_bytes(response.content)
+                writer = Chem.SDWriter(str(sdf_path))
+                writer.write(mol)
+                writer.close()
 
                 output_pdb_path = pocket_output_dir / f"{base_name}_pocket.pdb"
                 extract_pocket_biopython(
