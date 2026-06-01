@@ -1,18 +1,12 @@
 import torch
 from torch.utils.data import Subset
-try:
-    from .pl_pair_dataset import PocketLigandPairDataset
-    from .pdbbind import PDBBindDataset
-    _DATASETS_AVAILABLE = True
-except ImportError:
-    _DATASETS_AVAILABLE = False
+from .pl_pair_dataset import PocketLigandPairDataset
+from .pdbbind import PDBBindDataset
 
 
 def get_dataset(config, *args, **kwargs):
     name = config.name
     root = config.path
-    if not _DATASETS_AVAILABLE:
-        raise ImportError("lmdb is required for dataset loading: pip install lmdb")
     if name == 'pl':
         dataset = PocketLigandPairDataset(root, *args, **kwargs)
     elif name == 'pdbbind':
