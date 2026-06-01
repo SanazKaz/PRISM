@@ -5,8 +5,12 @@ Creates paired ligand-free binding pockets and ligand SDF files.
 
 This script iterates through PDB files in an input directory. For each PDB,
 it uses the RCSB API to identify all non-common, biological ligands.
+When the RCSB REST API is unreachable (e.g. on clusters with restricted
+outbound HTTP), it falls back to parsing HETATM records directly from the
+downloaded PDB file and fetching ideal-geometry SDFs from files.rcsb.org.
 """
 
+import io
 import os
 import glob
 import argparse
