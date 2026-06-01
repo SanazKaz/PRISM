@@ -2,16 +2,44 @@
 Shared TargetDiff inference helpers.
 
 Used by generate_targetdiff.py, test.py, and test_targets.py.
-All three functions that depend on TargetDiff internals use lazy imports so
-this module is safe to import without the TargetDiff root on sys.path.
-Callers are responsible for adding _TARGETDIFF_ROOT to sys.path before
-invoking pocket_from_pdb or reconstruct_molecules.
+All functions that depend on TargetDiff internals call _ensure_targetdiff_utils()
+first to resolve the utils namespace collision: DiffSBDD ships a flat utils.py
+while TargetDiff ships a utils/ package, so they clash when both model roots are
+on sys.path at the same time (e.g. test.py which supports both models).
 """
 
+import sys
 from pathlib import Path
 
 import torch
 import yaml
+
+_PROJECT_ROOT    = Path(__file__).resolve().parents[3]
+_TARGETDIFF_ROOT = _PROJECT_ROOT / 'src' / 'models' / 'targetdiff'
+
+
+def _ensure_targetdiff_utils() -> None:
+    """Ensure TargetDiff's utils/ package takes precedence in sys.modules.
+
+    DiffSBDD ships a flat utils.py; TargetDiff ships a utils/ package. When
+    both roots are on sys.path and DiffSBDD was imported first (e.g. via
+    analysis/molecule_builder.py which does `import utils`), Python caches
+    the flat module in sys.modules['utils']. Subsequent `from utils.data
+    import PDBProtein` then fails with "utils is not a package".
+
+    Fix: move TargetDiff root to the front of sys.path and evict the flat
+    module so Python re-imports utils as TargetDiff's package on next access.
+    """
+    td_root = str(_TARGETDIFF_ROOT)
+    if td_root in sys.path:
+        sys.path.remove(td_root)
+    sys.path.insert(0, td_root)
+
+    utils_mod = sys.modules.get('utils')
+    if utils_mod is not None and not hasattr(utils_mod, '__path__'):
+        # Flat module (DiffSBDD's utils.py) is cached — evict it and submodules
+        for key in [k for k in list(sys.modules) if k == 'utils' or k.startswith('utils.')]:
+            del sys.modules[key]
 
 
 def load_targetdiff_model(checkpoint_path: Path, config_path: Path, device: str):
@@ -37,8 +65,10 @@ def load_targetdiff_model(checkpoint_path: Path, config_path: Path, device: str)
 def pocket_from_pdb(pdb_path: str, protein_featurizer) -> "ProteinLigandData":
     """
     Parse a pocket PDB file into the ProteinLigandData format expected by
-    sample_diffusion_ligand. Requires _TARGETDIFF_ROOT on sys.path.
+    sample_diffusion_ligand.
     """
+    _ensure_targetdiff_utils()
+
     import torch as _torch
     from utils.data import PDBProtein                          # noqa: E402
     from datasets.pl_data import ProteinLigandData, torchify_dict  # noqa: E402
@@ -61,8 +91,10 @@ def reconstruct_molecules(all_pred_pos, all_pred_v) -> list:
     """
     Convert raw TargetDiff position + atom-type predictions into RDKit
     molecules. Returns a list of the same length as all_pred_pos; invalid
-    entries are None. Requires _TARGETDIFF_ROOT on sys.path.
+    entries are None.
     """
+    _ensure_targetdiff_utils()
+
     from rdkit import Chem
     from utils import transforms as trans   # noqa: E402
     from utils import reconstruct           # noqa: E402

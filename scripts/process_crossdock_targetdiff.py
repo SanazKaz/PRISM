@@ -52,9 +52,6 @@ sys.path.insert(0, str(_DIFFSBDD_ROOT))
 sys.path.insert(1, str(_TARGETDIFF_ROOT))
 sys.path.insert(2, str(_PROJECT_ROOT))
 
-# TargetDiff's own parser — this is the canonical source of 27-dim features
-from utils.data import PDBProtein                              # noqa: E402
-
 # DiffSBDD utilities for ligand encoding + SMILES (unchanged from existing pipeline)
 from analysis.molecule_builder import build_molecule           # noqa: E402
 from analysis.metrics import rdmol_to_smiles                   # noqa: E402
@@ -70,6 +67,29 @@ from scipy.ndimage import gaussian_filter                      # noqa: F811
 # ---------------------------------------------------------------------------
 _TD_ATOMIC_NUMS = np.array([1, 6, 7, 8, 16, 34], dtype=np.int64)   # H C N O S Se
 
+_PDBProtein = None
+
+
+def _get_pdb_protein_cls():
+    """Load PDBProtein via importlib to avoid the utils namespace collision.
+
+    DiffSBDD ships a flat `utils.py` module, and TargetDiff ships a `utils/`
+    package. When DiffSBDD's root is first on sys.path, a normal
+    `from utils.data import PDBProtein` fails because Python finds the flat
+    module first. importlib.util.spec_from_file_location bypasses sys.path.
+    """
+    global _PDBProtein
+    if _PDBProtein is None:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            '_prism_targetdiff_data',
+            str(_TARGETDIFF_ROOT / 'utils' / 'data.py'),
+        )
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        _PDBProtein = mod.PDBProtein
+    return _PDBProtein
+
 
 def featurize_pocket_targetdiff(pdb_path: str) -> tuple:
     """
@@ -80,6 +100,7 @@ def featurize_pocket_targetdiff(pdb_path: str) -> tuple:
     TargetDiff's training data loading — so the output is guaranteed to match
     what ScorePosNet3D's protein_atom_emb was trained on.
     """
+    PDBProtein = _get_pdb_protein_cls()
     protein = PDBProtein(pdb_path)
     d = protein.to_dict_atom()
 
