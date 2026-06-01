@@ -204,6 +204,76 @@ def refine_pocket_list(pocket_dir, sdf_dir, successful_basenames, tolerance=20):
     return refined_list
 
 
+def _extract_ligands_local(pdb_id, structure, args, block_list,
+                          sdf_output_dir, pocket_output_dir, successful_basenames):
+    """Fallback when data.rcsb.org/rest/v1/ is unreachable.
+
+    Identifies ligand residues directly from the Biopython structure (HETATM
+    records), then downloads the SDF with in-complex coordinates from
+    models.rcsb.org (same endpoint used by the primary path).
+    """
+    from rdkit.Chem import AllChem
+
+    model = structure[0]
+    seen = set()
+
+    for chain in model.get_chains():
+        chain_id = chain.get_id()
+        for residue in chain.get_residues():
+            hetatm_flag = residue.id[0]
+            if hetatm_flag == ' ' or hetatm_flag == 'W':
+                continue  # skip standard residues and water
+
+            comp_id = residue.resname.strip()
+            seq_id  = str(residue.id[1])
+            key     = (comp_id, chain_id, seq_id)
+            if key in seen:
+                continue
+            seen.add(key)
+
+            if (not args.include_common) and comp_id in block_list:
+                print(f"  Skipping {comp_id} (common additive)")
+                continue
+
+            try:
+                ligand_url = (
+                    f"https://models.rcsb.org/v1/{pdb_id}/ligand"
+                    f"?auth_seq_id={seq_id}&label_asym_id={chain_id}&encoding=sdf"
+                )
+                response = requests.get(ligand_url, timeout=15)
+                response.raise_for_status()
+
+                if not response.content:
+                    print(f"    [WARN] No SDF content for {pdb_id}_{comp_id}_{chain_id}_{seq_id}. Skipping.")
+                    continue
+
+                mol = Chem.MolFromMolBlock(response.content.decode('utf-8'), removeHs=False)
+                is_valid, reason = is_valid_small_molecule(mol)
+                if not is_valid:
+                    print(f"    [SKIP] {pdb_id}_{comp_id}_{chain_id}_{seq_id}: {reason}")
+                    continue
+
+                print(f"  Found biological ligand: {comp_id}")
+                base_name = f"{pdb_id}_{comp_id}_{chain_id}_{seq_id}"
+
+                sdf_path = sdf_output_dir / f"{base_name}.sdf"
+                sdf_path.write_bytes(response.content)
+
+                output_pdb_path = pocket_output_dir / f"{base_name}_pocket.pdb"
+                extract_pocket_biopython(
+                    structure=structure,
+                    sdf_path=sdf_path,
+                    distance_cutoff=args.distance,
+                    output_pdb_path=output_pdb_path,
+                )
+
+                print(f"    [OK] Saved Pocket & Ligand: {base_name}")
+                successful_basenames.append(base_name)
+
+            except Exception as e:
+                print(f"    [FAIL] Local extraction failed for {comp_id} in {pdb_id}: {e}", file=sys.stderr)
+
+
 def create_binding_pockets(args):
     """
     Main execution function.
@@ -243,7 +313,6 @@ def create_binding_pockets(args):
 
     for pdb_path in pdb_files:
         pdb_id = pdb_path.stem.lower()
-        pdb_id_upper = pdb_id.upper()   # RCSB REST API requires uppercase IDs
         suffix = pdb_path.suffix.lower()
         print(f"\n--- Processing {pdb_id} ({suffix.upper()}) ---")
 
@@ -257,7 +326,7 @@ def create_binding_pockets(args):
             continue
 
         try:
-            entry_url = f"https://data.rcsb.org/rest/v1/core/entry/{pdb_id_upper}/"
+            entry_url = f"https://data.rcsb.org/rest/v1/core/entry/{pdb_id}/"
             response = requests.get(entry_url)
             response.raise_for_status()
             data = response.json()
@@ -274,7 +343,7 @@ def create_binding_pockets(args):
                 continue
 
             for entity_id in entity_ids:
-                entity_url = f"https://data.rcsb.org/rest/v1/core/nonpolymer_entity/{pdb_id_upper}/{entity_id}"
+                entity_url = f"https://data.rcsb.org/rest/v1/core/nonpolymer_entity/{pdb_id}/{entity_id}"
                 response = requests.get(entity_url)
                 response.raise_for_status()
                 entity_data = response.json()
@@ -291,7 +360,7 @@ def create_binding_pockets(args):
 
                 for chain in asym_ids:
                     try:
-                        instance_url = f"https://data.rcsb.org/rest/v1/core/nonpolymer_entity_instance/{pdb_id_upper}/{chain}"
+                        instance_url = f"https://data.rcsb.org/rest/v1/core/nonpolymer_entity_instance/{pdb_id}/{chain}"
                         response = requests.get(instance_url)
                         response.raise_for_status()
                         instance_data = response.json()
@@ -299,7 +368,7 @@ def create_binding_pockets(args):
 
                         base_name = f"{pdb_id}_{comp_id}_{chain}_{seq_id}"
 
-                        ligand_url = f"https://models.rcsb.org/v1/{pdb_id_upper}/ligand?auth_seq_id={seq_id}&label_asym_id={chain}&encoding=sdf"
+                        ligand_url = f"https://models.rcsb.org/v1/{pdb_id}/ligand?auth_seq_id={seq_id}&label_asym_id={chain}&encoding=sdf"
                         response = requests.get(ligand_url)
                         response.raise_for_status()
 
@@ -334,7 +403,11 @@ def create_binding_pockets(args):
                         print(f"    [FAIL] Error processing instance {pdb_id}_{comp_id}_{chain}: {e}", file=sys.stderr)
 
         except Exception as e:
-            print(f"  [FAIL] Failed to process PDB {pdb_id} API data: {e}", file=sys.stderr)
+            print(f"  [WARN] RCSB REST API unavailable for {pdb_id} ({e}); falling back to local PDB parsing...")
+            _extract_ligands_local(
+                pdb_id, structure, args, block_list,
+                sdf_output_dir, pocket_output_dir, successful_basenames,
+            )
 
     print("\nDone! Extraction complete.")
 
