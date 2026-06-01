@@ -37,6 +37,7 @@ Usage
 """
 
 import argparse
+import traceback
 import warnings
 import sys
 from pathlib import Path
@@ -61,6 +62,7 @@ from src.prism.utils import dict_to_namespace, write_sdf_file
 from src.prism.models.policy_factory import build_diffsbdd_policy
 from src.prism.models.targetdiff_inference import (
     load_targetdiff_model, pocket_from_pdb, reconstruct_molecules,
+    _ensure_targetdiff_utils,
 )
 from src.models.diffsbdd.analysis.molecule_builder import process_molecule
 
@@ -295,6 +297,7 @@ def main():
         td_model = td_featurizer = None
     elif args.model == "targetdiff":
         td_model = load_targetdiff_model(args.checkpoint, args.config, device)
+        _ensure_targetdiff_utils()
         from utils import transforms as trans                          # noqa: E402
         td_featurizer = trans.FeaturizeProteinAtom()
         diffsbdd_model = None
@@ -369,7 +372,7 @@ def main():
                 pbar.set_description(f"Last: {ligand_name} ({elapsed:.1f}s)")
 
         except Exception as e:
-            warnings.warn(f"[ERROR] {ligand_name}: {e}")
+            warnings.warn(f"[ERROR] {ligand_name}: {e}\n{traceback.format_exc()}")
 
     times_summary = args.outdir / "pocket_times.txt"
     with open(times_summary, "w") as f:
