@@ -119,10 +119,20 @@ def make_targetdiff_reconstruction_fn():
             return None
 
     return _reconstruct
+
+
+def reconstruct_molecules(all_pred_pos, all_pred_v, debug=False):
     """
-    Convert raw TargetDiff position + atom-type predictions into RDKit
-    molecules. Returns a list of the same length as all_pred_pos; invalid
-    entries are None.
+    Convert raw TargetDiff position + atom-type predictions into RDKit molecules.
+
+    Uses TargetDiff's own OpenBabel pipeline with aromatic information
+    (basic_mode=False) for correct bond assignment.  Returns a list of the
+    same length as all_pred_pos; invalid entries are None.
+
+    Args:
+        all_pred_pos: list of [N_atoms, 3] position tensors, one per molecule.
+        all_pred_v:   list of [N_atoms] integer atom-type index tensors (add_aromatic).
+        debug:        if True, print per-molecule atom-type distribution and errors.
     """
     _ensure_targetdiff_utils()
 
@@ -131,7 +141,6 @@ def make_targetdiff_reconstruction_fn():
     from utils import transforms as trans   # noqa: E402
     from utils import reconstruct           # noqa: E402
 
-    # [DEBUG] summarise the raw v distribution once
     if debug:
         all_v_flat = [int(v) for pv in all_pred_v for v in pv.tolist()]
         counts = collections.Counter(all_v_flat)
@@ -154,6 +163,8 @@ def make_targetdiff_reconstruction_fn():
                 tqdm.write(f"[DEBUG]   mol {mol_idx}: atomic_nums={pred_atom_type}  "
                            f"aromatic={pred_aromatic}")
 
+            # basic_mode=False: pass aromatic flags to OpenBabel for correct bond assignment.
+            # Never use basic_mode=True — it silently discards aromaticity.
             mol = reconstruct.reconstruct_from_generated(
                 pred_pos, pred_atom_type, pred_aromatic, basic_mode=False, debug=debug, mol_idx=mol_idx
             )

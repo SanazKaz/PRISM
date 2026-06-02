@@ -409,17 +409,141 @@ python -m pytest tests/unit/ -v
 
 ---
 
+---
+
+## Step 11 — Wire up the reconstruction pipeline (critical)
+
+This step is easy to overlook and causes silent, catastrophic training failures
+if skipped. Every model encodes atom types differently. If the wrong decoder is
+used during rollout reconstruction, molecules are built from wrong atom types,
+rewards are computed on chemical nonsense, and training diverges silently.
+
+### The rule
+
+> **Each model must decode its own atom-type indices using its own pipeline.**
+> Never use DiffSBDD's `build_molecule` for a non-DiffSBDD model.
+
+| Model | Atom-type encoding | Reconstruction pipeline |
+|---|---|---|
+| DiffSBDD | 10-class element one-hot | `build_molecule` + `process_molecule` (molecule_builder.py) |
+| TargetDiff | 13-class `add_aromatic` | `reconstruct_from_generated(basic_mode=False)` via OpenBabel |
+| **New model** | **check the model source** | **must use the model's own pipeline** |
+
+### How to add the reconstruction function
+
+In `src/prism/models/targetdiff_inference.py` (or a new `<newmodel>_inference.py`),
+add two functions following the TargetDiff pattern:
+
+**1. A rollout reconstruction callable** for `build_molecules_from_batch`:
+
+```python
+def make_<newmodel>_reconstruction_fn():
+    """Returns (coords, atom_indices) -> Mol | None using <NewModel>'s own pipeline."""
+    def _reconstruct(coords, atom_indices):
+        try:
+            # decode atom_indices using the model's own vocabulary
+            atomic_nums = <newmodel_decode_atoms>(atom_indices)
+            aromatic    = <newmodel_decode_aromatic>(atom_indices)  # if applicable
+            mol = <newmodel_reconstruct>(coords, atomic_nums, aromatic, basic_mode=False)
+            smi = Chem.MolToSmiles(mol)
+            return mol if '.' not in smi else None
+        except Exception:
+            return None
+    return _reconstruct
+```
+
+**2. A batch reconstruction function** for test-time scripts:
+
+```python
+def reconstruct_molecules_<newmodel>(all_pred_pos, all_pred_v, debug=False):
+    """Convert list of (pos, atom_indices) predictions to RDKit mols."""
+    molecules = []
+    for mol_idx, (pred_pos, pred_v) in enumerate(zip(all_pred_pos, all_pred_v)):
+        try:
+            mol = <newmodel_reconstruct>(pred_pos, pred_v, basic_mode=False)
+            smi = Chem.MolToSmiles(mol)
+            molecules.append(mol if '.' not in smi else None)
+        except Exception:
+            molecules.append(None)
+    return molecules
+```
+
+### Wire it into the training loop
+
+In `src/prism/ppo_tuner/lightning_module.py`, add a branch for your model:
+
+```python
+elif model_type == '<new_model>':
+    self.policy, self.dataset_info = build_<newmodel>_policy(...)
+    self.ddpm_model = None
+    from src.prism.models.<newmodel>_inference import make_<newmodel>_reconstruction_fn
+    reconstruction_fn = make_<newmodel>_reconstruction_fn()
+```
+
+`reconstruction_fn` is passed to `get_reward_manager(reconstruction_fn=reconstruction_fn)`,
+which passes it to `RewardManager`, which passes it to `build_molecules_from_batch`.
+The chain is already in place — you only need to supply the function.
+
+### `basic_mode` — always False
+
+TargetDiff's `reconstruct_from_generated` has a `basic_mode` parameter.
+**Always pass `basic_mode=False`.**
+
+- `basic_mode=True` (the vendor default) silently ignores aromatic flags —
+  OpenBabel assigns bonds without aromatic hints, producing wrong SMILES.
+- `basic_mode=False` passes aromatic information to OpenBabel, producing
+  chemically correct aromatic rings.
+
+The vendor's own evaluation script (`evaluate_diffusion.py`) uses the default
+`basic_mode=True`, which is a known limitation. PRISM intentionally deviates
+from this to produce better molecules.
+
+If a new model has its own `basic_mode`-equivalent flag, always choose the
+mode that **uses all available atom-type information**.
+
+### Verification checklist for the reconstruction pipeline
+
+Run this before any training job:
+
+```python
+# 1. Confirm atom-type dimension matches between NPZ and model
+import numpy as np
+data = np.load('/path/to/your_dataset/train.npz')
+print("lig_one_hot shape:", data['lig_one_hot'].shape[-1])    # should match ligand_atom_types in config
+print("pocket_one_hot shape:", data['pocket_one_hot'].shape[-1])  # should match protein_feat_dim in config
+
+# 2. Generate one batch and inspect the decoded SMILES
+# Run with model_type=<new_model> and 1 outer epoch, 1 pocket.
+# Check the reward table printed by RewardManager — SMILES should look like
+# real drug-like molecules, not gibberish or single atoms.
+
+# 3. Sanity-check atom-type index mapping
+from utils import transforms as trans  # or your model's equivalent
+for i in range(num_atom_types):
+    print(i, trans.get_atomic_number_from_index([i], mode='add_aromatic'))
+# Compare against atom_decoder in policy_factory.py — they must agree.
+```
+
+---
+
 ## Checklist
 
 - [ ] Model source vendored under `src/models/<new_model>/`
 - [ ] Named parameter paths printed from the real checkpoint
 - [ ] Data processing script created with `--smoke_test` flag
 - [ ] Smoke test passes: correct shapes, concatenation works
+- [ ] **`lig_one_hot.shape[-1]` matches `ligand_atom_types` in config**
+- [ ] **`pocket_one_hot.shape[-1]` matches `protein_feat_dim` in config**
 - [ ] Factory function added to `policy_factory.py`
+- [ ] **`atom_decoder` in `_<MODEL>_DATASET_INFO` matches the model's atom-type index order**
 - [ ] Policy wrapper implements all 4 abstract methods + `parameters()` routing
+- [ ] **`make_<newmodel>_reconstruction_fn()` created and wired into `lightning_module.py`**
+- [ ] **`reconstruct_molecules_<newmodel>()` created and used in test scripts**
+- [ ] **`basic_mode=False` (or equivalent) confirmed in all reconstruction calls**
 - [ ] `lightning_module.py` branched on `model_type`
 - [ ] `freeze_except` verified against real named_parameters output
 - [ ] YAML config has correct `protein_feat_dim` matching the checkpoint
 - [ ] SLURM script uses root `--logdir`, not subdir
 - [ ] Unit tests added and passing
+- [ ] **Smoke rollout: run 1 epoch, inspect reward table SMILES for chemical sanity**
 - [ ] Smoke test submitted before full job
