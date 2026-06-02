@@ -109,9 +109,10 @@ def make_targetdiff_reconstruction_fn():
     def _reconstruct(coords, atom_indices):
         try:
             xyz = coords.tolist() if hasattr(coords, 'tolist') else list(coords)
-            idx = atom_indices.tolist() if hasattr(atom_indices, 'tolist') else list(atom_indices)
-            atomic_nums = trans.get_atomic_number_from_index(idx, mode='add_aromatic')
-            aromatic    = trans.is_aromatic_from_index(idx,    mode='add_aromatic')
+            # Pass atom_indices directly — get_atomic_number_from_index / is_aromatic_from_index
+            # call .tolist() internally and expect a tensor or numpy array, not a Python list.
+            atomic_nums = trans.get_atomic_number_from_index(atom_indices, mode='add_aromatic')
+            aromatic    = trans.is_aromatic_from_index(atom_indices,    mode='add_aromatic')
             mol = reconstruct.reconstruct_from_generated(
                 xyz, atomic_nums, aromatic, basic_mode=False
             )
@@ -119,7 +120,7 @@ def make_targetdiff_reconstruction_fn():
             smi = Chem.MolToSmiles(mol)
             return mol if '.' not in smi else None
         except Exception as e:
-            tqdm.write(f"[DEBUG][_reconstruct] FAILED n_atoms={len(idx) if 'idx' in dir() else '?'} "
+            tqdm.write(f"[DEBUG][_reconstruct] FAILED n_atoms={len(atom_indices)} "
                        f"err={type(e).__name__}: {e}")
             return None
 
