@@ -256,8 +256,18 @@ class PPOAlgorithm:
         _top_k = min(10, len(_sorted))
         reward_top10_mean = _sorted[:_top_k].mean().item()
 
+        # Validity: invalid molecules are left at exactly -0.1 (the penalty set in
+        # RewardManager when reconstruction fails). Valid molecules start at 0.0
+        # before reward accumulation, so > -0.1 is a reliable validity mask.
+        n_attempted = global_rewards.numel()
+        n_valid = (global_rewards > -0.1).sum().item()
+        validity_rate = n_valid / max(n_attempted, 1)
+
         # Final logs for the entire outer step
         final_logs = {
+            "train/n_attempted": n_attempted,
+            "train/n_valid": n_valid,
+            "train/validity_rate": validity_rate,
             "train/total_loss_epoch": epoch_total_loss / max(epoch_accumulation_steps, 1),
             "train/approx_kl_epoch": epoch_total_approx_kl / max(epoch_accumulation_steps, 1),
             "train/clipfrac_epoch": epoch_total_clipfrac / max(epoch_accumulation_steps, 1),
