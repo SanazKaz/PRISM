@@ -52,9 +52,8 @@ class RolloutCollector:
         # Determine Sampling Strategy
         # can add in a eval num steps instead but okay for now.
         
-        n_steps = self.config.ppo.n_steps
-        
-        samples_per_rank = math.ceil(n_steps / world_size)
+        # n_steps is per-GPU (same convention as batch_size), not a global budget
+        samples_per_rank = self.config.ppo.n_steps
         samples_per_pocket = math.ceil(samples_per_rank / max(1, local_batch_size))
         total_target_samples = min(samples_per_rank, local_batch_size * samples_per_pocket)
 
