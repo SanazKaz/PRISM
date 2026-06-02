@@ -124,9 +124,13 @@ def featurize_ligand(sdf_path: str, atom_dict: dict) -> tuple:
     if not lig_atoms:
         raise Exception("No valid atoms found in ligand")
 
+    # Filter coords identically to lig_atoms: exclude H atoms not in atom_dict.
+    # Using range(GetNumAtoms()) would include explicit H atoms and cause a
+    # coord/one_hot shape mismatch when the SDF has explicit H positions.
     lig_coords = np.array([
         list(mol.GetConformer(0).GetAtomPosition(i))
-        for i in range(mol.GetNumAtoms())
+        for i, a in enumerate(mol.GetAtoms())
+        if (a.GetSymbol().capitalize() in atom_dict or a.GetSymbol() != 'H')
     ], dtype=np.float32)
 
     lig_one_hot = np.stack([
@@ -395,6 +399,11 @@ def smoke_test(args):
         assert ph.ndim == 2, f"poc_one_hot must be 2-D, got {ph.shape}"
         assert lc.ndim == 2 and lc.shape[1] == 3, f"lig_coords must be [M,3], got {lc.shape}"
         assert pc.shape[0] == ph.shape[0], "poc_coords / poc_one_hot atom-count mismatch"
+        assert lc.shape[0] == lh.shape[0], \
+            f"lig_coords/lig_one_hot atom-count mismatch: {lc.shape[0]} vs {lh.shape[0]}"
+        if args.model == 'targetdiff':
+            assert ph.shape[1] == 27, \
+                f"TargetDiff pocket features must be 27-dim, got {ph.shape[1]}"
 
         poc_list.append(pc); lig_list.append(lc)
 

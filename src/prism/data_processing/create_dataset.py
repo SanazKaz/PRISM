@@ -149,8 +149,14 @@ def process_ligand_and_pocket(pdbfile, sdffile, atom_dict, aa_encoder, dist_cuto
         if not lig_atoms:
             raise Exception("No valid atoms found in ligand")
 
-        lig_coords = np.array([list(ligand.GetConformer(0).GetAtomPosition(idx))
-                        for idx in range(ligand.GetNumAtoms())])
+        # Filter coords identically to lig_atoms: exclude H atoms not in atom_dict.
+        # Using range(GetNumAtoms()) would include explicit H atoms and cause a
+        # coord/one_hot shape mismatch when the SDF has explicit H positions.
+        lig_coords = np.array([
+            list(ligand.GetConformer(0).GetAtomPosition(idx))
+            for idx, a in enumerate(ligand.GetAtoms())
+            if (a.GetSymbol().capitalize() in atom_dict or a.GetSymbol() != 'H')
+        ])
     except Exception as e:
         raise Exception(f"ligand atom processing failed:{str(e)}")
 
@@ -596,6 +602,9 @@ if __name__ == '__main__':
                         help='Key from constants.py dataset_params for atom/AA encoders.')
     parser.add_argument('--dist_cutoff', type=float, default=5.0,
                         help='Distance cutoff (Å) for defining pocket residues.')
+    parser.add_argument('--model', choices=['diffsbdd', 'targetdiff'], default='diffsbdd',
+                        help='Pocket featurisation format: diffsbdd (10-dim element one-hots) '
+                             'or targetdiff (27-dim element + AA + backbone features).')
 
     args = parser.parse_args()
     args.deduplicate = True  # default on when called standalone; --keep_duplicates flips it
