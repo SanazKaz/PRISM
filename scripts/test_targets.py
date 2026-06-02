@@ -285,12 +285,20 @@ def generate_for_target_targetdiff(
         raise FileNotFoundError(f"Pocket not found: {pocket_path}")
 
     print(f"\n{'='*60}\nTarget: {target_name}\nPocket: {pocket_path.name}\n{'='*60}")
+    print(f"[DEBUG] n_samples={n_samples}  batch_size={batch_size}  "
+          f"num_batches={int(np.ceil(n_samples/batch_size))}  num_steps={num_steps}")
 
     t_start = time()
     device  = next(model.parameters()).device
+    print(f"[DEBUG] Device: {device}")
 
+    t0 = time()
     pocket_data = pocket_from_pdb(str(pocket_path), protein_featurizer)
+    print(f"[DEBUG] Pocket loaded in {time()-t0:.2f}s  "
+          f"| protein_pos shape: {pocket_data.protein_pos.shape}  "
+          f"| protein_atom_feature shape: {pocket_data.protein_atom_feature.shape}")
 
+    t0 = time()
     with torch.no_grad():
         all_pred_pos, all_pred_v, *_ = sample_diffusion_ligand(
             model=model,
@@ -303,13 +311,25 @@ def generate_for_target_targetdiff(
             center_pos_mode=center_pos_mode,
             sample_num_atoms='prior',
         )
+    t_sample = time() - t0
+    print(f"[DEBUG] Sampling done in {t_sample:.2f}s ({t_sample/60:.1f} min)  "
+          f"| {len(all_pred_pos)} molecules  "
+          f"| {t_sample/len(all_pred_pos):.2f}s/mol")
 
-    molecules     = reconstruct_molecules(all_pred_pos, all_pred_v)
-    valid         = [m for m in molecules if m is not None]
+    t0 = time()
+    molecules = reconstruct_molecules(all_pred_pos, all_pred_v)
+    t_recon = time() - t0
+    valid     = [m for m in molecules if m is not None]
+    print(f"[DEBUG] Reconstruction done in {t_recon:.2f}s ({t_recon/60:.1f} min)  "
+          f"| {len(valid)}/{len(molecules)} valid  "
+          f"| {t_recon/max(len(molecules),1):.3f}s/mol")
+
     elapsed       = time() - t_start
     validity_rate = len(valid) / len(molecules) if molecules else 0
 
+    t0 = time()
     write_sdf_file(processed_sdf, valid)
+    print(f"[DEBUG] SDF written in {time()-t0:.2f}s -> {processed_sdf}")
 
     stats = {"target": target_name, "n_valid": len(valid),
              "n_generated": len(molecules), "validity_rate": validity_rate,
@@ -319,7 +339,8 @@ def generate_for_target_targetdiff(
             f.write(f"{k}: {v}\n")
 
     print(f"[DONE] {target_name}: {len(valid)} valid | "
-          f"validity {validity_rate*100:.1f}% | {elapsed/60:.1f} min")
+          f"validity {validity_rate*100:.1f}% | {elapsed/60:.1f} min  "
+          f"(sample={t_sample/60:.1f}min  recon={t_recon/60:.1f}min)")
     return stats
 
 
