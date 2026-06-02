@@ -109,9 +109,16 @@ Provide a plain-text file of PDB IDs (comma- or newline-separated). The
 pipeline fetches the structures from RCSB automatically.
 
 ```bash
+# DiffSBDD (default — 10-dim element one-hots)
 python -m scripts.process_data \
     --pdb_list data/example_pdbs.txt \
     --output_dir data/my_dataset
+
+# TargetDiff (27-dim element + AA + backbone features)
+python -m scripts.process_data \
+    --pdb_list data/example_pdbs.txt \
+    --output_dir data/my_dataset_td \
+    --model targetdiff
 ```
 
 A sample list (`data/example_pdbs.txt`) with ten PDB IDs is included for
@@ -126,7 +133,8 @@ step with `--skip_fetch`:
 python -m scripts.process_data \
     --skip_fetch \
     --pdb_dir /path/to/your/pdb_files \
-    --output_dir data/my_dataset
+    --output_dir data/my_dataset \
+    --model diffsbdd    # or targetdiff
 ```
 
 ### Option C — CrossDocked dataset (DiffSBDD or TargetDiff)
@@ -211,6 +219,7 @@ Set `datadir` in your training config to the `03_final_dataset/` path.
 | `--keep_duplicates` | off | Keep all chain instances of the same ligand |
 | `--include_common` | off | Include crystallographic additives (skips block list) |
 | `--dataset_info_key` | `crossdock_full` | Atom encoder key from `constants.py` |
+| `--model` | `diffsbdd` | Pocket feature format: `diffsbdd` (10-dim) or `targetdiff` (27-dim) |
 
 ### Reference files in `data/`
 
@@ -256,11 +265,11 @@ wget -P checkpoints/ https://zenodo.org/record/8183747/files/crossdocked_fullato
 
 ### Test set / custom target set
 
-`scripts/test.py` generates ligands for a directory of pockets and works
+`scripts/test_crossdocked.py` generates ligands for a directory of pockets and works
 with both models via `--model`:
 
 ```bash
-python -m scripts.test \
+python -m scripts.test_crossdocked \
     checkpoints/my_run.ckpt \
     --model diffsbdd \          # or targetdiff
     --config configs/ppo_config.yaml \
@@ -273,13 +282,17 @@ Expected layout under `--test_dir`:
 
 ```
 test_pockets/
-├── <stem>.sdf        reference ligand (used as output name key)
-├── <pdb_id>.pdb      pocket structure
-└── <stem>.txt        residue list (DiffSBDD only; optional)
+├── <stem>.sdf               reference ligand (used as output name key)
+├── <stem>_pocket.pdb        pocket PDB (CrossDocked extracted-pocket convention)
+│   — or —
+├── <pdb_id>.pdb             full-structure PDB (DiffSBDD raw-PDB convention)
+└── <stem>.txt               residue list (DiffSBDD only; optional)
 ```
 
-For TargetDiff the `.txt` file is not needed. Any directory of `.pdb` + `.sdf`
-pairs works — including a custom set of a few targets.
+The script first looks for `<stem>_pocket.pdb` (the naming convention produced by
+`process_crossdock.py`), then falls back to `<pdb_id>.pdb` (first `_`-separated
+component of the stem, used when the directory contains raw full-structure PDB files).
+For TargetDiff the `.txt` file is not needed.
 
 ### Held-out evaluation targets
 
@@ -383,7 +396,7 @@ Set a weight > 0 to enable a reward component. All weights should sum to 1.
 │   ├── train.py                        # PPO training entry point
 │   ├── generate_diffsbdd.py            # Single-pocket inference (DiffSBDD)
 │   ├── generate_targetdiff.py          # Single-pocket inference (TargetDiff)
-│   ├── test.py                         # Test-set generation (--model diffsbdd|targetdiff)
+│   ├── test_crossdocked.py             # Test-set generation (--model diffsbdd|targetdiff)
 │   └── test_targets.py                 # Eval-target generation (--model diffsbdd|targetdiff)
 ├── src/
 │   ├── models/diffsbdd/         # DiffSBDD diffusion model (vendored)
