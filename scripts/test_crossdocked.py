@@ -335,10 +335,16 @@ def main():
     for sdf_file in pbar:
         ligand_name = sdf_file.stem
         pdb_id      = ligand_name.split("_")[0]
-        pdb_file    = sdf_file.parent / f"{pdb_id}.pdb"
+
+        # Try CrossDocked pocket convention first (<stem>_pocket.pdb),
+        # then fall back to raw-PDB convention (<pdb_id>.pdb).
+        pocket_pdb  = sdf_file.parent / f"{ligand_name}_pocket.pdb"
+        raw_pdb     = sdf_file.parent / f"{pdb_id}.pdb"
+        pdb_file    = pocket_pdb if pocket_pdb.exists() else raw_pdb
 
         if not pdb_file.exists():
-            warnings.warn(f"[SKIP] PDB not found: {pdb_file}")
+            warnings.warn(f"[SKIP] PDB not found for {ligand_name} "
+                          f"(tried {pocket_pdb.name} and {raw_pdb.name})")
             continue
 
         try:
