@@ -217,15 +217,15 @@ def generate_for_pocket_targetdiff(
 
     t_start = time()
     device  = next(model.parameters()).device
-    print(f"[DEBUG] {ligand_name} | device={device}  n_samples={n_samples}  "
-          f"batch_size={batch_size}  num_batches={int(np.ceil(n_samples/batch_size))}  "
-          f"num_steps={num_steps}")
+    tqdm.write(f"[DEBUG] {ligand_name} | device={device}  n_samples={n_samples}  "
+               f"batch_size={batch_size}  num_batches={int(np.ceil(n_samples/batch_size))}  "
+               f"num_steps={num_steps}")
 
     t0 = time()
     pocket_data = pocket_from_pdb(str(pdb_file), protein_featurizer)
-    print(f"[DEBUG]   pocket loaded in {time()-t0:.2f}s  "
-          f"| protein_pos={pocket_data.protein_pos.shape}  "
-          f"| protein_feat={pocket_data.protein_atom_feature.shape}")
+    tqdm.write(f"[DEBUG]   pocket loaded in {time()-t0:.2f}s  "
+               f"| protein_pos={pocket_data.protein_pos.shape}  "
+               f"| protein_feat={pocket_data.protein_atom_feature.shape}")
 
     t0 = time()
     with torch.no_grad():
@@ -241,20 +241,20 @@ def generate_for_pocket_targetdiff(
             sample_num_atoms='prior',
         )
     t_sample = time() - t0
-    print(f"[DEBUG]   sampling done in {t_sample:.2f}s ({t_sample/60:.1f}min)  "
-          f"| {len(all_pred_pos)} mols  | {t_sample/max(len(all_pred_pos),1):.2f}s/mol")
+    tqdm.write(f"[DEBUG]   sampling done in {t_sample:.2f}s ({t_sample/60:.1f}min)  "
+               f"| {len(all_pred_pos)} mols  | {t_sample/max(len(all_pred_pos),1):.2f}s/mol")
 
     t0 = time()
     molecules = reconstruct_molecules(all_pred_pos, all_pred_v)
     t_recon = time() - t0
     valid = [m for m in molecules if m is not None]
-    print(f"[DEBUG]   reconstruction done in {t_recon:.2f}s ({t_recon/60:.1f}min)  "
-          f"| {len(valid)}/{len(molecules)} valid  "
-          f"| {t_recon/max(len(molecules),1):.3f}s/mol")
+    tqdm.write(f"[DEBUG]   reconstruction done in {t_recon:.2f}s ({t_recon/60:.1f}min)  "
+               f"| {len(valid)}/{len(molecules)} valid  "
+               f"| {t_recon/max(len(molecules),1):.3f}s/mol")
 
     t0 = time()
     write_sdf_file(processed_out, valid)
-    print(f"[DEBUG]   SDF written in {time()-t0:.2f}s -> {processed_out}")
+    tqdm.write(f"[DEBUG]   SDF written in {time()-t0:.2f}s -> {processed_out}")
 
     elapsed = time() - t_start
     time_file.write_text(f"{sdf_file} {elapsed}")
