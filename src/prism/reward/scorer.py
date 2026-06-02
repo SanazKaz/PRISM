@@ -67,24 +67,29 @@ class RewardManager:
     3. Aggregates weighted scores into a final reward tensor.
     """
 
-    def __init__(self, 
-                 reward_fns: List[BaseReward], 
-                 reward_weights: Dict[str, float], 
-                 dataset_info: Any, 
+    def __init__(self,
+                 reward_fns: List[BaseReward],
+                 reward_weights: Dict[str, float],
+                 dataset_info: Any,
                  ddpm_module: Any = None,
-                 aggregation: str = "weighted_sum"): # "weighted_sum" or "product"
+                 aggregation: str = "weighted_sum",
+                 reconstruction_fn=None):
         """
         Args:
             reward_fns: List of instantiated reward classes inheriting from BaseReward.
             reward_weights: Dictionary mapping reward names to their float weights.
             dataset_info: Metadata required for molecule reconstruction and file finding.
             ddpm_module: Optional module for virtual node handling.
+            reconstruction_fn: Optional callable(coords, atom_indices) -> Mol | None.
+                               When provided, replaces DiffSBDD's build_molecule for
+                               molecule reconstruction (e.g. TargetDiff's OpenBabel pipeline).
         """
         self.reward_fns = reward_fns
         self.weights = reward_weights
         self.base_weights = reward_weights.copy()
         self.dataset_info = dataset_info
         self.ddpm_module = ddpm_module
+        self.reconstruction_fn = reconstruction_fn
         self.aggregation = aggregation
 
         # Validate weights match rewards
@@ -155,10 +160,11 @@ class RewardManager:
         }
 
         molecules, mol_to_batch_idx = build_molecules_from_batch(
-            xh_lig, 
-            global_lig_mask, 
-            self.dataset_info, 
-            self.ddpm_module
+            xh_lig,
+            global_lig_mask,
+            self.dataset_info,
+            self.ddpm_module,
+            reconstruction_fn=self.reconstruction_fn,
         )
 
         if not molecules:

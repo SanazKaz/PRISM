@@ -88,7 +88,37 @@ def pocket_from_pdb(pdb_path: str, protein_featurizer) -> "ProteinLigandData":
     return protein_featurizer(data)
 
 
-def reconstruct_molecules(all_pred_pos, all_pred_v, debug=False) -> list:
+def make_targetdiff_reconstruction_fn():
+    """
+    Returns a reconstruction callable compatible with build_molecules_from_batch.
+
+    The returned function takes (coords: Tensor[N,3], atom_indices: Tensor[N])
+    and returns an RDKit Mol or None — the same contract as DiffSBDD's
+    build_molecule+process_molecule path, but using TargetDiff's OpenBabel
+    pipeline with aromatic information so rewards are computed on correctly
+    reconstructed molecules.
+    """
+    _ensure_targetdiff_utils()
+
+    from utils import transforms as trans   # noqa: E402
+    from utils import reconstruct           # noqa: E402
+
+    def _reconstruct(coords, atom_indices):
+        try:
+            xyz = coords.tolist() if hasattr(coords, 'tolist') else list(coords)
+            idx = atom_indices.tolist() if hasattr(atom_indices, 'tolist') else list(atom_indices)
+            atomic_nums = trans.get_atomic_number_from_index(idx, mode='add_aromatic')
+            aromatic    = trans.is_aromatic_from_index(idx,    mode='add_aromatic')
+            mol = reconstruct.reconstruct_from_generated(
+                xyz, atomic_nums, aromatic, basic_mode=False
+            )
+            from rdkit import Chem
+            smi = Chem.MolToSmiles(mol)
+            return mol if '.' not in smi else None
+        except Exception:
+            return None
+
+    return _reconstruct
     """
     Convert raw TargetDiff position + atom-type predictions into RDKit
     molecules. Returns a list of the same length as all_pred_pos; invalid
