@@ -103,6 +103,9 @@ def make_targetdiff_reconstruction_fn():
     from utils import transforms as trans   # noqa: E402
     from utils import reconstruct           # noqa: E402
 
+    tqdm.write(f"[DEBUG][make_targetdiff_reconstruction_fn] closure built: "
+               f"trans={trans.__file__}  reconstruct={reconstruct.__file__}")
+
     def _reconstruct(coords, atom_indices):
         try:
             xyz = coords.tolist() if hasattr(coords, 'tolist') else list(coords)
@@ -115,7 +118,9 @@ def make_targetdiff_reconstruction_fn():
             from rdkit import Chem
             smi = Chem.MolToSmiles(mol)
             return mol if '.' not in smi else None
-        except Exception:
+        except Exception as e:
+            tqdm.write(f"[DEBUG][_reconstruct] FAILED n_atoms={len(idx) if 'idx' in dir() else '?'} "
+                       f"err={type(e).__name__}: {e}")
             return None
 
     return _reconstruct

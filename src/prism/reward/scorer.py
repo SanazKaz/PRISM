@@ -168,6 +168,8 @@ class RewardManager:
         )
 
         if not molecules:
+            print(f"[DEBUG][RewardManager] 0/{num_molecules} molecules reconstructed — "
+                  f"all returning penalty -0.1. Check reconstruction_fn output above.", flush=True)
             return total_rewards, component_scores
 
         valid_indices = list(mol_to_batch_idx.values())
