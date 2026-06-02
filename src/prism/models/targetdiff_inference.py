@@ -13,6 +13,7 @@ from pathlib import Path
 
 import torch
 import yaml
+from tqdm import tqdm
 
 _PROJECT_ROOT    = Path(__file__).resolve().parents[3]
 _TARGETDIFF_ROOT = _PROJECT_ROOT / 'src' / 'models' / 'targetdiff'
@@ -87,7 +88,7 @@ def pocket_from_pdb(pdb_path: str, protein_featurizer) -> "ProteinLigandData":
     return protein_featurizer(data)
 
 
-def reconstruct_molecules(all_pred_pos, all_pred_v) -> list:
+def reconstruct_molecules(all_pred_pos, all_pred_v, debug=False) -> list:
     """
     Convert raw TargetDiff position + atom-type predictions into RDKit
     molecules. Returns a list of the same length as all_pred_pos; invalid
@@ -95,18 +96,62 @@ def reconstruct_molecules(all_pred_pos, all_pred_v) -> list:
     """
     _ensure_targetdiff_utils()
 
+    import collections
     from rdkit import Chem
     from utils import transforms as trans   # noqa: E402
     from utils import reconstruct           # noqa: E402
 
+    # [DEBUG] summarise the raw v distribution once
+    if debug:
+        all_v_flat = [int(v) for pv in all_pred_v for v in pv.tolist()]
+        counts = collections.Counter(all_v_flat)
+        tqdm.write(f"[DEBUG] reconstruct_molecules: {len(all_pred_pos)} mols  "
+                   f"atom-type dist (index:count): {dict(sorted(counts.items()))}")
+
     molecules = []
-    for pred_pos, pred_v in zip(all_pred_pos, all_pred_v):
+    error_counts = collections.Counter()
+
+    for mol_idx, (pred_pos, pred_v) in enumerate(zip(all_pred_pos, all_pred_v)):
         try:
+            if debug:
+                tqdm.write(f"[DEBUG]   mol {mol_idx}: {len(pred_v)} atoms  "
+                           f"v={pred_v.tolist()}")
+
             pred_atom_type = trans.get_atomic_number_from_index(pred_v, mode="add_aromatic")
             pred_aromatic  = trans.is_aromatic_from_index(pred_v, mode="add_aromatic")
-            mol = reconstruct.reconstruct_from_generated(pred_pos, pred_atom_type, pred_aromatic)
+
+            if debug:
+                tqdm.write(f"[DEBUG]   mol {mol_idx}: atomic_nums={pred_atom_type}  "
+                           f"aromatic={pred_aromatic}")
+
+            mol = reconstruct.reconstruct_from_generated(
+                pred_pos, pred_atom_type, pred_aromatic, basic_mode=False, debug=debug, mol_idx=mol_idx
+            )
             smiles = Chem.MolToSmiles(mol)
-            molecules.append(mol if "." not in smiles else None)
-        except reconstruct.MolReconsError:
+
+            if "." in smiles:
+                if debug:
+                    tqdm.write(f"[DEBUG]   mol {mol_idx}: FRAGMENT ({smiles})")
+                error_counts["fragment"] += 1
+                molecules.append(None)
+            else:
+                if debug:
+                    tqdm.write(f"[DEBUG]   mol {mol_idx}: OK  {smiles}")
+                molecules.append(mol)
+
+        except reconstruct.MolReconsError as e:
+            error_counts[f"MolReconsError:{e}"] += 1
+            if debug:
+                tqdm.write(f"[DEBUG]   mol {mol_idx}: MolReconsError: {e}")
             molecules.append(None)
+        except Exception as e:
+            error_counts[f"{type(e).__name__}:{e}"] += 1
+            if debug:
+                tqdm.write(f"[DEBUG]   mol {mol_idx}: {type(e).__name__}: {e}")
+            molecules.append(None)
+
+    if debug:
+        tqdm.write(f"[DEBUG] reconstruct summary: {sum(m is not None for m in molecules)}/{len(molecules)} valid  "
+                   f"errors={dict(error_counts)}")
+
     return molecules

@@ -245,7 +245,7 @@ def generate_for_pocket_targetdiff(
                f"| {len(all_pred_pos)} mols  | {t_sample/max(len(all_pred_pos),1):.2f}s/mol")
 
     t0 = time()
-    molecules = reconstruct_molecules(all_pred_pos, all_pred_v)
+    molecules = reconstruct_molecules(all_pred_pos, all_pred_v, debug=True)
     t_recon = time() - t0
     valid = [m for m in molecules if m is not None]
     tqdm.write(f"[DEBUG]   reconstruction done in {t_recon:.2f}s ({t_recon/60:.1f}min)  "
