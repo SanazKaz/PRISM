@@ -518,9 +518,10 @@ print("pocket_one_hot shape:", data['pocket_one_hot'].shape[-1])  # should match
 # real drug-like molecules, not gibberish or single atoms.
 
 # 3. Sanity-check atom-type index mapping
+import torch
 from utils import transforms as trans  # or your model's equivalent
 for i in range(num_atom_types):
-    print(i, trans.get_atomic_number_from_index([i], mode='add_aromatic'))
+    print(i, trans.get_atomic_number_from_index(torch.tensor([i]), mode='add_aromatic'))
 # Compare against atom_decoder in policy_factory.py — they must agree.
 ```
 
