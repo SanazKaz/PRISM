@@ -5,16 +5,14 @@
 #SBATCH --partition=devel
 #SBATCH --time=01:00:00
 #SBATCH --job-name=prism_process_data
-#SBATCH --mail-user=wolf7055@ox.ac.uk
-#SBATCH --mail-type=END,FAIL
-#SBATCH --output=jobs_files/process_data_%j.log
-#SBATCH --error=jobs_files/process_data_%j.log
+# #SBATCH --mail-user=you@example.com
+# #SBATCH --mail-type=END,FAIL
 
 module purge
 module load Anaconda3
-source activate /data/stat-cadd/wolf7055/conda/envs/PRISM_25
+source activate /path/to/your/conda/env
 
-export PROJECT_ROOT="/data/stat-cadd/wolf7055/PRISM"
+export PROJECT_ROOT="/path/to/PRISM"
 OUTPUT_BASE="/tmp/custom_diffsbdd"
 OUTPUT_TD="/tmp/custom_targetdiff"
 
