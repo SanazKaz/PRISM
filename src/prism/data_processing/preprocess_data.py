@@ -252,7 +252,7 @@ def create_binding_pockets(args):
             continue
 
         try:
-            entry_url = f"https://data.rcsb.org/rest/v1/core/entry/{pdb_id}/"
+            entry_url = f"https://data.rcsb.org/rest/v1/core/entry/{pdb_id}"
             response = requests.get(entry_url)
             response.raise_for_status()
             data = response.json()

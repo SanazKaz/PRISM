@@ -51,6 +51,8 @@ class PPOFineTuner(pl.LightningModule):
                 warm_start_checkpoint=warm_start_checkpoint,
             )
             self.ddpm_model = None  # no LigandPocketDDPM when using TargetDiff
+            from src.prism.models.targetdiff_inference import make_targetdiff_reconstruction_fn
+            reconstruction_fn = make_targetdiff_reconstruction_fn()
         else:
             self.policy, self.ddpm_model, self.dataset_info = build_diffsbdd_policy(
                 config=self.config,
@@ -58,6 +60,7 @@ class PPOFineTuner(pl.LightningModule):
                 node_histogram=node_histogram,
                 warm_start_checkpoint=warm_start_checkpoint,
             )
+            reconstruction_fn = None  # DiffSBDD uses build_molecule (default)
 
         # Attach the data directory so reward functions can resolve relative paths.
         self.dataset_info['datadir'] = self.config.datadir
@@ -66,6 +69,7 @@ class PPOFineTuner(pl.LightningModule):
             config=self.config,
             dataset_info=self.dataset_info,
             ddpm_module=self.policy,  # policy satisfies the virtual-node interface
+            reconstruction_fn=reconstruction_fn,
         )
 
         self.ppo_algorithm = PPOAlgorithm(

@@ -37,7 +37,7 @@ def sample_diffusion_ligand(model, data, num_samples, batch_size=16, device='cud
     time_list = []
     num_batch = int(np.ceil(num_samples / batch_size))
     current_i = 0
-    for i in tqdm(range(num_batch)):
+    for i in tqdm(range(num_batch), disable=True):  # [DEBUG] tqdm disabled
         n_data = batch_size if i < num_batch - 1 else num_samples - batch_size * (num_batch - 1)
         batch = Batch.from_data_list([data.clone() for _ in range(n_data)], follow_batch=FOLLOW_BATCH).to(device)
 

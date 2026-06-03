@@ -452,25 +452,30 @@ def postprocess_rd_mol_2(rdmol):
     return rdmol
 
 
-def reconstruct_from_generated(xyz, atomic_nums, aromatic=None, basic_mode=True):
+def reconstruct_from_generated(xyz, atomic_nums, aromatic=None, basic_mode=True, debug=False, mol_idx=None):
     """
     will utilize data.ligand_pos, data.ligand_element, data.ligand_atom_feature_full to reconstruct mol
     """
-    # xyz = data.ligand_pos.clone().cpu().tolist()
-    # atomic_nums = data.ligand_element.clone().cpu().tolist()
-    # indicators = data.ligand_atom_feature_full[:, -len(ATOM_FAMILIES_ID):].clone().cpu().bool().tolist()
-    # indicators = None
+    _lbl = f"mol {mol_idx}" if mol_idx is not None else "mol"
+
     if basic_mode:
         indicators = None
     else:
         indicators = aromatic
 
+    if debug:
+        print(f"[DEBUG]     {_lbl}: make_obmol  n_atoms={len(atomic_nums)}  basic_mode={basic_mode}", flush=True)
+
     mol, atoms = make_obmol(xyz, atomic_nums)
     fixup(atoms, mol, indicators)
 
+    if debug:
+        print(f"[DEBUG]     {_lbl}: connect_the_dots", flush=True)
     connect_the_dots(mol, atoms, indicators, covalent_factor=1.3)
     fixup(atoms, mol, indicators)
 
+    if debug:
+        print(f"[DEBUG]     {_lbl}: AddPolarHydrogens + PerceiveBondOrders", flush=True)
     mol.AddPolarHydrogens()
     mol.PerceiveBondOrders()
     fixup(atoms, mol, indicators)
@@ -494,7 +499,6 @@ def reconstruct_from_generated(xyz, atomic_nums, aromatic=None, basic_mode=True)
                     if a.IsAromatic():
                         aromatic_ccnt += 1
             if aromatic_ccnt >= carbon_cnt / 2 and aromatic_ccnt != ring.Size():
-                # set all ring atoms to be aromatic
                 for ai in ring._path:
                     a = mol.GetAtom(ai)
                     a.SetAromatic(True)
@@ -507,12 +511,21 @@ def reconstruct_from_generated(xyz, atomic_nums, aromatic=None, basic_mode=True)
             bond.SetAromatic(True)
 
     mol.PerceiveBondOrders()
+
+    if debug:
+        print(f"[DEBUG]     {_lbl}: convert_ob_mol_to_rd_mol  n_bonds={mol.NumBonds()}", flush=True)
     rd_mol = convert_ob_mol_to_rd_mol(mol)
     try:
-        # Post-processing
         rd_mol = postprocess_rd_mol_1(rd_mol)
         rd_mol = postprocess_rd_mol_2(rd_mol)
-    except:
+    except Exception as e:
+        if debug:
+            print(f"[DEBUG]     {_lbl}: postprocess failed: {type(e).__name__}: {e}", flush=True)
         raise MolReconsError()
+
+    if debug:
+        from rdkit.Chem import AllChem as _Chem
+        _smi = _Chem.MolToSmiles(rd_mol)
+        print(f"[DEBUG]     {_lbl}: reconstruct OK  smiles={_smi}", flush=True)
 
     return rd_mol

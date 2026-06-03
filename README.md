@@ -109,9 +109,16 @@ Provide a plain-text file of PDB IDs (comma- or newline-separated). The
 pipeline fetches the structures from RCSB automatically.
 
 ```bash
+# DiffSBDD (default — 10-dim element one-hots)
 python -m scripts.process_data \
     --pdb_list data/example_pdbs.txt \
     --output_dir data/my_dataset
+
+# TargetDiff (27-dim element + AA + backbone features)
+python -m scripts.process_data \
+    --pdb_list data/example_pdbs.txt \
+    --output_dir data/my_dataset_td \
+    --model targetdiff
 ```
 
 A sample list (`data/example_pdbs.txt`) with ten PDB IDs is included for
@@ -126,19 +133,18 @@ step with `--skip_fetch`:
 python -m scripts.process_data \
     --skip_fetch \
     --pdb_dir /path/to/your/pdb_files \
-    --output_dir data/my_dataset
+    --output_dir data/my_dataset \
+    --model diffsbdd    # or targetdiff
 ```
 
-### Option C — CrossDocked dataset (DiffSBDD)
+### Option C — CrossDocked dataset (DiffSBDD or TargetDiff)
 
-The CrossDocked2020 benchmark dataset used to train DiffSBDD is distributed by
-[Pocket2Mol](https://github.com/pengxingang/Pocket2Mol).
+The CrossDocked2020 benchmark dataset used to train both models is distributed
+by [Pocket2Mol](https://github.com/pengxingang/Pocket2Mol).
 
 **Step 1 — Download from Pocket2Mol**
 
-Follow the Pocket2Mol data instructions
-(`https://github.com/pengxingang/Pocket2Mol/blob/main/data/README.md`) to
-download the two files from their Google Drive link:
+Follow the Pocket2Mol data instructions to download:
 
 - `crossdocked_pocket10.tar.gz` — pocket PDB files
 - `split_by_name.pt` — train/test split
@@ -150,40 +156,31 @@ tar -xzvf crossdocked_pocket10.tar.gz
 # produces: crossdocked_pocket10/
 ```
 
-**Step 3 — Process for DiffSBDD**
+**Step 3 — Process**
 
-Use DiffSBDD's own preprocessing script (bundled under
-`src/models/diffsbdd/`):
-
-```bash
-python src/models/diffsbdd/process_crossdock.py \
-    /path/to/crossdocked_pocket10 \
-    --no_H \
-    --split_path /path/to/split_by_name.pt \
-    --output_dir data/cross_dock/processed_crossdock_noH_full_temp
-```
-
-Point `datadir` in `configs/ppo_config.yaml` at the output directory.
-
-### Option D — CrossDocked dataset (TargetDiff)
-
-TargetDiff requires 27-dimensional protein features (element + amino-acid type
-+ backbone flag) rather than DiffSBDD's 10-dimensional element one-hots. Use
-the dedicated processing script after completing Steps 1–2 above.
+Use the unified `process_crossdock.py` script with `--model diffsbdd` or
+`--model targetdiff`:
 
 ```bash
-python -m scripts.process_crossdock_targetdiff \
+# DiffSBDD (10-dim element one-hots)
+python -m scripts.process_crossdock \
     --crossdocked_dir /path/to/crossdocked_pocket10 \
     --split_path      /path/to/split_by_name.pt \
-    --output_dir      data/cross_dock/processed_crossdock_targetdiff
+    --output_dir      data/crossdock_diffsbdd \
+    --model           diffsbdd
+
+# TargetDiff (27-dim element + AA + backbone features)
+python -m scripts.process_crossdock \
+    --crossdocked_dir /path/to/crossdocked_pocket10 \
+    --split_path      /path/to/split_by_name.pt \
+    --output_dir      data/crossdock_targetdiff \
+    --model           targetdiff
 ```
 
-This script uses TargetDiff's own `PDBProtein` parser to produce exactly the
-27-dim features the pretrained checkpoint was trained on — no architectural
-modification required. Ligand features remain DiffSBDD-compatible so the
-reward pipeline is unaffected.
+Run `--smoke_test` first to verify shapes on 2 pairs before the full ~2 h job.
 
-Point `datadir` in `configs/targetdiff_ppo.yaml` at the output directory.
+Point `datadir` in `configs/ppo_config.yaml` (DiffSBDD) or
+`configs/targetdiff_ppo.yaml` (TargetDiff) at the output directory.
 
 ### Output structure
 
@@ -222,6 +219,7 @@ Set `datadir` in your training config to the `03_final_dataset/` path.
 | `--keep_duplicates` | off | Keep all chain instances of the same ligand |
 | `--include_common` | off | Include crystallographic additives (skips block list) |
 | `--dataset_info_key` | `crossdock_full` | Atom encoder key from `constants.py` |
+| `--model` | `diffsbdd` | Pocket feature format: `diffsbdd` (10-dim) or `targetdiff` (27-dim) |
 
 ### Reference files in `data/`
 
@@ -236,9 +234,28 @@ Set `datadir` in your training config to the `03_final_dataset/` path.
 
 ## Generating Ligands
 
-Two generation scripts are provided — `scripts/generate_diffsbdd.py` for DiffSBDD checkpoints and `scripts/generate_targetdiff.py` for TargetDiff checkpoints. Both accept the same required arguments and work with either the original pre-trained weights or a PRISM fine-tuned `.ckpt`.
+### Single pocket
 
-### 1. Get Pre-trained Models
+Two scripts handle single-pocket generation — one per model architecture.
+Both accept a checkpoint, a config, and a pocket PDB file.
+
+```bash
+# DiffSBDD
+python -m scripts.generate_diffsbdd \
+    checkpoints/crossdocked_fullatom_cond.ckpt \
+    --config configs/ppo_config.yaml \
+    --pdbfile path/to/pocket.pdb \
+    --outfile results/generated.sdf \
+    --n_samples 100 --batch_size 25 --sanitize
+
+# TargetDiff
+python -m scripts.generate_targetdiff \
+    checkpoints/targetdiff.pt \
+    --config configs/targetdiff_ppo.yaml \
+    --pdbfile path/to/pocket.pdb \
+    --outfile results/generated.sdf \
+    --n_samples 100
+```
 
 Obtain the original DiffSBDD checkpoint:
 
@@ -246,27 +263,53 @@ Obtain the original DiffSBDD checkpoint:
 wget -P checkpoints/ https://zenodo.org/record/8183747/files/crossdocked_fullatom_cond.ckpt
 ```
 
-PRISM fine-tuned checkpoints: coming soon.
+### Test set / custom target set
 
-### 2. Generate Molecules
+`scripts/test_crossdocked.py` generates ligands for a directory of pockets and works
+with both models via `--model`:
 
 ```bash
-# DiffSBDD
-python -m scripts.generate_diffsbdd \
-    checkpoints/crossdocked_fullatom_cond.ckpt \
+python -m scripts.test_crossdocked \
+    checkpoints/my_run.ckpt \
+    --model diffsbdd \          # or targetdiff
     --config configs/ppo_config.yaml \
-    --pdbfile data/my_dataset/02_preprocessed/pocket_files/1cil_ETS_C_263_pocket.pdb \
-    --outfile results/generated.sdf \
-    --n_samples 100 \
-    --batch_size 25 \
-    --sanitize
+    --test_dir /path/to/test_pockets \
+    --outdir results/test \
+    --n_samples 100 --batch_size 120
+```
 
-# TargetDiff (identical required args, different script)
-python -m scripts.generate_targetdiff \
-    checkpoints/targetdiff.pt \
-    --config configs/targetdiff_ppo.yaml \
-    --pdbfile data/my_dataset/02_preprocessed/pocket_files/1cil_ETS_C_263_pocket.pdb \
-    --outfile results/generated.sdf
+Expected layout under `--test_dir`:
+
+```
+test_pockets/
+├── <stem>.sdf               reference ligand (used as output name key)
+├── <stem>_pocket.pdb        pocket PDB (CrossDocked extracted-pocket convention)
+│   — or —
+├── <pdb_id>.pdb             full-structure PDB (DiffSBDD raw-PDB convention)
+└── <stem>.txt               residue list (DiffSBDD only; optional)
+```
+
+The script first looks for `<stem>_pocket.pdb` (the naming convention produced by
+`process_crossdock.py`), then falls back to `<pdb_id>.pdb` (first `_`-separated
+component of the stem, used when the directory contains raw full-structure PDB files).
+For TargetDiff the `.txt` file is not needed.
+
+### Held-out evaluation targets
+
+`scripts/test_targets.py` runs generation over a fixed set of 6 proteins
+(18 structures) and also supports `--model diffsbdd|targetdiff`:
+
+```bash
+python -m scripts.test_targets \
+    checkpoints/my_run.ckpt \
+    --model diffsbdd \
+    --config configs/ppo_config.yaml \
+    --targets_dir /data/targets \
+    --outdir results/eval_targets \
+    --n_samples 10000
+
+# Single target (useful for parallel submission)
+python -m scripts.test_targets ... --target BRD4_BD1_4whw
 ```
 
 ---
@@ -347,17 +390,21 @@ Set a weight > 0 to enable a reward component. All weights should sum to 1.
 │   ├── crossdocked_test_pdbs.txt
 │   └── pdb_block_list.txt
 ├── scripts/
-│   ├── process_data.py                    # Data pipeline orchestrator (case studies)
-│   ├── process_crossdock_targetdiff.py    # CrossDocked → 27-dim TargetDiff NPZ
-│   ├── train.py                           # PPO training entry point
-│   ├── generate_diffsbdd.py               # Inference with DiffSBDD checkpoints
-│   └── generate_targetdiff.py             # Inference with TargetDiff checkpoints
+│   ├── process_data.py                 # Data pipeline: PDB IDs → NPZ (custom datasets)
+│   ├── process_crossdock.py            # CrossDocked pocket10 → NPZ (--model diffsbdd|targetdiff)
+│   ├── process_crossdock_targetdiff.py # Legacy: TargetDiff CrossDocked processor
+│   ├── train.py                        # PPO training entry point
+│   ├── generate_diffsbdd.py            # Single-pocket inference (DiffSBDD)
+│   ├── generate_targetdiff.py          # Single-pocket inference (TargetDiff)
+│   ├── test_crossdocked.py             # Test-set generation (--model diffsbdd|targetdiff)
+│   └── test_targets.py                 # Eval-target generation (--model diffsbdd|targetdiff)
 ├── src/
-│   ├── models/diffsbdd/         # DiffSBDD diffusion model
+│   ├── models/diffsbdd/         # DiffSBDD diffusion model (vendored)
+│   ├── models/targetdiff/       # TargetDiff diffusion model (vendored)
 │   └── prism/
 │       ├── data_processing/     # fetch_pdbs, preprocess_data, create_dataset
 │       ├── data_modules/        # PyTorch Lightning DataModule + Dataset
-│       ├── models/              # Policy wrappers (DiffSBDD, TargetDiff)
+│       ├── models/              # Policy wrappers + targetdiff_inference helpers
 │       ├── ppo_tuner/           # PPO algorithm, rollout, loss, Lightning module
 │       └── reward/              # Reward function implementations
 └── results/                     # Generation outputs

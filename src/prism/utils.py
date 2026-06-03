@@ -141,10 +141,11 @@ def batch_to_list(data, batch_mask):
     return [data[batch_mask == bid] for bid in unique_ids]
 
 
-def build_molecules_from_batch(xh_lig: torch.Tensor, 
-                               lig_mask: torch.Tensor, 
-                               dataset_info, 
-                               ddpm_module=None) -> Tuple[List, Dict]:
+def build_molecules_from_batch(xh_lig: torch.Tensor,
+                               lig_mask: torch.Tensor,
+                               dataset_info,
+                               ddpm_module=None,
+                               reconstruction_fn=None) -> Tuple[List, Dict]:
     """
     Build RDKit molecule objects from batched ligand tensors.
     """
@@ -172,19 +173,33 @@ def build_molecules_from_batch(xh_lig: torch.Tensor,
 
     for batch_idx, (coords, atoms) in enumerate(zip(coords_list, atoms_list)):
         try:
-            mol = build_molecule(coords, atoms, dataset_info, add_coords=True)
-            mol = process_molecule(
-                mol,
-                add_hydrogens=False,
-                sanitize=True,
-                relax_iter=0,
-                largest_frag=True
-            )
+            if reconstruction_fn is not None:
+                mol = reconstruction_fn(coords, atoms)
+            else:
+                mol = build_molecule(coords, atoms, dataset_info, add_coords=True)
+                mol = process_molecule(
+                    mol,
+                    add_hydrogens=False,
+                    sanitize=True,
+                    relax_iter=0,
+                    largest_frag=True
+                )
             if mol is not None:
                 molecules.append(mol)
                 molecule_to_batch_idx[len(molecules) - 1] = batch_idx
-        except Exception:
+        except Exception as e:
+            print(f"[DEBUG][build_molecules_from_batch] mol {batch_idx} outer exception: "
+                  f"{type(e).__name__}: {e}", flush=True)
             continue
+
+    n_attempted = len(coords_list)
+    n_valid = len(molecules)
+    if n_valid == 0:
+        print(f"[DEBUG][build_molecules_from_batch] ALL {n_attempted} molecules failed reconstruction. "
+              f"reconstruction_fn={'custom' if reconstruction_fn is not None else 'diffsbdd'}", flush=True)
+    else:
+        print(f"[DEBUG][build_molecules_from_batch] {n_valid}/{n_attempted} molecules reconstructed successfully.",
+              flush=True)
 
     return molecules, molecule_to_batch_idx
 

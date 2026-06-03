@@ -47,7 +47,7 @@ REWARD_REGISTRY = {
     "dundee_score": DundeeScore,
 }
 
-def get_reward_manager(config, dataset_info, ddpm_module=None):
+def get_reward_manager(config, dataset_info, ddpm_module=None, reconstruction_fn=None):
     """
     Parses the namespace config, instantiates specific reward classes, 
     and returns the Orchestrator.
@@ -65,8 +65,8 @@ def get_reward_manager(config, dataset_info, ddpm_module=None):
     reward_params_ns = getattr(config, 'reward_params', None)
     if reward_params_ns is None:
         print("WARNING: 'reward_params' not found in config. No rewards will be calculated.")
-        return RewardManager([], {}, dataset_info, ddpm_module)
-    # new 
+        return RewardManager([], {}, dataset_info, ddpm_module, reconstruction_fn=reconstruction_fn)
+    # new
     aggregation = getattr(reward_params_ns, 'aggregation', 'weighted_sum')
 
 
@@ -75,7 +75,7 @@ def get_reward_manager(config, dataset_info, ddpm_module=None):
 
     if rewards_ns is None:
         print("WARNING: 'rewards' list is empty or missing.")
-        return RewardManager([], {}, dataset_info, ddpm_module)
+        return RewardManager([], {}, dataset_info, ddpm_module, reconstruction_fn=reconstruction_fn)
 
     # 3. Convert Namespace to Dict for iteration
     # Since dict_to_namespace works recursively, 'rewards_ns' is a Namespace.
@@ -148,5 +148,6 @@ def get_reward_manager(config, dataset_info, ddpm_module=None):
         reward_weights=weights,
         dataset_info=dataset_info,
         ddpm_module=ddpm_module,
-        aggregation=aggregation
+        aggregation=aggregation,
+        reconstruction_fn=reconstruction_fn,
     )
