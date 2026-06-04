@@ -179,9 +179,12 @@ class RolloutCollector:
                 )
                 ref_log_probs_list.append(ref_lp)
 
-        ref_log_probs = torch.stack(ref_log_probs_list, dim=1)    # (num_mols, T)
+        ref_log_probs = torch.stack(ref_log_probs_list, dim=1)    # (num_mols, T=999)
+        # old_log_probs has 1000 entries (full diffusion); latents/timesteps have 999
+        # (z_states[:,:-1] drops the last state). Align by taking the last T steps.
+        old_lp_aligned = old_log_probs[:, -T:]
         print(f"[DEBUG ref_kl shapes] old_log_probs={old_log_probs.shape}  ref_log_probs={ref_log_probs.shape}  latents={latents.shape}  next_latents={next_latents.shape}  timesteps={timesteps.shape}")
-        kl_per_mol = (old_log_probs - ref_log_probs).mean(dim=1)  # (num_mols,) — on-policy, ≥ 0
+        kl_per_mol = (old_lp_aligned - ref_log_probs).mean(dim=1)  # (num_mols,) — on-policy, ≥ 0
         rollout_data['rewards'] = rollout_data['rewards'] - self._ref_kl_coef * kl_per_mol
         print(f"[DEBUG ref_kl] mean_kl={kl_per_mol.mean():.4f}  max_kl={kl_per_mol.max():.4f}  "
               f"penalty_mean={self._ref_kl_coef * kl_per_mol.mean():.4f}")
