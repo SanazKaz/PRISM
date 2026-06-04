@@ -65,7 +65,7 @@ ppo:
   gradient_accumulation_steps: 10
   train_timesteps: 500            # PPO trains on the last 500 of 1000 reverse steps
   target_kl: null
-  ref_kl_coef: 0.5
+  ref_kl_coef: 0.1
   lr: 3.0e-5
   num_nodes_lig: 25
 
