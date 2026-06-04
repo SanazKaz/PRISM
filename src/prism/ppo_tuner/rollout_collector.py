@@ -161,7 +161,7 @@ class RolloutCollector:
         xh_lig, xh_pocket = rollout_data['molecules']
         lig_mask, pocket_mask = rollout_data['masks']
 
-        T = old_log_probs.shape[1]
+        T = latents.shape[1]  # latents is z_states[:,:-1] — one fewer than old_log_probs
         ref_log_probs_list = []
 
         with torch.no_grad():
