@@ -163,6 +163,7 @@ class PPOAlgorithm:
         # BaseX2HAttLayer instances to capture attention-weight entropy.
         # Fires only on the first outer epoch to avoid log spam.
         _debug_grad = getattr(self.config, 'debug_grad_saturation', False)
+        print(f"[DEBUG][grad-saturation] _debug_grad={_debug_grad} current_epoch={current_epoch}", flush=True)
         _debug_hooks = []
         _attn_entropy_log = {}  # layer_name -> list of per-step entropy values
         if _debug_grad:
