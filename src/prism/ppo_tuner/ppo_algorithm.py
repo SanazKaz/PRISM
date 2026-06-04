@@ -162,7 +162,7 @@ class PPOAlgorithm:
         self.policy_network.train()
 
         # Initialize trackers for logs
-        total_loss, total_kl, total_clipfrac, total_entropy, total_kl_penalty = 0, 0, 0, 0, 0
+        total_loss, total_kl, total_clipfrac, total_entropy, total_kl_penalty, total_ref_kl = 0, 0, 0, 0, 0, 0
         update_count = 0
 
         num_inner_epochs = self.config.ppo.num_inner_epochs
@@ -184,11 +184,12 @@ class PPOAlgorithm:
             epoch_total_clipfrac = 0.0
             epoch_total_entropy = 0.0
             epoch_total_kl_penalty = 0.0
+            epoch_total_ref_kl = 0.0
             epoch_accumulation_steps = 0
 
             for minibatch in self.buffer.get_minibatches():
                 for t_idx in range(current_k):
-                    policy_loss, approx_kl, clipfrac, entropy = compute_ppo_loss(
+                    policy_loss, approx_kl, clipfrac, entropy, ref_kl = compute_ppo_loss(
                         policy_network=self.policy_network,
                         ref_policy=self.ref_policy,
                         minibatch=minibatch,
@@ -219,6 +220,7 @@ class PPOAlgorithm:
                     epoch_total_entropy += entropy.item()
                     kl_coef = getattr(self.config.ppo, 'kl_coef', 0.0)
                     epoch_total_kl_penalty += (kl_coef * approx_kl.item())
+                    epoch_total_ref_kl += ref_kl.item()
                     epoch_accumulation_steps += 1
 
                     if target_kl is not None and approx_kl.item() > target_kl:
@@ -293,7 +295,9 @@ class PPOAlgorithm:
                     final_logs[f"train/reward_{name}_mean"] = score_tensor.mean().item()
         # ----------------------------------------------------------------
 
-        print(f"total_loss epoch: {epoch_total_loss / max(epoch_accumulation_steps, 1)}")
+        avg_ref_kl = epoch_total_ref_kl / max(epoch_accumulation_steps, 1)
+        final_logs["train/ref_kl_epoch"] = avg_ref_kl
+        print(f"[DEBUG epoch={current_epoch}] total_loss={epoch_total_loss / max(epoch_accumulation_steps, 1):.4f}  approx_kl={epoch_total_approx_kl / max(epoch_accumulation_steps, 1):.4f}  ref_kl={avg_ref_kl:.4f}  ref_kl_coef={getattr(self.config.ppo, 'ref_kl_coef', 0.0)}")
         self._log_to_csv(current_epoch, final_logs)
         
         return final_logs
