@@ -4,7 +4,7 @@ import tempfile
 import numpy as np
 import torch
 from pathlib import Path
-from utils import find_gt_files
+from ..utils import find_gt_files
 
 import argparse
 import pandas as pd
