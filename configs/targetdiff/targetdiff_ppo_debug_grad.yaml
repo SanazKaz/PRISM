@@ -1,0 +1,120 @@
+# [DEBUG] Gradient saturation diagnostic config for TargetDiff PPO.
+#
+# Runs for 2 outer epochs only — enough to capture gradient norms and
+# attention entropy from the first optimizer step (epoch 0).
+#
+# What to look for in the logs:
+#   [DEBUG][grad-saturation] gradient norms:
+#     - v_inference should have the largest mean grad norm
+#     - base_block.6/7/8 norms should be non-trivial (>1e-5)
+#     - if base_block.6 << v_inference by 100x+, saturation is confirmed
+#
+#   [DEBUG][grad-saturation] attention entropy:
+#     - max possible for K=32 neighbours = log(32) ≈ 3.47 nats
+#     - uniform attention ≈ 3.47, perfectly peaked ≈ 0.0
+#     - frozen blocks (0-5) will show their pre-trained entropy
+#     - if all blocks show H < 0.5, attention is highly peaked = saturation confirmed
+
+run_identifier: 'targetdiff_debug_grad_saturation'
+logdir: 'Log_Results'
+
+wandb_params:
+  mode: 'offline'
+  entity: 'sanazkazeminia97'
+  project: 'TargetDiff-PRISM'
+
+model_type: targetdiff
+
+# [DEBUG] Enable gradient saturation diagnostics (epoch 0 only)
+debug_grad_saturation: true
+
+freeze_except:
+  - 'v_inference'
+  - 'refine_net.base_block.6'
+  - 'refine_net.base_block.7'
+  - 'refine_net.base_block.8'
+
+model:
+  checkpoint: 'checkpoints/targetdiff_pretrained_diffusion.pt'
+  protein_feat_dim: 10
+  ligand_atom_types: 13
+  total_timesteps: 1000
+
+# -----------------------------------------------------------------------
+# Data
+# -----------------------------------------------------------------------
+datadir: '/data/stat-cadd/wolf7055/PRISM/data/cross_dock/processed_crossdock_targetdiff'
+dataset: 'crossdock'
+batch_size: 8
+num_workers: 4
+gpus: 1
+n_epochs: 1
+
+enable_progress_bar: False
+num_sanity_val_steps: 0
+
+# -----------------------------------------------------------------------
+# PPO — minimal run: 2 outer epochs, small rollout, enough to see grads
+# -----------------------------------------------------------------------
+ppo:
+  num_outer_epochs: 2
+  num_inner_epochs: 1
+  n_steps: 16                    # small rollout — just need 1 grad step
+  ligand_chunk_size: 16
+  batch_size: 16
+  clip_range: 0.1
+  entropy_coef: 0.001
+  max_grad_norm: 1.0
+  gradient_accumulation_steps: 1  # no accumulation — fire grad log immediately
+  train_timesteps: 50             # short chain — fast iteration
+  target_kl: 0.03
+  lr: 3.0e-5
+  num_nodes_lig: 25
+
+# -----------------------------------------------------------------------
+# Rewards — penalised_logp kept so reward pipeline is exercised
+# -----------------------------------------------------------------------
+docking_params:
+  dataset_info: custom
+
+reward_params:
+  target_name: 'BRD4_BD1'
+  aggregation: 'weighted_sum'
+  rewards:
+    qed: 0.0
+    sa_score: 0.0
+    lipinski: 0.0
+    bertz: 0.0
+    sucos: 0.0
+    interaction_fingerprints: 0.0
+    feature_density: 0.0
+    geometry_checks: 0.0
+    flatness_checks: 0.0
+    aromatic_counter: 0.0
+    aromatic_anchor: 0.0
+    multi_features: 0.0
+    silly_walks: 0.0
+    property_2d: 0.0
+    smina_docking: 0.0
+    custom_qed: 0.0
+    custom_sa_score: 0.0
+    penalised_logp: 1.0
+  reward_paths:
+    feature_density: '/data/stat-cadd/wolf7055/PRISM/data/BRD4_BD1/hotspot_analysis/BRD4_BD1_hotspot_data.pkl'
+    aromatic_anchor: 'src/prism/reward/scoring/reward_data/ampc_hotspot_global_centered_eps0.5_min10_aromatic5.pkl'
+    multi_features: 'src/prism/reward/scoring/reward_data/ampc_hotspot_global_centered_eps0.5_min10_aromatic5.pkl'
+    silly_walks: 'src/prism/reward/scoring/reward_data/chembl_drugs.smi'
+    property_2d: 'src/prism/reward/scoring/reward_data/propeties_ref.json'
+
+# -----------------------------------------------------------------------
+# Evaluation — disabled for speed
+# -----------------------------------------------------------------------
+eval_epochs: 99999
+visualize_sample_epoch: 99999
+visualize_chain_epoch: 999999
+eval_params:
+  n_eval_samples: 4
+  eval_batch_size: 4
+  smiles_file: '/data/stat-cadd/wolf7055/PRISM/data/cross_dock/processed_crossdock_targetdiff/train_smiles.npy'
+  n_visualize_samples: 0
+  keep_frames: 0

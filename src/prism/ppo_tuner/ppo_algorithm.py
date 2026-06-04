@@ -159,6 +159,62 @@ class PPOAlgorithm:
         # --- 3. Run PPO Inner Epochs ---
         self.policy_network.train()
 
+        # [DEBUG] gradient-saturation-check: register forward hooks on all
+        # BaseX2HAttLayer instances to capture attention-weight entropy.
+        # Fires only on the first outer epoch to avoid log spam.
+        _debug_grad = getattr(self.config, 'debug_grad_saturation', False)
+        _debug_hooks = []
+        _attn_entropy_log = {}  # layer_name -> list of per-step entropy values
+        if _debug_grad and current_epoch == 0:
+            import math as _math
+            def _make_attn_hook(layer_name):
+                def _hook(module, inputs, output):
+                    # output from BaseX2HAttLayer is the updated h, not alpha.
+                    # We capture alpha via the module's stored intermediate.
+                    # Instead, hook the scatter_softmax result stored in forward.
+                    pass
+                return _hook
+
+            # Hook directly on the model's refine_net base_block layers.
+            # We patch forward to capture alpha after scatter_softmax.
+            try:
+                base_block = self.policy_network._model.refine_net.base_block
+                for blk_idx, block in enumerate(base_block):
+                    for x2h_idx, x2h_layer in enumerate(block.x2h_layers):
+                        _orig_forward = x2h_layer.forward
+                        def _patched_forward(h, r_feat, edge_feat, edge_index, e_w=None,
+                                             _orig=_orig_forward, _name=f'base_block.{blk_idx}.x2h.{x2h_idx}'):
+                            import numpy as _np
+                            from torch_scatter import scatter_softmax as _ss
+                            N = h.size(0)
+                            src, dst = edge_index
+                            hi, hj = h[dst], h[src]
+                            kv_input = torch.cat([r_feat, hi, hj], -1)
+                            if edge_feat is not None:
+                                kv_input = torch.cat([edge_feat, kv_input], -1)
+                            k_val = x2h_layer.hk_func(kv_input).view(-1, x2h_layer.n_heads, x2h_layer.output_dim // x2h_layer.n_heads)
+                            q_val = x2h_layer.hq_func(h).view(-1, x2h_layer.n_heads, x2h_layer.output_dim // x2h_layer.n_heads)
+                            scores = (q_val[dst] * k_val / _np.sqrt(k_val.shape[-1])).sum(-1)
+                            alpha = _ss(scores, dst, dim=0, dim_size=N)  # [E, n_heads]
+                            # Entropy of attention distribution per node per head:
+                            # H = -sum(alpha * log(alpha+eps)) aggregated over edges
+                            with torch.no_grad():
+                                eps = 1e-8
+                                per_edge_H = -(alpha * (alpha + eps).log())  # [E, n_heads]
+                                from torch_scatter import scatter_sum as _ssum
+                                per_node_H = _ssum(per_edge_H, dst, dim=0, dim_size=N)  # [N, n_heads]
+                                mean_H = per_node_H.mean().item()
+                                # Max possible entropy = log(n_neighbors) ≈ log(32) ≈ 3.47
+                                if _name not in _attn_entropy_log:
+                                    _attn_entropy_log[_name] = []
+                                _attn_entropy_log[_name].append(mean_H)
+                            return _orig(h, r_feat, edge_feat, edge_index, e_w=e_w)
+                        x2h_layer.forward = _patched_forward
+                        _debug_hooks.append((x2h_layer, _orig_forward))
+                print(f"[DEBUG][grad-saturation] Registered attention-entropy hooks on {len(_debug_hooks)} X2H layers")
+            except Exception as _e:
+                print(f"[DEBUG][grad-saturation] Hook registration failed: {_e}")
+
         # Initialize trackers for logs
         total_loss, total_kl, total_clipfrac, total_entropy, total_kl_penalty = 0, 0, 0, 0, 0
         update_count = 0
@@ -207,6 +263,33 @@ class PPOAlgorithm:
                             self.policy_network.parameters(),
                             self.config.ppo.max_grad_norm,
                         )
+
+                        # [DEBUG] gradient-saturation-check: log grad norms per
+                        # trainable parameter group on the very first optimizer step
+                        # of epoch 0 to reveal where the gradient dies.
+                        if _debug_grad and current_epoch == 0 and accumulation_count == step_every:
+                            _rank = dist.get_rank() if dist.is_initialized() else 0
+                            if _rank == 0:
+                                print("[DEBUG][grad-saturation] === Gradient norms after first optimizer step ===")
+                                _group_norms = {}
+                                for _pname, _param in self.policy_network.named_parameters():
+                                    if _param.requires_grad and _param.grad is not None:
+                                        _norm = _param.grad.norm().item()
+                                        # Bucket by block name (e.g. refine_net.base_block.6 / v_inference)
+                                        if 'base_block' in _pname:
+                                            _parts = _pname.split('.')
+                                            _blk = '.'.join(_parts[:3])  # e.g. refine_net.base_block.6
+                                        elif 'v_inference' in _pname:
+                                            _blk = 'v_inference'
+                                        else:
+                                            _blk = _pname.split('.')[0]
+                                        _group_norms.setdefault(_blk, []).append(_norm)
+                                for _blk, _norms in sorted(_group_norms.items()):
+                                    _total = sum(_norms)
+                                    _mean  = _total / len(_norms)
+                                    print(f"[DEBUG][grad-saturation]   {_blk:50s}  mean={_mean:.6f}  max={max(_norms):.6f}  n_params={len(_norms)}")
+                                print("[DEBUG][grad-saturation] ===================================================")
+
                         optimizer.step()
                         optimizer.zero_grad(set_to_none=True)
 
@@ -233,6 +316,22 @@ class PPOAlgorithm:
                 )
                 optimizer.step()
                 optimizer.zero_grad(set_to_none=True)
+
+        # [DEBUG] gradient-saturation-check: print attention entropy summary and
+        # restore original forwards.  Max entropy for K=32 = log(32) ≈ 3.47 nats.
+        # Peaked attention ≈ 0.0; uniform attention ≈ 3.47.
+        if _debug_grad and current_epoch == 0:
+            _rank = dist.get_rank() if dist.is_initialized() else 0
+            if _rank == 0 and _attn_entropy_log:
+                print("[DEBUG][grad-saturation] === Attention entropy per X2H layer (mean over forward passes) ===")
+                print(f"[DEBUG][grad-saturation]   (max possible entropy for K=32 neighbours ≈ 3.47 nats)")
+                for _lname, _vals in sorted(_attn_entropy_log.items()):
+                    _mean_H = sum(_vals) / len(_vals)
+                    print(f"[DEBUG][grad-saturation]   {_lname:40s}  mean_H={_mean_H:.4f}")
+                print("[DEBUG][grad-saturation] =================================================================")
+            # Restore patched forwards
+            for _layer, _orig in _debug_hooks:
+                _layer.forward = _orig
 
         # All-gather rewards and advantages so every rank computes metrics from
         # the full global sample, not just its local shard.  With sync_dist=True
