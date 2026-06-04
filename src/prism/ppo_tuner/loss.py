@@ -67,7 +67,10 @@ def compute_ppo_loss(policy_network, minibatch, timestep_idx, config, ref_policy
     if ref_kl_coef > 0.0 and ref_policy is not None:
         with torch.no_grad():
             ref_log_probs = _get_log_probs(ref_policy, timestep_batch, config.model.total_timesteps)
-        ref_kl = (new_log_probs - ref_log_probs).mean()
+        # Signed log-ratio under old-policy samples — can be negative when policy
+        # shifts mass toward high-reward trajectories.  Take abs so we always
+        # penalise deviation from the pretrained prior regardless of direction.
+        ref_kl = (new_log_probs - ref_log_probs).mean().abs()
         policy_loss = policy_loss + ref_kl_coef * ref_kl
         print(f"[DEBUG ref_kl] ref_kl={ref_kl.item():.4f}  penalty={ref_kl_coef * ref_kl.item():.4f}  approx_kl={approx_kl.item():.4f}")
 
