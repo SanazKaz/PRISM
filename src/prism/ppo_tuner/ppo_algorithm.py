@@ -25,8 +25,10 @@ class PPOAlgorithm:
                  reward_function,
                  config,
                  dataset_info,
-                 checkpoint_dir):
+                 checkpoint_dir,
+                 ref_policy=None):
         self.policy_network = policy_network
+        self.ref_policy = ref_policy
         self.config = config
         self.device = next(policy_network.parameters()).device
         self.reward_function = reward_function
@@ -188,6 +190,7 @@ class PPOAlgorithm:
                 for t_idx in range(current_k):
                     policy_loss, approx_kl, clipfrac, entropy = compute_ppo_loss(
                         policy_network=self.policy_network,
+                        ref_policy=self.ref_policy,
                         minibatch=minibatch,
                         timestep_idx=t_idx,
                         config=self.config,

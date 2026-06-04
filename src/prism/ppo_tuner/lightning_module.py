@@ -53,6 +53,19 @@ class PPOFineTuner(pl.LightningModule):
             self.ddpm_model = None  # no LigandPocketDDPM when using TargetDiff
             from src.prism.models.targetdiff_inference import make_targetdiff_reconstruction_fn
             reconstruction_fn = make_targetdiff_reconstruction_fn()
+            # Frozen reference policy — never updated, anchors KL penalty to pretrained prior
+            if getattr(self.config.ppo, 'ref_kl_coef', 0.0) > 0.0:
+                self.ref_policy, _ = build_targetdiff_policy(
+                    config=self.config,
+                    device=device,
+                    warm_start_checkpoint=warm_start_checkpoint,
+                )
+                self.ref_policy.eval()
+                for p in self.ref_policy.parameters():
+                    p.requires_grad_(False)
+                print("[Init] Frozen reference policy loaded for KL anchor.")
+            else:
+                self.ref_policy = None
         else:
             self.policy, self.ddpm_model, self.dataset_info = build_diffsbdd_policy(
                 config=self.config,
@@ -74,6 +87,7 @@ class PPOFineTuner(pl.LightningModule):
 
         self.ppo_algorithm = PPOAlgorithm(
             policy_network=self.policy,
+            ref_policy=getattr(self, 'ref_policy', None),
             reward_function=self.reward_manager,
             config=self.config,
             dataset_info=self.dataset_info,

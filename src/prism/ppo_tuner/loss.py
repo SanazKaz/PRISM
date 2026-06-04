@@ -3,7 +3,7 @@
 import torch
 from tests.ppo_debug_utils import assert_same_ids, dbg_tensor
 
-def compute_ppo_loss(policy_network, minibatch, timestep_idx, config):
+def compute_ppo_loss(policy_network, minibatch, timestep_idx, config, ref_policy=None):
     """
     Computes the PPO loss for a single minibatch and a single timestep.
 
@@ -54,12 +54,20 @@ def compute_ppo_loss(policy_network, minibatch, timestep_idx, config):
     # Add entropy bonus
     policy_loss -= config.ppo.entropy_coef * entropy
 
-    # --- KL penalty: E[log π_old - log π_θ] = KL(π_old || π_θ) ---
-    # Needs grad so it can propagate; approx_kl is also returned for logging.
+    # --- KL vs rolling old policy (logging only; kl_coef stays 0.0) ---
     approx_kl = (old_log_probs - new_log_probs).mean()
     kl_coef = getattr(config.ppo, 'kl_coef', 0.0)
     if kl_coef > 0.0:
         policy_loss = policy_loss + kl_coef * approx_kl
+
+    # --- KL vs frozen pretrained reference: KL(π_θ || π_ref) ---
+    # Prevents the policy from drifting off the pretrained prior that generates valid molecules.
+    ref_kl_coef = getattr(config.ppo, 'ref_kl_coef', 0.0)
+    if ref_kl_coef > 0.0 and ref_policy is not None:
+        with torch.no_grad():
+            ref_log_probs = _get_log_probs(ref_policy, timestep_batch, config.model.total_timesteps)
+        ref_kl = (new_log_probs - ref_log_probs).mean()
+        policy_loss = policy_loss + ref_kl_coef * ref_kl
 
     return policy_loss, approx_kl.detach(), clipfrac, entropy
 
