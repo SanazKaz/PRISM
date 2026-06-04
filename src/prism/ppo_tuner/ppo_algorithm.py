@@ -165,7 +165,7 @@ class PPOAlgorithm:
         _debug_grad = getattr(self.config, 'debug_grad_saturation', False)
         _debug_hooks = []
         _attn_entropy_log = {}  # layer_name -> list of per-step entropy values
-        if _debug_grad and current_epoch == 0:
+        if _debug_grad:
             import math as _math
             def _make_attn_hook(layer_name):
                 def _hook(module, inputs, output):
@@ -267,7 +267,7 @@ class PPOAlgorithm:
                         # [DEBUG] gradient-saturation-check: log grad norms per
                         # trainable parameter group on the very first optimizer step
                         # of epoch 0 to reveal where the gradient dies.
-                        if _debug_grad and current_epoch == 0 and accumulation_count == step_every:
+                        if _debug_grad and accumulation_count == step_every:
                             _rank = dist.get_rank() if dist.is_initialized() else 0
                             if _rank == 0:
                                 print("[DEBUG][grad-saturation] === Gradient norms after first optimizer step ===")
@@ -320,7 +320,7 @@ class PPOAlgorithm:
         # [DEBUG] gradient-saturation-check: print attention entropy summary and
         # restore original forwards.  Max entropy for K=32 = log(32) ≈ 3.47 nats.
         # Peaked attention ≈ 0.0; uniform attention ≈ 3.47.
-        if _debug_grad and current_epoch == 0:
+        if _debug_grad:
             _rank = dist.get_rank() if dist.is_initialized() else 0
             if _rank == 0 and _attn_entropy_log:
                 print("[DEBUG][grad-saturation] === Attention entropy per X2H layer (mean over forward passes) ===")
