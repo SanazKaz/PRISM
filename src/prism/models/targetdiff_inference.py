@@ -120,8 +120,6 @@ def make_targetdiff_reconstruction_fn():
             smi = Chem.MolToSmiles(mol)
             return mol if '.' not in smi else None
         except Exception as e:
-            tqdm.write(f"[DEBUG][_reconstruct] FAILED n_atoms={len(atom_indices)} "
-                       f"err={type(e).__name__}: {e}")
             return None
 
     return _reconstruct

@@ -188,18 +188,7 @@ def build_molecules_from_batch(xh_lig: torch.Tensor,
                 molecules.append(mol)
                 molecule_to_batch_idx[len(molecules) - 1] = batch_idx
         except Exception as e:
-            print(f"[DEBUG][build_molecules_from_batch] mol {batch_idx} outer exception: "
-                  f"{type(e).__name__}: {e}", flush=True)
             continue
-
-    n_attempted = len(coords_list)
-    n_valid = len(molecules)
-    if n_valid == 0:
-        print(f"[DEBUG][build_molecules_from_batch] ALL {n_attempted} molecules failed reconstruction. "
-              f"reconstruction_fn={'custom' if reconstruction_fn is not None else 'diffsbdd'}", flush=True)
-    else:
-        print(f"[DEBUG][build_molecules_from_batch] {n_valid}/{n_attempted} molecules reconstructed successfully.",
-              flush=True)
 
     return molecules, molecule_to_batch_idx
 

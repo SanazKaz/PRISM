@@ -1,5 +1,6 @@
 import torch
 import traceback
+import random
 from typing import List, Dict, Tuple, Any, Optional
 from rdkit import Chem
 from abc import ABC, abstractmethod
@@ -7,6 +8,9 @@ from src.prism.reward.scoring.transformations import reshape_batch_rewards
 
 # Import the utility we created previously
 from src.prism.utils import build_molecules_from_batch
+
+# Set to True to log up to 20 randomly-sampled molecule rewards per batch.
+LOG_SAMPLE_REWARDS = True
 
 class BaseReward(ABC):
     """
@@ -168,8 +172,6 @@ class RewardManager:
         )
 
         if not molecules:
-            print(f"[DEBUG][RewardManager] 0/{num_molecules} molecules reconstructed — "
-                  f"all returning penalty -0.1. Check reconstruction_fn output above.", flush=True)
             return total_rewards, component_scores
 
         valid_indices = list(mol_to_batch_idx.values())
@@ -220,15 +222,17 @@ class RewardManager:
                 traceback.print_exc()
 
         
-        print(f"\n[Epoch {current_epoch}] Molecule Rewards:")
-        print(f"{'SMILES':<60} {'Total':<10} {' | '.join([r.name for r in self.reward_fns])}")
-        print("-" * 110)
-        for local_idx, mol in enumerate(molecules):
-            batch_idx = mol_to_batch_idx[local_idx]
-            smiles = Chem.MolToSmiles(mol)
-            total = total_rewards[batch_idx].item()
-            components = " | ".join([f"{component_scores[r.name][batch_idx].item():.3f}" for r in self.reward_fns])
-            print(f"{smiles:<60} {total:<10.4f} {components}")
+        if LOG_SAMPLE_REWARDS:
+            sample_indices = random.sample(range(len(molecules)), min(20, len(molecules)))
+            print(f"\n[Epoch {current_epoch}] Molecule Rewards (sample {len(sample_indices)}/{len(molecules)}):")
+            print(f"{'SMILES':<60} {'Total':<10} {' | '.join([r.name for r in self.reward_fns])}")
+            print("-" * 110)
+            for local_idx in sample_indices:
+                batch_idx = mol_to_batch_idx[local_idx]
+                smiles = Chem.MolToSmiles(molecules[local_idx])
+                total = total_rewards[batch_idx].item()
+                components = " | ".join([f"{component_scores[r.name][batch_idx].item():.3f}" for r in self.reward_fns])
+                print(f"{smiles:<60} {total:<10.4f} {components}")
         
         total_rewards = torch.nan_to_num(total_rewards, nan=-0.1)
 

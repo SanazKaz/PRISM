@@ -96,8 +96,10 @@ def get_reward_manager(config, dataset_info, ddpm_module=None, reconstruction_fn
     else:
         reward_paths = {}
         
-    print(f"Initializing Rewards: {rewards_dict}")
-    print(f"Initializing Reward Paths: {reward_paths}")
+    active_rewards = {k: v for k, v in rewards_dict.items() if float(v) > 0}
+    active_paths   = {k: v for k, v in reward_paths.items()  if k in active_rewards}
+    print(f"Initializing Rewards (active): {active_rewards}")
+    print(f"Initializing Reward Paths (active): {active_paths}")
 
     for name, weight in rewards_dict.items():
         # Skip zero-weighted rewards or internal keys
