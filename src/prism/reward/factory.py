@@ -20,6 +20,7 @@ from src.prism.reward.scoring.smina_docking import SminaDockingReward
 from src.prism.reward.scoring.custom_qed_sa import CustomQEDReward, CustomSAScoreReward
 from src.prism.reward.scoring.penalised_logp import PenalisedLogP
 from src.prism.reward.scoring.dundee_filter import DundeeScore
+from src.prism.reward.scoring.oxygen_fraction import OxygenFraction
 
 
 # 1. The Registry
@@ -45,6 +46,7 @@ REWARD_REGISTRY = {
     "custom_sa_score": CustomSAScoreReward,
     "penalised_logp": PenalisedLogP,
     "dundee_score": DundeeScore,
+    "oxygen_fraction": OxygenFraction,
 }
 
 def get_reward_manager(config, dataset_info, ddpm_module=None, reconstruction_fn=None):
