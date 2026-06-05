@@ -47,6 +47,26 @@ class LigandPocketDataModule(pl.LightningDataModule):
         torch.utils.data.distributed.DistributedSampler to shard the dataset
         across ranks (no per-epoch cursor logic required).
         """
+        # Fixed-pocket debug mode: pin training to the same pocket(s) every epoch
+        # so reward_mean is comparable across epochs (removes pocket-identity noise).
+        # Set config.fixed_pocket to an int (number of pockets) or a list of indices.
+        fixed_pocket = getattr(self.config, 'fixed_pocket', None)
+        if fixed_pocket:
+            if isinstance(fixed_pocket, int):
+                indices = list(range(fixed_pocket))
+            else:
+                indices = list(fixed_pocket)
+            fixed_dataset = torch.utils.data.Subset(self.train_dataset, indices)
+            print(f"[DataModule] FIXED POCKET MODE — training on indices {indices} every epoch (no shuffle)")
+            return DataLoader(
+                fixed_dataset,
+                batch_size=self.config.batch_size,
+                shuffle=False,
+                num_workers=self.config.num_workers,
+                collate_fn=self.train_dataset.collate_fn,
+                pin_memory=True,
+            )
+
         # Use a DistributedSampler when running under torch.distributed so
         # each rank gets a disjoint slice of the dataset.
         if torch.distributed.is_initialized():
