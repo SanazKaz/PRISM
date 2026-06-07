@@ -293,7 +293,7 @@ class PPOAlgorithm:
                     final_logs[f"train/reward_{name}_mean"] = score_tensor.mean().item()
         # ----------------------------------------------------------------
 
-        print(f"[DEBUG epoch={current_epoch}] total_loss={epoch_total_loss / max(epoch_accumulation_steps, 1):.4f}  approx_kl={epoch_total_approx_kl / max(epoch_accumulation_steps, 1):.4f}")
+        print(f"[epoch {current_epoch}] total_loss={epoch_total_loss / max(epoch_accumulation_steps, 1):.4f}  approx_kl={epoch_total_approx_kl / max(epoch_accumulation_steps, 1):.4f}")
         self._log_to_csv(current_epoch, final_logs)
         
         return final_logs

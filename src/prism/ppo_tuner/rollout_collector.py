@@ -183,17 +183,10 @@ class RolloutCollector:
         # old_log_probs has 1000 entries (full diffusion); latents/timesteps have 999
         # (z_states[:,:-1] drops the last state). Align by taking the last T steps.
         old_lp_aligned = old_log_probs[:, -T:]
-        print(f"[DEBUG ref_kl shapes] old_log_probs={old_log_probs.shape}  ref_log_probs={ref_log_probs.shape}  latents={latents.shape}  next_latents={next_latents.shape}  timesteps={timesteps.shape}")
         kl_per_mol = (old_lp_aligned - ref_log_probs).mean(dim=1)  # (num_mols,) — on-policy, ≥ 0
-        rewards_before = rollout_data['rewards'].clone()
         rollout_data['rewards'] = rollout_data['rewards'] - self._ref_kl_coef * kl_per_mol
-        print(f"[DEBUG ref_kl] mean_kl={kl_per_mol.mean():.4f}  max_kl={kl_per_mol.max():.4f}  "
+        print(f"[ref_kl] mean={kl_per_mol.mean():.4f}  max={kl_per_mol.max():.4f}  "
               f"penalty_mean={self._ref_kl_coef * kl_per_mol.mean():.4f}")
-        print(f"{'Mol':>4}  {'reward_before':>13}  {'kl':>8}  {'penalty':>8}  {'reward_after':>12}")
-        print(f"{'----':>4}  {'-------------':>13}  {'--------':>8}  {'--------':>8}  {'------------':>12}")
-        for i in range(len(kl_per_mol)):
-            penalty = self._ref_kl_coef * kl_per_mol[i].item()
-            print(f"{i:>4}  {rewards_before[i].item():>13.4f}  {kl_per_mol[i].item():>8.4f}  {penalty:>8.4f}  {rollout_data['rewards'][i].item():>12.4f}")
         return rollout_data
 
 
