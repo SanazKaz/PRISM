@@ -54,8 +54,7 @@ def compute_ppo_loss(policy_network, minibatch, timestep_idx, config):
     # Add entropy bonus
     policy_loss -= config.ppo.entropy_coef * entropy
 
-    # --- KL penalty: E[log π_old - log π_θ] = KL(π_old || π_θ) ---
-    # Needs grad so it can propagate; approx_kl is also returned for logging.
+    # --- KL vs rolling old policy (logging only; kl_coef stays 0.0) ---
     approx_kl = (old_log_probs - new_log_probs).mean()
     kl_coef = getattr(config.ppo, 'kl_coef', 0.0)
     if kl_coef > 0.0:

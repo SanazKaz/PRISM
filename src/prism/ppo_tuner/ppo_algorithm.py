@@ -25,8 +25,10 @@ class PPOAlgorithm:
                  reward_function,
                  config,
                  dataset_info,
-                 checkpoint_dir):
+                 checkpoint_dir,
+                 ref_policy=None):
         self.policy_network = policy_network
+        self.ref_policy = ref_policy
         self.config = config
         self.device = next(policy_network.parameters()).device
         self.reward_function = reward_function
@@ -44,6 +46,7 @@ class PPOAlgorithm:
             policy_network=self.policy_network,
             reward_function=self.reward_function,
             config=config,
+            ref_policy=self.ref_policy,
         )
         self.buffer = RolloutBuffer(config=config)
         
@@ -290,7 +293,7 @@ class PPOAlgorithm:
                     final_logs[f"train/reward_{name}_mean"] = score_tensor.mean().item()
         # ----------------------------------------------------------------
 
-        print(f"total_loss epoch: {epoch_total_loss / max(epoch_accumulation_steps, 1)}")
+        print(f"[epoch {current_epoch}] total_loss={epoch_total_loss / max(epoch_accumulation_steps, 1):.4f}  approx_kl={epoch_total_approx_kl / max(epoch_accumulation_steps, 1):.4f}")
         self._log_to_csv(current_epoch, final_logs)
         
         return final_logs

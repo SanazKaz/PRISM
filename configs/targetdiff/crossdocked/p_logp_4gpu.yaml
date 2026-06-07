@@ -65,8 +65,8 @@ ppo:
   max_grad_norm: 1.0
   gradient_accumulation_steps: 42 
   train_timesteps: 700            # PPO trains on the last 500 of 1000 reverse steps
-  target_kl: null
-  lr: 3.0e-5 # reduced from 3.0e-5 to avoid instability
+  target_kl: 0.03
+  lr: 3.0e-3
   num_nodes_lig: 27
 
 # -----------------------------------------------------------------------

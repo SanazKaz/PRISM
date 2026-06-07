@@ -4,6 +4,7 @@ import traceback
 from collections import defaultdict
 
 from tests.ppo_debug_utils import assert_same_ids, dbg_tensor
+from .loss import _get_log_probs
 
 
 class RolloutCollector:
@@ -11,10 +12,12 @@ class RolloutCollector:
     A self-contained class responsible for collecting experience (rollouts)
     by running the diffusion model policy.
     """
-    def __init__(self, policy_network, reward_function, config):
+    def __init__(self, policy_network, reward_function, config, ref_policy=None):
         self.policy_network = policy_network
         self.reward_function = reward_function
         self.config = config
+        self.ref_policy = ref_policy
+        self._ref_kl_coef = getattr(config.ppo, 'ref_kl_coef', 0.0)
 
         # NOTE: We get the device directly from the policy network
         self.device = next(self.policy_network.parameters()).device
@@ -52,9 +55,8 @@ class RolloutCollector:
         # Determine Sampling Strategy
         # can add in a eval num steps instead but okay for now.
         
-        n_steps = self.config.ppo.n_steps
-        
-        samples_per_rank = math.ceil(n_steps / world_size)
+        # n_steps is per-GPU (same convention as batch_size), not a global budget
+        samples_per_rank = self.config.ppo.n_steps
         samples_per_pocket = math.ceil(samples_per_rank / max(1, local_batch_size))
         total_target_samples = min(samples_per_rank, local_batch_size * samples_per_pocket)
 
@@ -143,7 +145,49 @@ class RolloutCollector:
                         continue
         
         # Final Aggregation and Processing
-        return self._aggregate_rollouts(rollout_data, valid_samples, rank)
+        rollout_data = self._aggregate_rollouts(rollout_data, valid_samples, rank)
+
+        if self.ref_policy is not None and self._ref_kl_coef > 0.0:
+            rollout_data = self._apply_ref_kl_penalty(rollout_data)
+
+        return rollout_data
+
+    def _apply_ref_kl_penalty(self, rollout_data):
+        """Subtract KL(π_rollout || π_ref) from rewards — standard RLHF reward shaping."""
+        old_log_probs = rollout_data['old_log_probs']      # (num_mols, T)
+        latents       = rollout_data['latents']             # (num_atoms, T, D)
+        next_latents  = rollout_data['next_latents']        # (num_atoms, T, D)
+        timesteps     = rollout_data['timesteps']           # (num_mols, T)
+        xh_lig, xh_pocket = rollout_data['molecules']
+        lig_mask, pocket_mask = rollout_data['masks']
+
+        T = latents.shape[1]  # latents is z_states[:,:-1] — one fewer than old_log_probs
+        ref_log_probs_list = []
+
+        with torch.no_grad():
+            for t_idx in range(T):
+                timestep_batch = {
+                    "molecules": (xh_lig, xh_pocket),
+                    "masks": (lig_mask, pocket_mask),
+                    "latents": latents[:, t_idx],
+                    "next_latents": next_latents[:, t_idx].detach(),
+                    "timestep": timesteps[:, t_idx],
+                }
+                ref_lp = _get_log_probs(
+                    self.ref_policy, timestep_batch,
+                    self.config.model.total_timesteps
+                )
+                ref_log_probs_list.append(ref_lp)
+
+        ref_log_probs = torch.stack(ref_log_probs_list, dim=1)    # (num_mols, T=999)
+        # old_log_probs has 1000 entries (full diffusion); latents/timesteps have 999
+        # (z_states[:,:-1] drops the last state). Align by taking the last T steps.
+        old_lp_aligned = old_log_probs[:, -T:]
+        kl_per_mol = (old_lp_aligned - ref_log_probs).mean(dim=1)  # (num_mols,) — on-policy, ≥ 0
+        rollout_data['rewards'] = rollout_data['rewards'] - self._ref_kl_coef * kl_per_mol
+        print(f"[ref_kl] mean={kl_per_mol.mean():.4f}  max={kl_per_mol.max():.4f}  "
+              f"penalty_mean={self._ref_kl_coef * kl_per_mol.mean():.4f}")
+        return rollout_data
 
 
     def _generate_and_evaluate_chunk(self, single_pocket_data, samples_in_chunk, chunk_mask_base, names, current_epoch):
