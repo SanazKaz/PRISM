@@ -21,8 +21,8 @@ Run a single target (useful for parallel job submission):
 The expected directory layout under --targets_dir is:
     <targets_dir>/
     └── <TargetName>/
+        ├── 01_raw_pdbs/<pdb>.pdb
         └── 02_preprocessed/
-            ├── pocket_files/<pdb>_<lig>_<chain>_<resid>_pocket.pdb
             └── sdf_files/<pdb>_<lig>_<chain>_<resid>.sdf
 """
 
@@ -89,10 +89,10 @@ def _build_targets(targets_dir: Path) -> dict:
     """Resolve _TARGET_SPECS into absolute pocket/ligand paths under targets_dir."""
     targets = {}
     for key, (protein, basename) in _TARGET_SPECS.items():
-        base = targets_dir / protein / "02_preprocessed"
+        pdb_id = basename.split('_')[0]   # e.g. "4whw" from "4whw_3OT_B_201"
         targets[key] = {
-            "pocket": base / "pocket_files" / f"{basename}_pocket.pdb",
-            "ligand": base / "sdf_files"   / f"{basename}.sdf",
+            "pocket": targets_dir / protein / "01_raw_pdbs" / f"{pdb_id}.pdb",
+            "ligand": targets_dir / protein / "02_preprocessed" / "sdf_files" / f"{basename}.sdf",
         }
     return targets
 
