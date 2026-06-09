@@ -24,6 +24,23 @@ The expected directory layout under --targets_dir is:
         ├── 01_raw_pdbs/<pdb>.pdb
         └── 02_preprocessed/
             └── sdf_files/<pdb>_<lig>_<chain>_<resid>.sdf
+
+Custom targets (e.g. from a finetuned model)
+--------------------------------------------
+Instead of --targets_dir, pass --targets_file pointing to a JSON file:
+
+    {
+      "my_target_A": {"pdb": "/data/proteinA.pdb", "sdf": "/data/ligandA.sdf"},
+      "my_target_B": {"pdb": "/data/proteinB.pdb", "sdf": "/data/ligandB.sdf"}
+    }
+
+    python -m scripts.test_targets \\
+        checkpoints/finetuned.ckpt \\
+        --model diffsbdd \\
+        --config configs/ppo_config.yaml \\
+        --targets_file my_targets.json \\
+        --outdir results/finetuned_eval \\
+        --n_samples 100 --batch_size 20 --sanitize
 """
 
 import argparse
@@ -359,8 +376,12 @@ def main():
                         help="Which model architecture the checkpoint belongs to")
     parser.add_argument("--config", type=Path, required=True,
                         help="PRISM YAML config")
-    parser.add_argument("--targets_dir", type=Path, required=True,
-                        help="Root data directory containing per-target subdirectories")
+    parser.add_argument("--targets_dir", type=Path, default=None,
+                        help="Root data directory containing per-target subdirectories "
+                             "(required unless --targets_file is set)")
+    parser.add_argument("--targets_file", type=Path, default=None,
+                        help="JSON file mapping target names to {pdb, sdf} paths; "
+                             "replaces the built-in target list (--targets_dir not needed)")
     parser.add_argument("--outdir", type=Path, required=True)
     parser.add_argument("--n_samples", type=int, default=10000)
     parser.add_argument("--batch_size", type=int, default=200)
@@ -397,7 +418,17 @@ def main():
         td_featurizer  = trans.FeaturizeProteinAtom()
         diffsbdd_model = None
 
-    all_targets = _build_targets(args.targets_dir)
+    if args.targets_file:
+        import json
+        raw = json.loads(args.targets_file.read_text())
+        all_targets = {
+            name: {"pocket": Path(v["pdb"]), "ligand": Path(v["sdf"])}
+            for name, v in raw.items()
+        }
+    else:
+        if not args.targets_dir:
+            parser.error("--targets_dir is required when --targets_file is not set")
+        all_targets = _build_targets(args.targets_dir)
 
     if args.target:
         if args.target not in all_targets:
