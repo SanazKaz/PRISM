@@ -3,13 +3,13 @@
 #   python scripts/train.py --config configs/targetdiff_ppo.yaml \
 #       --datadir /path/to/crossdocked_data --seed 42
 
-run_identifier: 'new_layer_64_batch_700T_4_gpu_TargetDiff_CD_plogp'
+run_identifier: 'no_ref_kl_1e-3_clip0.05_500T_2gpu'
 logdir: 'Log_Results'
 
 wandb_params:
   mode: 'offline'
   entity: 'sanazkazeminia97'
-  project: 'TargetDiff_CD_plogp'
+  project: 'Real_TargetDiff_CD_plogp'
 
 model_type: targetdiff
 
@@ -19,15 +19,15 @@ model_type: targetdiff
 #   - last three transformer layers (6, 7, 8) = 1/3 of the 9-layer stack
 freeze_except:
   - 'v_inference'
-  - 'refine_net.base_block.5' # new
-  - 'refine_net.base_block.6'
+  # - 'refine_net.base_block.5' # new
+  # - 'refine_net.base_block.6'
   - 'refine_net.base_block.7'
   - 'refine_net.base_block.8'
 
 model:
   # Path to the TargetDiff pretrained checkpoint (.pt, native format with
   # key 'model' containing the state_dict).
-  checkpoint: 'checkpoints/targetdiff_pretrained_diffusion.pt'
+  checkpoint: 'checkpoints/targetdiff_pretrained_models/targetdiff_pretrained_diffusion.pt'
 
   # Run process_data.py with --model targetdiff to produce this dataset.
   # That pipeline uses FeaturizeProteinAtom (6 elements + 20 AA + backbone = 27 dims),
@@ -42,9 +42,9 @@ model:
 # -----------------------------------------------------------------------
 datadir: '/data/stat-cadd/wolf7055/PRISM/data/cross_dock/processed_crossdock_targetdiff'
 dataset: 'crossdock'
-batch_size: 42
-num_workers: 4
-gpus: 4
+batch_size: 32
+num_workers: 0
+gpus: 2 # reduced from 4 to 1 to avoid OOM
 n_epochs: 1
 
 enable_progress_bar: False
@@ -54,20 +54,27 @@ num_sanity_val_steps: 0
 # PPO algorithm knobs
 # -----------------------------------------------------------------------
 ppo:
-  num_outer_epochs: 60
+  num_outer_epochs: 70
   num_inner_epochs: 2
-  n_steps: 64                     # molecules generated per rollout
-  ligand_chunk_size: 64           # reduce if OOM
+  n_steps: 64                     # per gpu 64
+  ligand_chunk_size: 84           # reduce if OOM 
   batch_size: 64
-  clip_range: 0.1
-  entropy_coef: 0.001
+  clip_range: 0.05
+  entropy_coef: 0.0
   kl_coef: 0.0
   max_grad_norm: 1.0
-  gradient_accumulation_steps: 42 
-  train_timesteps: 700            # PPO trains on the last 500 of 1000 reverse steps
-  target_kl: 0.03
-  lr: 3.0e-3
+  gradient_accumulation_steps: 168 
+  train_timesteps: 500            # PPO trains on the last 500 of 1000 reverse steps
+  target_kl: null
+  ref_kl_coef: 0.00 # forthis reward we want to pull the model away
   num_nodes_lig: 27
+  lr: 1.0e-3
+
+  
+
+grad_logging:
+  enabled: true
+  every_n_epochs: 5    # cheap; 70 epochs / 5 = 14 logging points
 
 # -----------------------------------------------------------------------
 # Rewards  (same interface as DiffSBDD runs)
