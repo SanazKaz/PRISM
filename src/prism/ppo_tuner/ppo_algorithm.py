@@ -268,8 +268,8 @@ class PPOAlgorithm:
 
         # Final logs for the entire outer step
         final_logs = {
-            "train/n_attempted": n_attempted,
-            "train/n_valid": n_valid,
+            # "train/n_attempted": n_attempted,
+            # "train/n_valid": n_valid,
             "train/validity_rate": validity_rate,
             "train/total_loss_epoch": epoch_total_loss / max(epoch_accumulation_steps, 1),
             "train/approx_kl_epoch": epoch_total_approx_kl / max(epoch_accumulation_steps, 1),

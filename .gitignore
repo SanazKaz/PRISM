@@ -34,6 +34,7 @@ data/custom_pdb_list_data/
 
 src/models/diffsbdd/data/
 src/models/diffsbdd/bash
+debugging
 
 # Job files and logs
 jobs_files/
