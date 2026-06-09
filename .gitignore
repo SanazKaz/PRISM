@@ -32,6 +32,8 @@ data/HIV_1_Protease/
 data/Factor_Xa/
 data/custom_pdb_list_data/
 
+bash/
+
 src/models/diffsbdd/data/
 src/models/diffsbdd/bash
 debugging
