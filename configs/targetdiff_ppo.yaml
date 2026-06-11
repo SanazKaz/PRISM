@@ -56,6 +56,7 @@ ppo:
   num_outer_epochs: 60
   num_inner_epochs: 2
   n_steps: 64                     # molecules generated per rollout
+  use_grpo_advantages: false      # true => per-pocket (GRPO) advantage norm
   ligand_chunk_size: 32           # reduce if OOM
   batch_size: 64
   clip_range: 0.1
