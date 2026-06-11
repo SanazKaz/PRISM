@@ -42,7 +42,7 @@ model:
 datadir: '/data/stat-cadd/wolf7055/PRISM/data/cross_dock/processed_crossdock_targetdiff'
 dataset: 'crossdock'
 batch_size: 8
-num_workers: 4
+num_workers: 0
 gpus: 1
 n_epochs: 1
 

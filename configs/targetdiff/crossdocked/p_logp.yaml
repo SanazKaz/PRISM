@@ -23,6 +23,17 @@ freeze_except:
   - 'refine_net.base_block.7'
   - 'refine_net.base_block.8'
 
+# Gradient / weight-update diagnostics (optional; safe to omit on other configs).
+# Logs per-epoch grad histograms, per-block grad norms, and weight-update
+# magnitudes to wandb under the grad/* namespace. Use to diagnose vanishing
+# gradients or weights that never update.
+grad_logging:
+  enabled: true
+  every_n_epochs: 1
+  log_histogram: true
+  per_block_histogram: true
+  max_hist_elements: 1000000
+
 model:
   # Path to the TargetDiff pretrained checkpoint (.pt, native format with
   # key 'model' containing the state_dict).
@@ -64,8 +75,8 @@ ppo:
   max_grad_norm: 1.0
   gradient_accumulation_steps: 42 
   train_timesteps: 700            # PPO trains on the last 500 of 1000 reverse steps
-  target_kl: null
-  lr: 3.0e-5 # reduced from 3.0e-5 to avoid instability
+  target_kl: 0.03
+  lr: 3.0e-3
   num_nodes_lig: 27
 
 # -----------------------------------------------------------------------
