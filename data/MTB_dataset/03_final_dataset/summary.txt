@@ -1,0 +1,15 @@
+# SUMMARY for CUSTOM_MTB_PROTEINLIST Dataset Split
+
+# After processing
+num_samples train: 13
+num_samples val:   13
+num_samples test:  13
+
+# Info (from training set)
+'atom_encoder': {'C': 0, 'N': 1, 'O': 2, 'S': 3, 'B': 4, 'Br': 5, 'Cl': 6, 'P': 7, 'I': 8, 'F': 9}
+'atom_decoder': ['C', 'N', 'O', 'S', 'B', 'Br', 'Cl', 'P', 'I', 'F']
+'aa_encoder': {'C': 0, 'N': 1, 'O': 2, 'S': 3, 'B': 4, 'Br': 5, 'Cl': 6, 'P': 7, 'I': 8, 'F': 9}
+'aa_decoder': ['C', 'N', 'O', 'S', 'B', 'Br', 'Cl', 'P', 'I', 'F']
+'atom_hist': {'C': 208, 'N': 43, 'O': 91, 'S': 2, 'B': 0, 'Br': 0, 'Cl': 2, 'P': 13, 'I': 0, 'F': 3}
+'aa_hist': {'C': 1479, 'N': 398, 'O': 396, 'S': 6, 'B': 0, 'Br': 0, 'Cl': 0, 'P': 0, 'I': 0, 'F': 0}
+'n_nodes_shape': (56, 311)
