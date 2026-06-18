@@ -162,6 +162,20 @@ def analyse_checkpoint(label, ckpt, config, pocket_batch, args, device, reconstr
     buffer = RolloutBuffer(config)
     buffer.load_rollout_data(rollout)
     buffer.compute_advantages()
+
+    # Guard: if the reward has ~no variance, advantages are ~0 and every
+    # gradient column will read ~0 — reflecting degenerate reward, NOT the
+    # network. Most common cause: a checkpoint that failed to load (see the
+    # missing/unexpected keys printed above) producing all-invalid molecules.
+    rstd = rollout['rewards'].std().item()
+    rmean = rollout['rewards'].mean().item()
+    if rstd < 1e-6:
+        print(f"\n[diag][WARNING] '{label}': rollout rewards are ~constant "
+              f"(mean={rmean:.3f}, std={rstd:.2e}). Advantages ~0 => |dL/dh|/|dL/dx| "
+              f"will be ~0 everywhere. This is a degenerate-reward artifact, not the "
+              f"network. Check the checkpoint loaded correctly (missing/unexpected "
+              f"keys above) and that the reward varies on this pocket.\n")
+
     # validate_minibatch keeps module-level "seen molecule ID" state across calls;
     # reset it so analysing a second checkpoint (same IDs 0..N) doesn't false-trip.
     reset_seen_mb_ids()
