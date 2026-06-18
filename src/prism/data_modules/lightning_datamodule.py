@@ -84,9 +84,14 @@ class LigandPocketDataModule(pl.LightningDataModule):
             else self.train_dataset
         )
 
+        batch_size = getattr(self.config, 'batch_size', None) or 1
+        if batch_size != self.config.batch_size:
+            print(f"[DataModule] WARNING: batch_size was {self.config.batch_size!r}, defaulting to 1. "
+                  "Set batch_size explicitly in your config to suppress this warning.")
+
         return DataLoader(
             self.train_dataset,
-            batch_size=self.config.batch_size,
+            batch_size=batch_size,
             sampler=sampler,
             shuffle=shuffle,
             num_workers=self.config.num_workers,
