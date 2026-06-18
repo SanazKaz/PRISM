@@ -78,6 +78,11 @@ class PPOFineTuner(pl.LightningModule):
         # Attach the data directory so reward functions can resolve relative paths.
         self.dataset_info['datadir'] = self.config.datadir
 
+        # Store the reconstruction fn so validation rebuilds molecules with the
+        # same converter as the reward manager (TargetDiff's OpenBabel/aromatic
+        # pipeline for TargetDiff, None -> DiffSBDD's build_molecule otherwise).
+        self.reconstruction_fn = reconstruction_fn
+
         self.reward_manager = get_reward_manager(
             config=self.config,
             dataset_info=self.dataset_info,
@@ -345,10 +350,6 @@ class PPOFineTuner(pl.LightningModule):
         self._log_grad_diagnostics()
 
         if (self.current_epoch + 1) % self.config.eval_epochs == 0:
-            if self.ddpm_model is None:
-                # TargetDiff does not use DiffSBDD's validation loop.
-                print(f"[Validation] Skipping DiffSBDD validation — TargetDiff mode.")
-                return
             print(f"\n{'='*80}")
             print(f"Running validation at epoch {self.current_epoch + 1}")
             print(f"{'='*80}\n")
@@ -357,11 +358,13 @@ class PPOFineTuner(pl.LightningModule):
     def _run_validation(self):
         """Generate molecules on the validation set and log quality metrics.
 
-        Uses the same RolloutCollector as training, then evaluates the resulting
-        molecules with MoleculeMetrics and SminaDocking.  Only called for the
-        DiffSBDD path (TargetDiff validation is skipped — see on_train_epoch_end).
+        Model-agnostic: works for both DiffSBDD and TargetDiff.  Samples through
+        self.policy (the BaseDiffusionPolicy, not any model-specific module) via
+        the same RolloutCollector used in training, rebuilds RDKit mols with the
+        policy's reconstruction_fn, then evaluates them with MoleculeMetrics and
+        SminaDocking — none of which are model-specific.
         """
-        self.ddpm_model.eval()
+        self.policy.eval()
 
         try:
             with torch.no_grad():
@@ -395,6 +398,7 @@ class PPOFineTuner(pl.LightningModule):
                     global_lig_mask,
                     self.dataset_info,
                     self.policy,
+                    reconstruction_fn=self.reconstruction_fn,
                 )
 
                 print(f"[Validation] Successfully built {len(molecules)} valid RDKit molecules")
@@ -425,4 +429,4 @@ class PPOFineTuner(pl.LightningModule):
 
         finally:
             # Always restore train mode regardless of success/failure.
-            self.ddpm_model.train()
+            self.policy.train()

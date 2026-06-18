@@ -14,7 +14,7 @@
 # Expected output: last.ckpt updates every epoch; up to 3 top-k .ckpt/.pt files;
 # "[Checkpoint] New top-k saved" printed whenever a top-k slot is filled or replaced.
 
-run_identifier: 'debug_checkpoint'
+run_identifier: 'debug_checkpoint_lr_3e-3'
 logdir: '/tmp/ckpt_test'
 
 wandb_params:
@@ -26,6 +26,9 @@ model_type: targetdiff
 
 freeze_except:
   - 'v_inference'
+  # - 'refine_net.base_block.4'
+  # - 'refine_net.base_block.5'
+  # - 'refine_net.base_block.6'
   - 'refine_net.base_block.7'
   - 'refine_net.base_block.8'
 
@@ -40,7 +43,7 @@ model:
 # -----------------------------------------------------------------------
 datadir: '/data/stat-cadd/wolf7055/PRISM/data/cross_dock/processed_crossdock_targetdiff'
 dataset: 'crossdock'
-batch_size: 1
+batch_size: 2
 num_workers: 0
 gpus: 1
 n_epochs: 1
@@ -48,23 +51,25 @@ n_epochs: 1
 enable_progress_bar: True
 num_sanity_val_steps: 0
 
+fixed_pocket: [0, 1]   # always these two pockets
+
 # -----------------------------------------------------------------------
 # PPO — minimal settings so each epoch is fast
 # -----------------------------------------------------------------------
 ppo:
   num_outer_epochs: 10
   num_inner_epochs: 1
-  n_steps: 1
-  ligand_chunk_size: 1
-  batch_size: 1
+  n_steps: 10
+  ligand_chunk_size: 10
+  batch_size: 10
   clip_range: 0.1
   entropy_coef: 0.001
-  kl_coef: 0.0
   max_grad_norm: 1.0
-  gradient_accumulation_steps: 1
-  train_timesteps: 10
+  gradient_accumulation_steps: 168
+  train_timesteps: 300
   target_kl: null
-  lr: 3.0e-5
+  ref_kl_coef: 0.0
+  lr: 3.0e-3
   num_nodes_lig: 27
 
 # -----------------------------------------------------------------------
@@ -73,10 +78,22 @@ ppo:
 docking_params:
   dataset_info: custom
 
+# Gradient / weight-update diagnostics (optional; safe to omit on other configs).
+# Logs per-epoch grad histograms, per-block grad norms, and weight-update
+# magnitudes to wandb under the grad/* namespace. Use to diagnose vanishing
+# gradients or weights that never update.
+grad_logging:
+  enabled: true
+  every_n_epochs: 1
+  log_histogram: true
+  per_block_histogram: true
+  max_hist_elements: 1000000
+
 reward_params:
   target_name: 'BRD4_BD1'
   aggregation: 'weighted_sum'
   rewards:
+    oxygen_fraction: 1.0
     qed: 0.0
     sa_score: 0.0
     lipinski: 0.0
@@ -94,7 +111,7 @@ reward_params:
     smina_docking: 0.0
     custom_qed: 0.0
     custom_sa_score: 0.0
-    penalised_logp: 1.0
+    penalised_logp: 0.0
   reward_paths:
     feature_density: 'src/prism/reward/scoring/reward_data/ampc_hotspot_global_centered_eps0.5_min10_aromatic5.pkl'
     aromatic_anchor: 'src/prism/reward/scoring/reward_data/ampc_hotspot_global_centered_eps0.5_min10_aromatic5.pkl'
