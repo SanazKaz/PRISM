@@ -219,6 +219,10 @@ def analyse_checkpoint(label, ckpt, config, pocket_batch, args, device, reconstr
         'grad_v_norm': float(np.nanmean(gv)) if gv else math.nan,
         'reward_mean': float(rollout['rewards'].mean().item()),
     }
+    # Recommended channel_grad_scale.v (with pos=1.0) to make the atom-type
+    # channel's gradient comparable to the coordinate channel's.
+    gp, gvn = channels['grad_pos_norm'], channels['grad_v_norm']
+    channels['recommended_s_v'] = (gp / gvn) if (gvn and gvn > 0) else math.nan
     return summary, channels
 
 
@@ -312,6 +316,15 @@ def main():
               f"|log_p_pos|={abs(chan['log_p_pos_mean']):.3f}  "
               f"|log_p_v|={abs(chan['log_p_v_mean']):.3f}  "
               f"grad_pos={chan['grad_pos_norm']:.2e}  grad_v={chan['grad_v_norm']:.2e}")
+        rec = chan.get('recommended_s_v', math.nan)
+        if not math.isnan(rec):
+            print(f"[diag] {label} -> coords currently outweigh atom-types "
+                  f"{rec:.3g}:1 in gradient.\n"
+                  f"        To balance them, set in your config:\n"
+                  f"          ppo:\n"
+                  f"            channel_grad_scale:\n"
+                  f"              pos: 1.0\n"
+                  f"              v:   {rec:.3g}")
 
     title = f"PRISM layer diagnostics ({args.reward or 'config reward'})"
     fig1 = plot_comparison(summaries, str(out / 'layer_diagnostics.png'), title=title)
