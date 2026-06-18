@@ -273,6 +273,57 @@ class TargetDiffPolicy(BaseDiffusionPolicy):
             (log_model_prob * v_s_onehot).sum(dim=-1), lig_mask, dim=0)
         return log_p_pos, log_p_v
 
+    def trajectory_stats_given_zt(self, s, t, z_t, z_s, xh_pock, lig_mask, poc_mask):
+        """Diagnostic-only: per-molecule signals for the denoising-trajectory sweep.
+
+        One forward pass; returns a dict of [n_mols] tensors:
+
+            log_p_pos, log_p_v   – the two additive policy log-prob channels
+            pos_sigma            – posterior coordinate std σ(t); the 1/σ² that
+                                   blows up log_p_pos at low noise. Also a proxy
+                                   for coordinate malleability (→0 ⇒ coords frozen)
+            atomtype_entropy     – entropy of the categorical atom-type posterior
+                                   (atom-identity malleability; →0 once an atom's
+                                   element is locked in)
+
+        Lets the sweep show WHEN along the reverse trajectory the molecule's
+        identity and geometry crystallize, and where the channel gradient is healthy.
+        """
+        t_int = (t.squeeze(-1) * self._timesteps).round().long()
+
+        pos_t = z_t[:, :self._n_dims];  v_t = z_t[:, self._n_dims:].argmax(dim=-1)
+        pos_s = z_s[:, :self._n_dims];  v_s = z_s[:, self._n_dims:].argmax(dim=-1)
+
+        preds = self._model(
+            protein_pos=xh_pock[:, :self._n_dims].float(),
+            protein_v=xh_pock[:, self._n_dims:].float(),
+            batch_protein=poc_mask,
+            init_ligand_pos=pos_t, init_ligand_v=v_t,
+            batch_ligand=lig_mask, time_step=t_int,
+        )
+
+        pos_mean, pos_log_var, log_model_prob = self._get_posteriors(
+            preds['pred_ligand_pos'], preds['pred_ligand_v'],
+            pos_t, v_t, t_int, lig_mask,
+        )
+
+        log_p_pos = scatter_mean(
+            log_normal(pos_s, pos_mean, 0.5 * pos_log_var), lig_mask, dim=0)
+        v_s_onehot = F.one_hot(v_s, self._num_atom_types).float()
+        log_p_v = scatter_mean(
+            (log_model_prob * v_s_onehot).sum(dim=-1), lig_mask, dim=0)
+
+        pos_sigma = scatter_mean(
+            (0.5 * pos_log_var).exp().squeeze(-1), lig_mask, dim=0)
+        p = log_model_prob.exp()
+        ent_atom = -(p * log_model_prob).sum(dim=-1)        # per-atom entropy
+        atomtype_entropy = scatter_mean(ent_atom, lig_mask, dim=0)
+
+        return {
+            'log_p_pos': log_p_pos, 'log_p_v': log_p_v,
+            'pos_sigma': pos_sigma, 'atomtype_entropy': atomtype_entropy,
+        }
+
     # ------------------------------------------------------------------
     # BaseDiffusionPolicy – data pre-processing
     # ------------------------------------------------------------------

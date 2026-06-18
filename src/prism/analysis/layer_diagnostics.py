@@ -348,6 +348,179 @@ class EGNNLayerDiagnostics:
 
 
 # ----------------------------------------------------------------------
+# Per-layer decision attribution (logit-lens) — TargetDiff only
+# ----------------------------------------------------------------------
+
+class TargetDiffDecisionLens:
+    """Logit-lens across the 9 UniTransformer layers (TargetDiff).
+
+    Standard layer diagnostics measure activation/grad *magnitude*. This probe
+    measures the *decision variables* instead: it grabs each base_block's ligand
+    hidden ``h_l`` and coords ``x_l``, applies the model's frozen atom-type head
+    (``v_inference``) to ``h_l``, and asks where along depth the molecule is
+    actually decided:
+
+      * ``atomtype_entropy[l]``  – entropy of softmax(v_inference(h_l)); how
+        uncertain the element identity still is at layer l.
+      * ``atomtype_kl_final[l]`` – KL(p_l ‖ p_final); 0 ⇒ the atom-type decision
+        is already made by layer l (later layers add nothing).
+      * ``coord_drift[l]``       – ‖x_l − x_final‖; 0 ⇒ coordinates have settled
+        by layer l.
+
+    If both curves flatten in the *frozen* early layers, unfreezing the last K
+    layers cannot move the output — which is exactly the layer-agnostic flatness
+    we are chasing. No model mutation: pure forward hooks.
+    """
+
+    DECISION_KEYS = ('atomtype_entropy', 'atomtype_kl_final', 'coord_drift')
+
+    def __init__(self, score_model):
+        self.model = score_model
+        self.head = score_model.v_inference
+        self.layers = list(score_model.refine_net.base_block)
+        self.num_layers = len(self.layers)
+        self._handles = []
+        self._cur = {}
+        self.records = []
+
+    def attach(self):
+        for l_idx, layer in enumerate(self.layers):
+            self._handles.append(
+                layer.register_forward_hook(self._make_hook(l_idx)))
+        return self
+
+    def _make_hook(self, l_idx: int):
+        def hook(module, inputs, output):
+            mask = inputs[4].bool()                       # ligand-atom mask
+            out_h, out_x = output[0], output[1]
+            logp = torch.log_softmax(self.head(out_h[mask]), dim=-1).detach()
+            self._cur[l_idx] = {'logp': logp, 'x': out_x[mask].detach()}
+        return hook
+
+    def reset(self):
+        self._cur = {}
+
+    def collect_step(self, label: str = ''):
+        final = self._cur.get(self.num_layers - 1)
+        layers = {}
+        for l in range(self.num_layers):
+            c = self._cur.get(l)
+            if c is None:
+                layers[l] = {k: math.nan for k in self.DECISION_KEYS}
+                continue
+            p = c['logp'].exp()
+            ent = -(p * c['logp']).sum(dim=-1).mean().item()
+            if final is not None:
+                kl = (p * (c['logp'] - final['logp'])).sum(dim=-1).mean().item()
+                drift = (c['x'] - final['x']).norm(dim=-1).mean().item()
+            else:
+                kl = drift = math.nan
+            layers[l] = {'atomtype_entropy': ent,
+                         'atomtype_kl_final': kl, 'coord_drift': drift}
+        self.records.append({'label': label, 'layers': layers})
+        self.reset()
+
+    def remove(self):
+        for h in self._handles:
+            h.remove()
+        self._handles = []
+        self._cur = {}
+
+    def summary(self) -> dict:
+        metrics = {k: [math.nan] * self.num_layers for k in self.DECISION_KEYS}
+        for l in range(self.num_layers):
+            for k in self.DECISION_KEYS:
+                vals = [r['layers'][l][k] for r in self.records
+                        if not math.isnan(r['layers'][l].get(k, math.nan))]
+                metrics[k][l] = (sum(vals) / len(vals)) if vals else math.nan
+        return {'num_layers': self.num_layers,
+                'steps': [r['label'] for r in self.records],
+                'metrics': metrics}
+
+
+def plot_layer_decision(summaries: dict, out_path: str, title: str = ''):
+    """Plot the logit-lens decision curves across layers (one line per label)."""
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+
+    panels = [
+        ('atomtype_entropy', 'Atom-type entropy  H(softmax(v_inference(h_l)))'),
+        ('atomtype_kl_final', 'Atom-type KL(p_l ‖ p_final)  (0 ⇒ decided by layer l)'),
+        ('coord_drift', 'Coord drift  ||x_l − x_final||  (0 ⇒ coords settled)'),
+    ]
+    fig, axes = plt.subplots(1, 3, figsize=(16, 4), squeeze=False)
+    for idx, (key, lbl) in enumerate(panels):
+        ax = axes[0][idx]
+        for run_label, summ in summaries.items():
+            ys = summ['metrics'].get(key, [])
+            ax.plot(range(len(ys)), ys, marker='o', markersize=4, label=run_label)
+        ax.set_title(lbl, fontsize=10)
+        ax.set_xlabel('layer index (0 = first … last)')
+        ax.grid(True, alpha=0.3)
+        if idx == 0:
+            ax.legend(fontsize=8)
+    if title:
+        fig.suptitle(title, fontsize=12)
+    fig.tight_layout(rect=(0, 0, 1, 0.95 if title else 1))
+    fig.savefig(out_path, dpi=130)
+    plt.close(fig)
+    return out_path
+
+
+def plot_trajectory(traj: dict, out_path: str, title: str = ''):
+    """Plot per-timestep denoising-trajectory curves (one line per label).
+
+    Each label maps to a dict of equal-length lists keyed by:
+        't', 'log_p_pos', 'log_p_v', 'grad_pos', 'grad_v',
+        'pos_sigma', 'atomtype_entropy'
+    x-axis is the diffusion timestep t (large = noisy, small = near-clean).
+    """
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    panels = [
+        (('log_p_pos', 'log_p_v'), '|log-prob| per channel', True, 'abs'),
+        (('grad_pos', 'grad_v'), '||∂channel/∂θ|| into trainable params', True, None),
+        (('grad_ratio',), 'grad_pos / grad_v   (>1 ⇒ coords dominate)', True, None),
+        (('pos_sigma',), 'coord σ(t)  (malleability; small ⇒ frozen)', True, None),
+        (('atomtype_entropy',), 'atom-type entropy  (small ⇒ identity locked)', False, None),
+        (('log_p_v',), '|log_p_v| alone (atom-type signal)', True, 'abs'),
+    ]
+    fig, axes = plt.subplots(3, 2, figsize=(14, 11), squeeze=False)
+    for idx, (keys, lbl, logy, mode) in enumerate(panels):
+        ax = axes[idx // 2][idx % 2]
+        for run_label, d in traj.items():
+            ts = d.get('t', [])
+            order = np.argsort(ts)[::-1]      # plot noisy→clean (large t first)
+            xs = np.asarray(ts)[order]
+            for k in keys:
+                ys = np.asarray(d.get(k, [math.nan] * len(ts)), dtype=float)[order]
+                if mode == 'abs':
+                    ys = np.abs(ys)
+                lab = f"{run_label}:{k}" if len(traj) * len(keys) > 1 else k
+                ax.plot(xs, ys, marker='.', markersize=4, label=lab)
+        ax.set_title(lbl, fontsize=10)
+        ax.set_xlabel('diffusion timestep t  (large = noisy → small = near-clean)')
+        ax.invert_xaxis()                      # clean on the right
+        ax.grid(True, alpha=0.3)
+        if logy:
+            try:
+                ax.set_yscale('log')
+            except Exception:
+                pass
+        ax.legend(fontsize=7)
+    if title:
+        fig.suptitle(title, fontsize=12)
+    fig.tight_layout(rect=(0, 0, 1, 0.97 if title else 1))
+    fig.savefig(out_path, dpi=130)
+    plt.close(fig)
+    return out_path
+
+
+# ----------------------------------------------------------------------
 # Plotting — comparison across one or more labelled summaries
 # ----------------------------------------------------------------------
 
