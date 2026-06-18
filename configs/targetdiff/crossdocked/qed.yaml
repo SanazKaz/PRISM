@@ -36,7 +36,8 @@ model:
 # -----------------------------------------------------------------------
 datadir: '/data/stat-cadd/wolf7055/PRISM/data/cross_dock/processed_crossdock_targetdiff'
 dataset: 'crossdock'
-batch_size: 1          # single pocket -> 1 pocket entry per train batch
+batch_size: 1          # REQUIRED: blank/None makes DataLoader pass a single dict
+                       # to collate_fn -> KeyError: 0. Single pocket -> 1 per batch.
 num_workers: 4
 gpus: 1
 n_epochs: 1
