@@ -40,6 +40,15 @@ class DiffSBDDPolicy(BaseDiffusionPolicy):
     def log_p_zs_given_zt(self, s, t, z_t, z_s, xh_pock, lig_mask, poc_mask):
         return self._inner.log_p_zs_given_zt(s, t, z_t, z_s, xh_pock, lig_mask, poc_mask)
 
+    def log_p_zs_given_zt_channels(self, s, t, z_t, z_s, xh_pock, lig_mask, poc_mask):
+        """Returns (log_p_pos, log_p_v) — Gaussian coord and atom-type channels separately."""
+        return self._inner.log_p_zs_given_zt_channels(
+            s, t, z_t, z_s, xh_pock, lig_mask, poc_mask)
+
+    @property
+    def total_timesteps(self) -> int:
+        return self._inner.T
+
     # ------------------------------------------------------------------
     # BaseDiffusionPolicy – data pre-processing
     # ------------------------------------------------------------------

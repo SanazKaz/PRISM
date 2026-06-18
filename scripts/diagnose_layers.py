@@ -1,28 +1,38 @@
 #!/usr/bin/env python
 """
-Standalone layer-wise diagnostics for a TargetDiff PPO policy.
+Standalone layer-wise diagnostics for TargetDiff or DiffSBDD PPO policies.
 
 Answers two questions when PPO won't shift the mean reward for *any* reward:
 
   1. WHERE can I control the network?  -> per-layer activation update size and
-     gradient flow across the 9 transformer layers (so you know which layers to
-     unfreeze instead of just the last 3).
+     gradient flow across transformer/EGNN layers (9 for TargetDiff, 5 for DiffSBDD).
   2. WHY are atom-identity rewards (QED/logP/SA/aromatic) dead?  -> decompose the
-     policy log-prob into its coordinate (Gaussian) and atom-type (categorical)
-     channels and compare both their magnitudes and the gradient each sends into
-     the trainable params.
+     policy log-prob into coordinate and atom-type channels and compare both their
+     magnitudes and the gradient each sends into the trainable params.
+
+     TargetDiff: log_p_pos is continuous Gaussian, log_p_v is categorical (bounded)
+                 -> coordinate channel dominates by ~360,000x in gradient.
+     DiffSBDD:   BOTH channels are continuous Gaussian (3 vs atom_nf=10 dims)
+                 -> at low noise, |log_p_v| >= |log_p_pos| -> near-balanced or reversed.
 
 It loads a checkpoint, pulls one real pocket batch, samples a small rollout with
 the chosen reward, then runs the *actual* PPO loss backward with hooks attached.
 Compare a baseline vs a "stuck" fine-tuned checkpoint with --finetuned-ckpt.
 
-Example
--------
+Example (TargetDiff)
+--------------------
     python scripts/diagnose_layers.py \
-        --config configs/targetdiff/crossdocked/p_logp.yaml \
-        --baseline-ckpt /path/to/pretrained.pt \
-        --finetuned-ckpt /path/to/stuck_custom_qed.pt \
-        --reward custom_qed --num-samples 16 --out-dir diag_out
+        --config configs/targetdiff/crossdocked/qed.yaml \
+        --baseline-ckpt /path/to/targetdiff_pretrained.pt \
+        --finetuned-ckpt /path/to/stuck_qed.pt \
+        --model-type targetdiff --reward custom_qed --out-dir diag_out
+
+Example (DiffSBDD)
+------------------
+    python scripts/diagnose_layers.py \
+        --config configs/crossdocked/base.yaml \
+        --baseline-ckpt /path/to/diffsbdd_pretrained.ckpt \
+        --model-type diffsbdd --reward custom_qed --out-dir diag_diffsbdd
 """
 
 import os
@@ -30,6 +40,7 @@ import sys
 import json
 import argparse
 import math
+import types
 from pathlib import Path
 
 # --- make project + vendored diffsbdd importable (mirrors scripts/train.py) ---
@@ -43,20 +54,34 @@ import yaml
 
 from src.prism.utils import dict_to_namespace
 from src.prism.data_modules.lightning_datamodule import LigandPocketDataModule
-from src.prism.models.policy_factory import build_targetdiff_policy
+from src.prism.models.policy_factory import build_targetdiff_policy, build_diffsbdd_policy
 from src.prism.reward.factory import get_reward_manager
 from src.prism.ppo_tuner.rollout_collector import RolloutCollector
 from src.prism.ppo_tuner.rollout_buffer import RolloutBuffer
 from src.prism.ppo_tuner.loss import compute_ppo_loss
 from tests.ppo_debug_utils import reset_seen_mb_ids
 from src.prism.analysis.layer_diagnostics import (
-    LayerDiagnostics, plot_comparison, plot_logprob_channels,
+    LayerDiagnostics, EGNNLayerDiagnostics, plot_comparison, plot_logprob_channels,
 )
 
 
 # ----------------------------------------------------------------------
 # Config helpers
 # ----------------------------------------------------------------------
+
+def _load_histogram(args, config):
+    """Load the DiffSBDD node-count histogram (size_distribution.npy)."""
+    if getattr(args, 'histogram_file', None):
+        path = Path(args.histogram_file)
+    else:
+        path = Path(config.datadir) / 'size_distribution.npy'
+    if not path.exists():
+        raise FileNotFoundError(
+            f"DiffSBDD requires a node histogram at {path}. "
+            f"Pass --histogram-file to override the default location."
+        )
+    return np.load(str(path)).tolist()
+
 
 def _override_single_reward(config, reward_name):
     """Force a single-objective weighted-sum reward (others zeroed) for a clean
@@ -97,7 +122,12 @@ def _apply_requires_grad(policy, trainable_names, all_unfrozen):
 # ----------------------------------------------------------------------
 
 def _channels_for_timestep(policy, minibatch, timestep_idx, total_timesteps):
-    """Return (log_p_pos, log_p_v) per molecule for one timestep, grad-tracked."""
+    """Return (log_p_pos, log_p_v) per molecule for one timestep, grad-tracked.
+
+    Works for both TargetDiff and DiffSBDD as long as the policy implements
+    log_p_zs_given_zt_channels().  total_timesteps must be passed explicitly
+    (config.model.total_timesteps for TargetDiff; policy.total_timesteps for DiffSBDD).
+    """
     z_t = minibatch["latents"][:, timestep_idx]
     z_s = minibatch["next_latents"][:, timestep_idx].detach()
     xh_lig, xh_pock = minibatch["molecules"]
@@ -139,10 +169,36 @@ def _grad_norm(loss, params):
 def analyse_checkpoint(label, ckpt, config, pocket_batch, args, device, reconstruction_fn):
     print(f"\n{'='*70}\n[diag] Analysing '{label}'  ckpt={ckpt}\n{'='*70}")
 
-    policy, dataset_info = build_targetdiff_policy(
-        config=config, device=device, warm_start_checkpoint=ckpt,
-    )
+    model_type = getattr(args, 'model_type', 'targetdiff')
+
+    if model_type == 'diffsbdd':
+        node_histogram = _load_histogram(args, config)
+        policy, ddpm_outer, dataset_info = build_diffsbdd_policy(
+            config=config, device=device,
+            node_histogram=node_histogram, warm_start_checkpoint=ckpt,
+        )
+        total_timesteps = policy.total_timesteps
+        diag_cls = EGNNLayerDiagnostics
+        diag_target = policy           # EGNNLayerDiagnostics takes the full policy
+        reward_ddpm = ddpm_outer       # outer LigandPocketDDPM for reward manager
+        recon_fn = None                # DiffSBDD doesn't need a separate decoder fn
+    else:
+        policy, dataset_info = build_targetdiff_policy(
+            config=config, device=device, warm_start_checkpoint=ckpt,
+        )
+        total_timesteps = getattr(getattr(config, 'model', None), 'total_timesteps', 1000)
+        diag_cls = LayerDiagnostics
+        diag_target = policy._model    # LayerDiagnostics takes ScorePosNet3D
+        reward_ddpm = policy
+        recon_fn = reconstruction_fn
+
     dataset_info['datadir'] = config.datadir
+
+    # Ensure config.model.total_timesteps is set for compute_ppo_loss
+    if not hasattr(config, 'model') or config.model is None:
+        config.model = types.SimpleNamespace()
+    if not hasattr(config.model, 'total_timesteps'):
+        config.model.total_timesteps = total_timesteps
 
     trainable_names = _trainable_name_set(policy, config.freeze_except)
     _apply_requires_grad(policy, trainable_names, args.all_unfrozen)
@@ -151,7 +207,7 @@ def analyse_checkpoint(label, ckpt, config, pocket_batch, args, device, reconstr
     # --- collect a small rollout with the configured reward ---
     reward_manager = get_reward_manager(
         config=config, dataset_info=dataset_info,
-        ddpm_module=policy, reconstruction_fn=reconstruction_fn,
+        ddpm_module=reward_ddpm, reconstruction_fn=recon_fn,
     )
     collector = RolloutCollector(policy, reward_manager, config)
     rollout = collector.collect(pocket_batch, current_epoch=0,
@@ -189,11 +245,14 @@ def analyse_checkpoint(label, ckpt, config, pocket_batch, args, device, reconstr
           f"seq_len={seq_len} | probe timestep indices={probe_idxs}")
 
     # --- layer fwd/bwd diagnostics over the real PPO loss ---
-    diag = LayerDiagnostics(policy._model).attach(capture_attention=True)
+    diag = diag_cls(diag_target).attach(capture_attention=(model_type == 'targetdiff'))
     policy.train()
     for idx in probe_idxs:
         diag.reset()
-        policy._model.zero_grad(set_to_none=True)
+        if model_type == 'diffsbdd':
+            policy._inner.zero_grad(set_to_none=True)
+        else:
+            policy._model.zero_grad(set_to_none=True)
         loss, _, _, _ = compute_ppo_loss(policy, minibatch, idx, config)
         loss.backward()
         t_val = int(minibatch["timesteps"][0, idx].item())
@@ -204,9 +263,12 @@ def analyse_checkpoint(label, ckpt, config, pocket_batch, args, device, reconstr
     # --- log-prob channel decomposition (over the configured trainable set) ---
     pos_mags, v_mags, gpos, gv = [], [], [], []
     for idx in probe_idxs:
-        policy._model.zero_grad(set_to_none=True)
+        if model_type == 'diffsbdd':
+            policy._inner.zero_grad(set_to_none=True)
+        else:
+            policy._model.zero_grad(set_to_none=True)
         log_p_pos, log_p_v = _channels_for_timestep(
-            policy, minibatch, idx, config.model.total_timesteps)
+            policy, minibatch, idx, total_timesteps)
         pos_mags.append(log_p_pos.mean().item())
         v_mags.append(log_p_v.mean().item())
         if trainable_params:
@@ -253,9 +315,15 @@ def main():
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--config', required=True, help='Path to the training YAML.')
     ap.add_argument('--baseline-ckpt', required=True,
-                    help='Pretrained TargetDiff checkpoint (.pt/.ckpt).')
+                    help='Pretrained checkpoint (.pt/.ckpt).')
     ap.add_argument('--finetuned-ckpt', default=None,
                     help='Optional stuck fine-tuned checkpoint to overlay.')
+    ap.add_argument('--model-type', default='targetdiff',
+                    choices=['targetdiff', 'diffsbdd'],
+                    help='Architecture of the checkpoint (default: targetdiff).')
+    ap.add_argument('--histogram-file', default=None,
+                    help='Path to size_distribution.npy for DiffSBDD. '
+                         'Default: {datadir}/size_distribution.npy.')
     ap.add_argument('--reward', default='custom_qed',
                     help="Single reward to isolate (default custom_qed). "
                          "Pass '' to keep the config's reward weights as-is.")
@@ -297,10 +365,13 @@ def main():
 
     # TargetDiff rebuilds RDKit molecules with its own 13-class aromatic decoder;
     # use the same converter the trainer uses so rewards are meaningful.
+    # DiffSBDD uses its own built-in decoder — no separate reconstruction_fn needed.
     reconstruction_fn = None
-    if getattr(config, 'model_type', 'diffsbdd') == 'targetdiff':
+    if args.model_type == 'targetdiff':
         from src.prism.models.targetdiff_inference import make_targetdiff_reconstruction_fn
         reconstruction_fn = make_targetdiff_reconstruction_fn()
+
+    print(f"[diag] model_type={args.model_type}")
 
     runs = [('baseline', args.baseline_ckpt)]
     if args.finetuned_ckpt:
@@ -326,7 +397,7 @@ def main():
                   f"              pos: 1.0\n"
                   f"              v:   {rec:.3g}")
 
-    title = f"PRISM layer diagnostics ({args.reward or 'config reward'})"
+    title = f"PRISM layer diagnostics — {args.model_type} ({args.reward or 'config reward'})"
     fig1 = plot_comparison(summaries, str(out / 'layer_diagnostics.png'), title=title)
     fig2 = plot_logprob_channels(channels, str(out / 'logprob_channels.png'), title=title)
     with open(out / 'diagnostics.json', 'w') as f:

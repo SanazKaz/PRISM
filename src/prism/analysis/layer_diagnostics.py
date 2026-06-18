@@ -229,6 +229,125 @@ class LayerDiagnostics:
 
 
 # ----------------------------------------------------------------------
+# DiffSBDD / EGNN diagnostics
+# ----------------------------------------------------------------------
+
+class EGNNLayerDiagnostics:
+    """Attach to a DiffSBDDPolicy and record per-EquivariantBlock fwd/bwd statistics.
+
+    Mirrors LayerDiagnostics for TargetDiff but targets the EGNN backbone
+    (policy._inner.dynamics.egnn.e_block_0 … e_block_{n-1}).
+
+    Key differences from LayerDiagnostics:
+    - EGNN concatenates ligand + pocket atoms before the message-passing loop,
+      so hooks see ALL atoms and no ligand mask is available.  Norms are
+      therefore reported over all atoms (still diagnostic for channel balance).
+    - GCL uses sigmoid scalar attention (not softmax), so attn_entropy_* is
+      always NaN.
+    """
+
+    METRIC_KEYS = LayerDiagnostics.METRIC_KEYS
+
+    def __init__(self, policy):
+        egnn = policy._inner.dynamics.egnn
+        self.num_layers = egnn.n_layers
+        self.layers = [egnn._modules[f"e_block_{i}"] for i in range(self.num_layers)]
+        self._handles = []
+        self._cur = {}
+        self.records = []
+
+    # ------------------------------------------------------------------
+    # Attach / detach
+    # ------------------------------------------------------------------
+
+    def attach(self, capture_attention: bool = False):
+        """Register forward hooks. capture_attention is accepted but ignored
+        (EGNN has no entropy-meaningful attention)."""
+        for l_idx, layer in enumerate(self.layers):
+            self._handles.append(
+                layer.register_forward_hook(self._make_forward_hook(l_idx))
+            )
+        return self
+
+    def remove(self):
+        for h in self._handles:
+            h.remove()
+        self._handles = []
+        self._cur = {}
+
+    # ------------------------------------------------------------------
+    # Hook factory
+    # ------------------------------------------------------------------
+
+    def _make_forward_hook(self, l_idx: int):
+        def hook(module, inputs, output):
+            # EquivariantBlock.forward(h, x, edge_index, ...) → (h, x)
+            in_h = inputs[0]   # [N_all_atoms, hidden_nf]
+            in_x = inputs[1]   # [N_all_atoms, 3]
+            out_h, out_x = output[0], output[1]
+
+            num = (out_h - in_h).norm(dim=-1)
+            den = in_h.norm(dim=-1) + 1e-8
+            rec = {
+                'act_h_norm':       out_h.norm(dim=-1).mean().item(),
+                'act_x_norm':       out_x.norm(dim=-1).mean().item(),
+                'delta_h_rel':      (num / den).mean().item(),
+                'delta_x_norm':     (out_x - in_x).norm(dim=-1).mean().item(),
+                'attn_entropy_x2h': math.nan,
+                'attn_entropy_h2x': math.nan,
+                'grad_h_norm':      math.nan,
+                'grad_x_norm':      math.nan,
+            }
+            self._cur[l_idx] = rec
+
+            if out_h.requires_grad:
+                out_h.register_hook(self._make_grad_hook(l_idx, 'grad_h_norm'))
+            if out_x.requires_grad:
+                out_x.register_hook(self._make_grad_hook(l_idx, 'grad_x_norm'))
+
+        return hook
+
+    def _make_grad_hook(self, l_idx: int, key: str):
+        def grad_hook(grad):
+            rec = self._cur.get(l_idx)
+            if rec is not None:
+                rec[key] = grad.norm(dim=-1).mean().item()
+            return None
+        return grad_hook
+
+    # ------------------------------------------------------------------
+    # Step accumulation — identical interface to LayerDiagnostics
+    # ------------------------------------------------------------------
+
+    def reset(self):
+        self._cur = {}
+
+    def collect_step(self, label: str = ''):
+        layers = {}
+        for l_idx in range(self.num_layers):
+            rec = self._cur.get(l_idx, {})
+            layers[l_idx] = {k: rec.get(k, math.nan) for k in self.METRIC_KEYS}
+        self.records.append({'label': label, 'layers': layers})
+        self.reset()
+
+    def summary(self) -> dict:
+        metrics = {k: [math.nan] * self.num_layers for k in self.METRIC_KEYS}
+        for l_idx in range(self.num_layers):
+            for key in self.METRIC_KEYS:
+                vals = [
+                    r['layers'][l_idx][key]
+                    for r in self.records
+                    if not math.isnan(r['layers'][l_idx].get(key, math.nan))
+                ]
+                metrics[key][l_idx] = (sum(vals) / len(vals)) if vals else math.nan
+        return {
+            'num_layers': self.num_layers,
+            'steps': [r['label'] for r in self.records],
+            'metrics': metrics,
+        }
+
+
+# ----------------------------------------------------------------------
 # Plotting — comparison across one or more labelled summaries
 # ----------------------------------------------------------------------
 

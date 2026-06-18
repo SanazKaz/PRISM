@@ -525,9 +525,53 @@ class ConditionalDDPM(EnVariationalDiffusion):
         )
         
         log_prob = scatter_mean(log_prob_atom, lig_mask, dim=0)
-        
+
         return log_prob
 
+    def log_p_zs_given_zt_channels(self, s, t, z_t, z_s, xh_pock, lig_mask, pock_mask):
+        """Like log_p_zs_given_zt but returns (log_p_pos, log_p_v) separately.
+
+        Both channels are Gaussian (continuous DDPM); splitting by dimension:
+          log_p_pos — Gaussian over the 3 coordinate dims
+          log_p_v   — Gaussian over the atom_nf feature dims
+        Their sum equals log_p_zs_given_zt to floating-point precision.
+        """
+        gamma_s = self.gamma(s)
+        gamma_t = self.gamma(t)
+
+        sigma2_t_given_s, sigma_t_given_s, alpha_t_given_s = \
+            self.sigma_and_alpha_t_given_s(gamma_t, gamma_s, z_t)
+
+        sigma_s = self.sigma(gamma_s, target_tensor=z_t)
+        sigma_t = self.sigma(gamma_t, target_tensor=z_t)
+
+        eps_t_lig, _ = self.dynamics(z_t, xh_pock, t, lig_mask, pock_mask)
+
+        mu_lig = z_t / alpha_t_given_s[lig_mask] - \
+                 (sigma2_t_given_s / alpha_t_given_s / sigma_t)[lig_mask] * eps_t_lig
+
+        sigma = sigma_t_given_s * sigma_s / sigma_t
+        sigma_sq_lig = sigma[lig_mask] ** 2 + 1e-8
+        diff = z_s - mu_lig
+
+        # Position channel: first n_dims dimensions
+        diff_pos = diff[:, :self.n_dims]
+        sig_pos = sigma_sq_lig[:, :self.n_dims]
+        log_p_pos_atom = -0.5 * (
+            (diff_pos ** 2 / sig_pos).sum(dim=1) +
+            torch.log(2 * torch.pi * sig_pos).sum(dim=1)
+        )
+
+        # Atom-type channel: remaining atom_nf dimensions
+        diff_v = diff[:, self.n_dims:]
+        sig_v = sigma_sq_lig[:, self.n_dims:]
+        log_p_v_atom = -0.5 * (
+            (diff_v ** 2 / sig_v).sum(dim=1) +
+            torch.log(2 * torch.pi * sig_v).sum(dim=1)
+        )
+
+        return (scatter_mean(log_p_pos_atom, lig_mask, dim=0),
+                scatter_mean(log_p_v_atom,   lig_mask, dim=0))
 
 
     @torch.no_grad()
