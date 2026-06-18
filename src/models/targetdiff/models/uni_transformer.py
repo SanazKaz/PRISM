@@ -22,6 +22,11 @@ class BaseX2HAttLayer(nn.Module):
         self.ew_net_type = ew_net_type
         self.out_fc = out_fc
 
+        # Diagnostics: opt-in attention capture (no-op unless LayerDiagnostics
+        # toggles capture_attention=True). Default-off => zero training overhead.
+        self.capture_attention = False
+        self._last_attn_entropy = None
+
         # attention key func
         kv_input_dim = input_dim * 2 + edge_feat_dim + r_feat_dim
         self.hk_func = MLP(kv_input_dim, output_dim, hidden_dim, norm=norm, act_fn=act_fn)
@@ -73,6 +78,15 @@ class BaseX2HAttLayer(nn.Module):
         alpha = scatter_softmax((q[dst] * k / np.sqrt(k.shape[-1])).sum(-1), dst, dim=0,
                                 dim_size=N)  # [num_edges, n_heads]
 
+        if self.capture_attention:
+            # Per-destination-node attention entropy (averaged over nodes/heads).
+            # High entropy => diffuse/uniform attention; low => focused. Stored
+            # as a plain float so backward and equivariance are untouched.
+            with torch.no_grad():
+                a = alpha.clamp_min(1e-9)
+                node_ent = scatter_sum(-(a * a.log()), dst, dim=0, dim_size=N)  # [N, heads]
+                self._last_attn_entropy = node_ent.mean().item()
+
         # perform attention-weighted message-passing
         m = alpha.unsqueeze(-1) * v  # (E, heads, H_per_head)
         output = scatter_sum(m, dst, dim=0, dim_size=N)  # (N, heads, H_per_head)
@@ -96,6 +110,10 @@ class BaseH2XAttLayer(nn.Module):
         self.r_feat_dim = r_feat_dim
         self.act_fn = act_fn
         self.ew_net_type = ew_net_type
+
+        # Diagnostics: opt-in attention capture (see BaseX2HAttLayer).
+        self.capture_attention = False
+        self._last_attn_entropy = None
 
         kv_input_dim = input_dim * 2 + edge_feat_dim + r_feat_dim
 
@@ -133,6 +151,12 @@ class BaseH2XAttLayer(nn.Module):
 
         # Compute attention weights
         alpha = scatter_softmax((q[dst] * k / np.sqrt(k.shape[-1])).sum(-1), dst, dim=0, dim_size=N)  # (E, heads)
+
+        if self.capture_attention:
+            with torch.no_grad():
+                a = alpha.clamp_min(1e-9)
+                node_ent = scatter_sum(-(a * a.log()), dst, dim=0, dim_size=N)  # [N, heads]
+                self._last_attn_entropy = node_ent.mean().item()
 
         # Perform attention-weighted message-passing
         m = alpha.unsqueeze(-1) * v  # (E, heads, 3)

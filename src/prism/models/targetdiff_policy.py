@@ -236,6 +236,43 @@ class TargetDiffPolicy(BaseDiffusionPolicy):
 
         return self._step_log_prob(pos_s, pos_mean, pos_log_var, v_s, log_model_prob, lig_mask)
 
+    def log_p_zs_given_zt_channels(self, s, t, z_t, z_s, xh_pock, lig_mask, poc_mask):
+        """Diagnostic-only variant of log_p_zs_given_zt.
+
+        Returns the two additive channels of the policy log-prob *separately*:
+
+            (log_p_pos, log_p_v)   each shape [n_mols]
+
+        so callers can compare their magnitudes and (after backward on each)
+        the gradient each channel sends into the trainable params. Used to test
+        whether the continuous-coordinate Gaussian term swamps the categorical
+        atom-type term — which would starve atom-identity rewards (QED/logP/SA).
+        """
+        t_int = (t.squeeze(-1) * self._timesteps).round().long()
+
+        pos_t = z_t[:, :self._n_dims];  v_t = z_t[:, self._n_dims:].argmax(dim=-1)
+        pos_s = z_s[:, :self._n_dims];  v_s = z_s[:, self._n_dims:].argmax(dim=-1)
+
+        preds = self._model(
+            protein_pos=xh_pock[:, :self._n_dims].float(),
+            protein_v=xh_pock[:, self._n_dims:].float(),
+            batch_protein=poc_mask,
+            init_ligand_pos=pos_t, init_ligand_v=v_t,
+            batch_ligand=lig_mask, time_step=t_int,
+        )
+
+        pos_mean, pos_log_var, log_model_prob = self._get_posteriors(
+            preds['pred_ligand_pos'], preds['pred_ligand_v'],
+            pos_t, v_t, t_int, lig_mask,
+        )
+
+        log_p_pos = scatter_mean(
+            log_normal(pos_s, pos_mean, 0.5 * pos_log_var), lig_mask, dim=0)
+        v_s_onehot = F.one_hot(v_s, self._num_atom_types).float()
+        log_p_v = scatter_mean(
+            (log_model_prob * v_s_onehot).sum(dim=-1), lig_mask, dim=0)
+        return log_p_pos, log_p_v
+
     # ------------------------------------------------------------------
     # BaseDiffusionPolicy – data pre-processing
     # ------------------------------------------------------------------
