@@ -48,6 +48,7 @@ from src.prism.reward.factory import get_reward_manager
 from src.prism.ppo_tuner.rollout_collector import RolloutCollector
 from src.prism.ppo_tuner.rollout_buffer import RolloutBuffer
 from src.prism.ppo_tuner.loss import compute_ppo_loss
+from tests.ppo_debug_utils import reset_seen_mb_ids
 from src.prism.analysis.layer_diagnostics import (
     LayerDiagnostics, plot_comparison, plot_logprob_channels,
 )
@@ -161,6 +162,9 @@ def analyse_checkpoint(label, ckpt, config, pocket_batch, args, device, reconstr
     buffer = RolloutBuffer(config)
     buffer.load_rollout_data(rollout)
     buffer.compute_advantages()
+    # validate_minibatch keeps module-level "seen molecule ID" state across calls;
+    # reset it so analysing a second checkpoint (same IDs 0..N) doesn't false-trip.
+    reset_seen_mb_ids()
     minibatch = next(iter(buffer.get_minibatches()))
 
     seq_len = minibatch["latents"].shape[1]
