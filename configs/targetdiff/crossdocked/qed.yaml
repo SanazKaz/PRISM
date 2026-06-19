@@ -63,20 +63,25 @@ ppo:
   max_grad_norm: 1.0
   gradient_accumulation_steps: 168
   train_timesteps: 300
+  # Which end of the reverse-diffusion trajectory to train on.
+  #   'last'  = final K low-noise steps (t=K-1..0)   — original behaviour
+  #   'first' = initial K high-noise steps (t=T-1..T-K) — where atom identity is
+  #             still malleable and the pos/type gradient is balanced (~1, not 1e5).
+  timestep_window: first
   target_kl: 3.0
   ref_kl_coef: 0.00
   lr: 2.0e-4
   num_nodes_lig: 27
 
-  # ---- THE FIX -------------------------------------------------------
+  # ---- channel gradient reweight ------------------------------------
   # Reweight how much each log-prob channel's GRADIENT counts (value/PPO
-  # ratio are unchanged). Coordinates keep learning (pos: 1.0); the
-  # atom-type channel is amplified so QED/SA/aromatic rewards get real
-  # signal. Tune `v` if needed: flat -> raise to 1.0e6; unstable -> drop
-  # to 5.0e4. Delete this block to reproduce last night exactly.
+  # ratio unchanged). With timestep_window: first (high noise) the pos/type
+  # gradient ratio is already ~1, so NO scaling is needed — both set to 1.0
+  # (the loss takes its fast no-split path). Only raise `v` if you switch
+  # back to timestep_window: last, where coords dominate by ~1e5.
   channel_grad_scale:
     pos: 1.0
-    v:   200000.0
+    v:   1.0
   # --------------------------------------------------------------------
 
 # Gradient / weight-update diagnostics

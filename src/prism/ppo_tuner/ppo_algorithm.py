@@ -128,12 +128,22 @@ class PPOAlgorithm:
         
         # --- 2.6. DETERMINE CURRENT K (from original code) ---
         current_k = self.config.ppo.train_timesteps
-        
-        
-        # --- 2.7. SLICE TO LAST K TIMESTEPS (from original: rollout_data[key] = rollout_data[key][:, -k:]) ---
+
+        # Which end of the reverse-diffusion trajectory to train on. The stored
+        # sequence runs [t=T-1 (noisy) ... t=0 (near-clean)] (see RolloutCollector:
+        # timesteps_1d = arange(T-1, -1, -1)). 'last' (default) keeps the final K
+        # low-noise steps (original behaviour); 'first' keeps the initial K
+        # high-noise steps, where atom identity is still malleable and the
+        # pos/type gradient is balanced.
+        window = getattr(self.config.ppo, 'timestep_window', 'last')
+
+        # --- 2.7. SLICE TO K TIMESTEPS ('last' => [:, -k:], 'first' => [:, :k]) ---
         for key in ("latents", "next_latents", "old_log_probs", "timesteps"):
             if key in rollout_data_for_permute and rollout_data_for_permute[key] is not None:
-                rollout_data_for_permute[key] = rollout_data_for_permute[key][:, -current_k:]
+                if window == 'first':
+                    rollout_data_for_permute[key] = rollout_data_for_permute[key][:, :current_k]
+                else:
+                    rollout_data_for_permute[key] = rollout_data_for_permute[key][:, -current_k:]
         
         # --- 2.8. PERMUTE TIMESTEPS (from original) ---
         with torch.no_grad():
