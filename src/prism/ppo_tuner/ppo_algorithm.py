@@ -129,21 +129,49 @@ class PPOAlgorithm:
         # --- 2.6. DETERMINE CURRENT K (from original code) ---
         current_k = self.config.ppo.train_timesteps
 
-        # Which end of the reverse-diffusion trajectory to train on. The stored
+        # Which part of the reverse-diffusion trajectory to train on. The stored
         # sequence runs [t=T-1 (noisy) ... t=0 (near-clean)] (see RolloutCollector:
-        # timesteps_1d = arange(T-1, -1, -1)). 'last' (default) keeps the final K
-        # low-noise steps (original behaviour); 'first' keeps the initial K
-        # high-noise steps, where atom identity is still malleable and the
-        # pos/type gradient is balanced.
+        # timesteps_1d = arange(T-1, -1, -1)).
+        #   'last'  (default) keeps the final K low-noise steps (original behaviour).
+        #   'first' keeps the initial K high-noise steps, where atom identity is
+        #           still malleable and the pos/type gradient is balanced.
+        #   'band'  keeps exactly the steps whose diffusion timestep t falls in the
+        #           inclusive range [ppo.t_lo, ppo.t_hi] (timestep units, 0=clean,
+        #           T-1=noisiest). Unlike first/last this ignores train_timesteps and
+        #           targets a middle band of the chain — a leverage/variance tradeoff:
+        #           moving toward the middle dials down both per-step malleability
+        #           (leverage) and per-step σ(t) (seed variance), since both scale
+        #           with σ(t). current_k becomes the number of selected steps.
         window = getattr(self.config.ppo, 'timestep_window', 'last')
 
-        # --- 2.7. SLICE TO K TIMESTEPS ('last' => [:, -k:], 'first' => [:, :k]) ---
-        for key in ("latents", "next_latents", "old_log_probs", "timesteps"):
-            if key in rollout_data_for_permute and rollout_data_for_permute[key] is not None:
-                if window == 'first':
-                    rollout_data_for_permute[key] = rollout_data_for_permute[key][:, :current_k]
-                else:
-                    rollout_data_for_permute[key] = rollout_data_for_permute[key][:, -current_k:]
+        # --- 2.7. SLICE TIMESTEPS (first => [:, :k], last => [:, -k:], band => mask) ---
+        if window == 'band':
+            t_lo = int(getattr(self.config.ppo, 't_lo'))
+            t_hi = int(getattr(self.config.ppo, 't_hi'))
+            if t_lo > t_hi:
+                t_lo, t_hi = t_hi, t_lo
+            # The reverse schedule is deterministic, so every molecule shares the
+            # same per-step timestep values; row 0 is representative (matches the
+            # positional-slicing assumption used by 'first'/'last').
+            t_row = rollout_data_for_permute["timesteps"][0]
+            keep = ((t_row >= t_lo) & (t_row <= t_hi)).nonzero(as_tuple=True)[0]
+            if keep.numel() == 0:
+                raise ValueError(
+                    f"timestep_window='band' selected 0 steps for t in "
+                    f"[{t_lo}, {t_hi}]; available t range is "
+                    f"[{int(t_row.min())}, {int(t_row.max())}]."
+                )
+            current_k = int(keep.numel())
+            for key in ("latents", "next_latents", "old_log_probs", "timesteps"):
+                if key in rollout_data_for_permute and rollout_data_for_permute[key] is not None:
+                    rollout_data_for_permute[key] = rollout_data_for_permute[key][:, keep]
+        else:
+            for key in ("latents", "next_latents", "old_log_probs", "timesteps"):
+                if key in rollout_data_for_permute and rollout_data_for_permute[key] is not None:
+                    if window == 'first':
+                        rollout_data_for_permute[key] = rollout_data_for_permute[key][:, :current_k]
+                    else:
+                        rollout_data_for_permute[key] = rollout_data_for_permute[key][:, -current_k:]
         
         # --- 2.8. PERMUTE TIMESTEPS (from original) ---
         with torch.no_grad():

@@ -65,6 +65,15 @@ ppo:
   max_grad_norm: 1.0
   gradient_accumulation_steps: 10
   train_timesteps: 500            # PPO trains on the last 500 of 1000 reverse steps
+  # Which part of the reverse chain to train on (t: 0=clean, 999=noisiest):
+  #   timestep_window: last   -> final train_timesteps low-noise steps (default)
+  #   timestep_window: first  -> initial train_timesteps high-noise steps
+  #   timestep_window: band   -> only steps with t in [t_lo, t_hi] (ignores
+  #                              train_timesteps); a middle band trades leverage
+  #                              for lower seed variance (both scale with sigma(t)).
+  # timestep_window: band
+  # t_lo: 400
+  # t_hi: 650
   target_kl: 0.03
   lr: 3.0e-5
   num_nodes_lig: 25
