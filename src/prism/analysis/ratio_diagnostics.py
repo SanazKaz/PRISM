@@ -193,8 +193,17 @@ class RatioDistributionLogger:
         xh_lig, xh_pock = algo.buffer.molecules         # full, not sliced
         lig_mask, poc_mask = algo.buffer.masks
 
-        M, T = old_log_probs.shape
+        # Alignment (mirror rollout_collector): old_log_probs is stored over the
+        # full chain (T+1 entries), but latents/next_latents/timesteps cover the T
+        # transitions (z_states[:, :-1] / [:, 1:]). The collector aligns by taking
+        # old_log_probs[:, -T:]; do the same so index ti pairs the SAME transition
+        # across all tensors (otherwise the ratio compares mismatched steps). The
+        # min() is a defensive guard against any further off-by-one.
         device = old_log_probs.device
+        M = old_log_probs.shape[0]
+        T = min(latents.shape[1], next_latents.shape[1], timesteps.shape[1])
+        if old_log_probs.shape[1] != T:
+            old_log_probs = old_log_probs[:, -T:]
 
         # Per-step accumulators for THIS measurement (summed over molecules/ranks).
         count = torch.zeros(T, device=device)
