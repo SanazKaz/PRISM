@@ -101,6 +101,17 @@ class PPOFineTuner(pl.LightningModule):
         self.freeze_parameters()
         self._init_grad_logging()
 
+        # --- [REMOVABLE] per-step importance-ratio distribution diagnostic ---------
+        # Off unless PRISM_RATIO_DIAG is set, so this has zero impact by default.
+        # Delete this block (and src/prism/analysis/ratio_diagnostics.py) to remove.
+        if os.environ.get("PRISM_RATIO_DIAG"):
+            from src.prism.analysis.ratio_diagnostics import attach_ratio_logging
+            self._ratio_diag = attach_ratio_logging(
+                self.ppo_algorithm,
+                every_n_epochs=int(os.environ.get("PRISM_RATIO_DIAG_EVERY", "5")),
+            )
+        # --------------------------------------------------------------------------
+
     # ------------------------------------------------------------------
     # Parameter freezing
     # ------------------------------------------------------------------
