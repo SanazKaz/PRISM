@@ -257,16 +257,17 @@ class RatioDistributionLogger:
                 for k in ('count', 'sum_d', 'sumsq_d', 'sum_r', 'sumsq_r', 'clip_count'):
                     self._acc[k] += cur[k]
 
-        # Only rank 0 derives stats + writes files (sums are already global).
-        if not _is_rank0():
-            return {}
-
+        # Derive on ALL ranks (sums were already all-reduced, so every rank gets
+        # identical stats). Only rank 0 writes files. Returning the same summary
+        # dict on every rank keeps log_dict(sync_dist=True) collectives balanced
+        # — a rank-0-only return can hang DDP at the epoch boundary.
         stats = self._derive(cur)
-        self._save(stats, self.out_dir / f'ratio_dist_ep{epoch:04d}', M=M, T=T, epoch=epoch)
-        if self.accumulate and self._acc is not None:
-            avg_stats = self._derive(self._acc)
-            self._save(avg_stats, self.out_dir / 'ratio_dist_avg', M=M, T=T, epoch=epoch,
-                       title_suffix=' (cumulative avg)')
+        if _is_rank0():
+            self._save(stats, self.out_dir / f'ratio_dist_ep{epoch:04d}', M=M, T=T, epoch=epoch)
+            if self.accumulate and self._acc is not None:
+                avg_stats = self._derive(self._acc)
+                self._save(avg_stats, self.out_dir / 'ratio_dist_avg', M=M, T=T, epoch=epoch,
+                           title_suffix=' (cumulative avg)')
 
         # Summary scalars for WandB (use this measurement, not the cumulative).
         rm = stats['ratio_mean']
