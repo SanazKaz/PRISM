@@ -126,19 +126,6 @@ class PPOAlgorithm:
             'pocket_indices': self.buffer.pocket_indices
         }
         
-        # --- 2.5b. ALIGN old_log_probs TO THE TRANSITION GRID ---
-        # old_log_probs spans the full chain (T+1 entries); latents/next_latents/
-        # timesteps span the T transitions (z_states[:, :-1] / [:, 1:]). The
-        # collector's convention is old_log_probs[:, -T:] (last T) — old_log_prob[i]
-        # pairs with latent[i-1]. The 'last' window slices [:, -k:] which preserves
-        # that, but 'first'/'band' index from the front, pairing new_log_prob[t]
-        # with old_log_prob[t-1] (off-by-one) and corrupting the PPO ratio/clip.
-        # Align here so every window is consistent; 'last' is unchanged by this.
-        _T = rollout_data_for_permute["timesteps"].shape[1]
-        _olp = rollout_data_for_permute["old_log_probs"]
-        if _olp is not None and _olp.shape[1] != _T:
-            rollout_data_for_permute["old_log_probs"] = _olp[:, -_T:]
-
         # --- 2.6. DETERMINE CURRENT K (from original code) ---
         current_k = self.config.ppo.train_timesteps
 
