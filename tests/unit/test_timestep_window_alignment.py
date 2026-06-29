@@ -22,7 +22,7 @@ pairing is: for every kept position, old_log_probs == latents_tag + 1.
 
 import torch
 
-from src.prism.ppo_tuner.ppo_algorithm import apply_timestep_window
+from src.prism.ppo_tuner.timestep_window import apply_timestep_window
 
 
 S = 8                     # stored states  -> old_log_probs has S columns
