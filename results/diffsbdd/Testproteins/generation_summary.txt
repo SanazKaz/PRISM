@@ -1,0 +1,6 @@
+checkpoint: /data/stat-cadd/stat0548/PRISM/checkpoints/crossdocked_fa_cond_temp.ckpt
+config:     /data/stat-cadd/stat0548/PRISM/configs/ppo_config.yaml
+model:      diffsbdd
+n_samples:  2
+
+PARP_dataset_5WS1_7U9: 2 mols, 100.0% valid, 1.0 min

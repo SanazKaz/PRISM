@@ -1,0 +1,5 @@
+target: PARP_dataset_9ETR_A1H64
+n_valid: 0
+n_generated: 0
+validity_rate: 0
+time_seconds: 0.22632336616516113

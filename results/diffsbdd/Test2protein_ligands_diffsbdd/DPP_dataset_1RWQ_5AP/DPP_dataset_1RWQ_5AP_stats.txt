@@ -1,0 +1,5 @@
+target: DPP_dataset_1RWQ_5AP
+n_valid: 1000
+n_generated: 1092
+validity_rate: 0.9716117216117216
+time_seconds: 565.3475711345673

@@ -1,0 +1,10 @@
+{
+    "MTB_dataset_4UNR_QZE": {
+        "pdb": "/data/stat-cadd/stat0548/PRISM/data/MTB_dataset/Test/4UNR.pdb",
+        "sdf": "/data/stat-cadd/stat0548/PRISM/data/MTB_dataset/Test/4UNR_QZE.sdf"
+      },
+      "MTB_dataset_6YT1_PK5": {
+        "pdb": "/data/stat-cadd/stat0548/PRISM/data/MTB_dataset/Test/6YT1.pdb",
+        "sdf": "/data/stat-cadd/stat0548/PRISM/data/MTB_dataset/Test/6YT1_PK5.sdf"
+      }
+}

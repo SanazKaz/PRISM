@@ -1,0 +1,5 @@
+target: DPP_dataset_2G63_AAF
+n_valid: 20
+n_generated: 84
+validity_rate: 0.9761904761904762
+time_seconds: 72.59588313102722

@@ -1,0 +1,5 @@
+target: DPP_dataset_2OGZ_U1N
+n_valid: 2
+n_generated: 2
+validity_rate: 1.0
+time_seconds: 8.549896717071533

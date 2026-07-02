@@ -1,0 +1,5 @@
+target: ABL_dataset_2HZ0_GIN
+n_valid: 1
+n_generated: 1
+validity_rate: 1.0
+time_seconds: 218.5890076160431

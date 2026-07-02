@@ -1,0 +1,5 @@
+target: DPP_dataset_3EIO_AJH
+n_valid: 2
+n_generated: 2
+validity_rate: 1.0
+time_seconds: 9.723266124725342

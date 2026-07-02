@@ -1,0 +1,1 @@
+/data/stat-cadd/stat0548/PRISM/data/cross_dock/processed_crossdock_noH_full_temp/test/5liu-X-rec-4gq0-qap-lig-tt-min-0-pocket10_5liu-X-rec-4gq0-qap-lig-tt-min-0.sdf 35.687992572784424

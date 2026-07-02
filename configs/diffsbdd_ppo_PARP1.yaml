@@ -1,0 +1,80 @@
+run_identifier: 'diffsbdd_ppo_PARP1'
+logdir: 'Log_Results'
+wandb_params:
+  mode: 'disabled'
+  entity: 'sanazkazeminia97'
+  project: 'CDPenalised_LogP'
+dataset: 'crossdock'
+datadir: '/data/stat-cadd/stat0548/PRISM/data/PARP_dataset/03_final_dataset'
+enable_progress_bar: False
+num_sanity_val_steps: 0
+batch_size: 64
+num_workers: 4
+gpus: 1
+n_epochs: 1
+
+# Layers to fine-tune; all others are frozen.
+# DiffSBDD layer names follow the pattern 'e_block_N' (0-indexed, 5 total).
+freeze_except: ['e_block_3', 'e_block_4']
+
+model:
+  total_timesteps: 500   # full DiffSBDD diffusion chain length
+
+ppo:
+  num_outer_epochs: 60
+  num_inner_epochs: 2
+  n_steps: 128                    # molecules generated per rollout
+  ligand_chunk_size: 64           # reduce if OOM
+  batch_size: 128
+  clip_range: 0.1
+  entropy_coef: 0.001
+  kl_coef: 0.0
+  max_grad_norm: 1.0
+  gradient_accumulation_steps: 42
+  train_timesteps: 300            # PPO trains on the last N reverse steps
+  target_kl: 0.03
+  lr: 3.0e-5
+  num_nodes_lig: 25
+
+docking_params:
+  dataset_info: custom
+
+reward_params:
+  target_name: 'PARP1'
+  aggregation: 'weighted_sum'
+  rewards:
+    qed: 0.0
+    sa_score: 0.0
+    lipinski: 0.0
+    bertz: 0.0
+    sucos: 0.0
+    interaction_fingerprints: 0.0
+    feature_density: 0.0
+    geometry_checks: 0.0
+    flatness_checks: 0.0
+    aromatic_counter: 0.0
+    aromatic_anchor: 0.0
+    multi_features: 0.0
+    silly_walks: 0.0
+    property_2d: 0.0
+    smina_docking: 0.0
+    custom_qed: 0.0
+    custom_sa_score: 0.0
+    penalised_logp: 0.0
+    target_profile: 1.0
+  reward_paths:
+    feature_density: '/data/stat-cadd/wolf7055/PRISM/data/BRD4_BD1/hotspot_analysis/BRD4_BD1_hotspot_data.pkl'
+    aromatic_anchor: 'src/prism/reward/scoring/reward_data/ampc_hotspot_global_centered_eps0.5_min10_aromatic5.pkl'
+    multi_features: 'src/prism/reward/scoring/reward_data/ampc_hotspot_global_centered_eps0.5_min10_aromatic5.pkl'
+    silly_walks: 'src/prism/reward/scoring/reward_data/chembl_drugs.smi'
+    property_2d: 'src/prism/reward/scoring/reward_data/propeties_ref.json'
+
+eval_epochs: 10
+visualize_sample_epoch: 99999
+visualize_chain_epoch: 999999
+eval_params:
+  n_eval_samples: 20
+  eval_batch_size: 20
+  smiles_file: '/data/stat-cadd/stat0548/PRISM/data/cross_dock/processed_crossdock_noH_full_temp/train_smiles.npy'
+  n_visualize_samples: 0
+  keep_frames: 0

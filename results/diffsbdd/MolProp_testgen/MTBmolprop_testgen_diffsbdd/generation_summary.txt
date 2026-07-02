@@ -1,0 +1,7 @@
+checkpoint: /data/stat-cadd/stat0548/PRISM/Log_Results/training_molprop/diffsbdd/diffsbdd_ppo_MTB/checkpoints/MTB_dataset/seed=42/epoch=58-reward=0.14.ckpt
+config:     /data/stat-cadd/stat0548/PRISM/configs/diffsbdd_ppo_MTB.yaml
+model:      diffsbdd
+n_samples:  1000
+
+MTB_dataset_4UNR_QZE: 0 mols, 0.0% valid, 0.4 min
+MTB_dataset_6YT1_PK5: 0 mols, 0.0% valid, 0.5 min

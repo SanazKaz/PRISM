@@ -1,0 +1,5 @@
+target: DPP_dataset_3SWW_KXB
+n_valid: 1000
+n_generated: 1092
+validity_rate: 0.9853479853479854
+time_seconds: 597.2583277225494

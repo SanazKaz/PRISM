@@ -1,0 +1,5 @@
+target: MTB_dataset_4UNR_QZE
+n_valid: 1000
+n_generated: 1092
+validity_rate: 0.9798534798534798
+time_seconds: 759.7705342769623

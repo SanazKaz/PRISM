@@ -1,0 +1,1 @@
+/data/stat-cadd/stat0548/PRISM/data/cross_dock/processed_crossdock_noH_full_temp/test/4bel-A-rec-2ewy-dbo-lig-tt-min-0-pocket10_4bel-A-rec-2ewy-dbo-lig-tt-min-0.sdf 51.67479658126831

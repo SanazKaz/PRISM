@@ -1,0 +1,22 @@
+checkpoint: /data/stat-cadd/stat0548/PRISM/checkpoints/crossdocked_fa_cond_temp.ckpt
+config:     /data/stat-cadd/stat0548/PRISM/configs/ppo_config.yaml
+model:      diffsbdd
+n_samples:  1000
+
+ABL_dataset_2HZ0_GIN: 1000 mols, 94.0% valid, 15.1 min
+ABL_dataset_2HZI_JIN: 1000 mols, 97.1% valid, 10.8 min
+ABL_dataset_5HU9_66K: 1000 mols, 94.8% valid, 15.3 min
+DPP_dataset_1RWQ_5AP: 1000 mols, 97.2% valid, 9.4 min
+DPP_dataset_2G63_AAF: 1000 mols, 97.3% valid, 11.5 min
+DPP_dataset_2OGZ_U1N: 1000 mols, 97.7% valid, 10.9 min
+DPP_dataset_2QJR_PZF: 1000 mols, 96.7% valid, 13.1 min
+DPP_dataset_3EIO_AJH: 1000 mols, 95.6% valid, 13.8 min
+DPP_dataset_3SWW_KXB: 1000 mols, 98.5% valid, 10.0 min
+DPP_dataset_3VJM_W61: 1000 mols, 97.5% valid, 11.7 min
+DPP_dataset_5KBY_6RL: 1000 mols, 97.8% valid, 10.8 min
+MTB_dataset_4UNR_QZE: 1000 mols, 98.0% valid, 12.7 min
+MTB_dataset_6YT1_PK5: 1000 mols, 97.8% valid, 10.9 min
+PARP_dataset_7AAC_78P: 1000 mols, 96.0% valid, 9.2 min
+PARP_dataset_7ONT_VKQ: 1000 mols, 95.0% valid, 15.2 min
+PARP_dataset_9ETQ_A1H63: 0 mols, 0.0% valid, 0.0 min
+PARP_dataset_9ETR_A1H64: 0 mols, 0.0% valid, 0.0 min

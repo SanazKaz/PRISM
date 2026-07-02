@@ -1,0 +1,5 @@
+target: PARP_dataset_7AAC_78P
+n_valid: 1000
+n_generated: 1092
+validity_rate: 0.9633699633699634
+time_seconds: 782.6042454242706

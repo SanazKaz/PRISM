@@ -1,0 +1,5 @@
+target: PARP_dataset_7ONT_VKQ
+n_valid: 2
+n_generated: 2
+validity_rate: 1.0
+time_seconds: 9.578144073486328

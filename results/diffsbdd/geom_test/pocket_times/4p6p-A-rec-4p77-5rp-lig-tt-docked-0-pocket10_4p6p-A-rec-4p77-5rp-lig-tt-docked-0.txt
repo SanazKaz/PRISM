@@ -1,0 +1,1 @@
+/data/stat-cadd/stat0548/PRISM/data/cross_dock/processed_crossdock_noH_full_temp/test/4p6p-A-rec-4p77-5rp-lig-tt-docked-0-pocket10_4p6p-A-rec-4p77-5rp-lig-tt-docked-0.sdf 35.75456881523132

@@ -1,0 +1,1 @@
+/data/stat-cadd/stat0548/PRISM/data/cross_dock/processed_crossdock_noH_full_temp/test/3nfb-A-rec-3nfb-oae-lig-tt-docked-2-pocket10_3nfb-A-rec-3nfb-oae-lig-tt-docked-2.sdf 35.58328986167908

@@ -1,0 +1,6 @@
+checkpoint: /data/stat-cadd/stat0548/PRISM/checkpoints/targetdiff_pretrained_models/targetdiff_pretrained_models/pretrained_diffusion.pt
+config:     /data/stat-cadd/stat0548/PRISM/configs/targetdiff_ppo.yaml
+model:      targetdiff
+n_samples:  1000
+
+ABL_dataset_5HU9_66K: 0 mols, 0.0% valid, 381.9 min

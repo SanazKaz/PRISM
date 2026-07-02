@@ -1,0 +1,1 @@
+/data/stat-cadd/stat0548/PRISM/data/cross_dock/processed_crossdock_noH_full_temp/test/2zen-A-rec-2afx-1bn-lig-tt-docked-7-pocket10_2zen-A-rec-2afx-1bn-lig-tt-docked-7.sdf 26.241480112075806

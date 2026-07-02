@@ -1,0 +1,35 @@
+{
+
+  "DPP_dataset_1RWQ_5AP": {
+    "pdb": "/data/stat-cadd/stat0548/PRISM/data/DPP_dataset/Test/1RWQ.pdb",
+    "sdf": "/data/stat-cadd/stat0548/PRISM/data/DPP_dataset/Test/1RWQ_5AP.sdf"
+  },
+  "DPP_dataset_2G63_AAF": {
+    "pdb": "/data/stat-cadd/stat0548/PRISM/data/DPP_dataset/Test/2G63.pdb",
+    "sdf": "/data/stat-cadd/stat0548/PRISM/data/DPP_dataset/Test/2G63_AAF.sdf"
+  },
+  "DPP_dataset_2OGZ_U1N": {
+    "pdb": "/data/stat-cadd/stat0548/PRISM/data/DPP_dataset/Test/2OGZ.pdb",
+    "sdf": "/data/stat-cadd/stat0548/PRISM/data/DPP_dataset/Test/2OGZ_U1N.sdf"
+  },
+  "DPP_dataset_2QJR_PZF": {
+    "pdb": "/data/stat-cadd/stat0548/PRISM/data/DPP_dataset/Test/2QJR.pdb",
+    "sdf": "/data/stat-cadd/stat0548/PRISM/data/DPP_dataset/Test/2QJR_PZF.sdf"
+  },
+  "DPP_dataset_3EIO_AJH": {
+    "pdb": "/data/stat-cadd/stat0548/PRISM/data/DPP_dataset/Test/3EIO.pdb",
+    "sdf": "/data/stat-cadd/stat0548/PRISM/data/DPP_dataset/Test/3EIO_AJH.sdf"
+  },
+  "DPP_dataset_3SWW_KXB": {
+    "pdb": "/data/stat-cadd/stat0548/PRISM/data/DPP_dataset/Test/3SWW.pdb",
+    "sdf": "/data/stat-cadd/stat0548/PRISM/data/DPP_dataset/Test/3SWW_KXB.sdf"
+  },
+  "DPP_dataset_3VJM_W61": {
+    "pdb": "/data/stat-cadd/stat0548/PRISM/data/DPP_dataset/Test/3VJM.pdb",
+    "sdf": "/data/stat-cadd/stat0548/PRISM/data/DPP_dataset/Test/3VJM_W61.sdf"
+  },
+  "DPP_dataset_5KBY_6RL": {
+    "pdb": "/data/stat-cadd/stat0548/PRISM/data/DPP_dataset/Test/5KBY.pdb",
+    "sdf": "/data/stat-cadd/stat0548/PRISM/data/DPP_dataset/Test/5KBY_6RL.sdf"
+  }
+}

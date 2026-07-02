@@ -1,0 +1,5 @@
+target: MTB_dataset_6YT1_PK5
+n_valid: 1000
+n_generated: 1092
+validity_rate: 0.9761904761904762
+time_seconds: 861.5499448776245

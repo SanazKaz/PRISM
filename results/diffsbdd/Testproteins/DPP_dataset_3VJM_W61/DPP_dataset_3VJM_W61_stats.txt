@@ -1,0 +1,5 @@
+target: DPP_dataset_3VJM_W61
+n_valid: 20
+n_generated: 84
+validity_rate: 1.0
+time_seconds: 73.20031380653381

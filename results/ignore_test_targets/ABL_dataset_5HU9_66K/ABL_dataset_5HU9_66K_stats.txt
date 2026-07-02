@@ -1,0 +1,5 @@
+target: ABL_dataset_5HU9_66K
+n_valid: 0
+n_generated: 1
+validity_rate: 0.0
+time_seconds: 126.38254761695862

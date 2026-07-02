@@ -1,0 +1,5 @@
+target: PARP_dataset_5WS1_7U9
+n_valid: 1000
+n_generated: 1092
+validity_rate: 0.9642857142857143
+time_seconds: 684.225748538971

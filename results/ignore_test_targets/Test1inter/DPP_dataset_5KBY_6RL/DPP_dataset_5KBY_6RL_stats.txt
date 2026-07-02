@@ -1,0 +1,5 @@
+target: DPP_dataset_5KBY_6RL
+n_valid: 2
+n_generated: 2
+validity_rate: 1.0
+time_seconds: 9.094422817230225

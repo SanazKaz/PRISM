@@ -1,0 +1,5 @@
+target: DPP_dataset_2QJR_PZF
+n_valid: 1000
+n_generated: 1092
+validity_rate: 0.967032967032967
+time_seconds: 786.0852611064911

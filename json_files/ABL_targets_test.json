@@ -1,0 +1,14 @@
+{
+  "ABL_dataset_2HZ0_GIN": {
+      "pdb": "/data/stat-cadd/stat0548/PRISM/data/ABL_dataset/Test/2HZ0.pdb",
+      "sdf": "/data/stat-cadd/stat0548/PRISM/data/ABL_dataset/Test/2HZ0_GIN.sdf"
+  },
+  "ABL_dataset_2HZI_JIN": {
+      "pdb": "/data/stat-cadd/stat0548/PRISM/data/ABL_dataset/Test/2HZI.pdb",
+      "sdf": "/data/stat-cadd/stat0548/PRISM/data/ABL_dataset/Test/2HZI_JIN.sdf"
+  },
+  "ABL_dataset_5HU9_66K": {
+      "pdb": "/data/stat-cadd/stat0548/PRISM/data/ABL_dataset/Test/5HU9.pdb",
+      "sdf": "/data/stat-cadd/stat0548/PRISM/data/ABL_dataset/Test/5HU9_66K.sdf"
+  }
+}

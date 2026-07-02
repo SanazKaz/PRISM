@@ -1,0 +1,5 @@
+target: ABL_dataset_2HZI_JIN
+n_valid: 0
+n_generated: 0
+validity_rate: 0
+time_seconds: 27.366957187652588

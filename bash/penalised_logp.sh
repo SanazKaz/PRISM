@@ -6,19 +6,18 @@
 #SBATCH --partition=short
 #SBATCH --time 04:00:00
 #SBATCH --job-name=penalised_logp
-#SBATCH --mail-user=wolf7055@ox.ac.uk
+#SBATCH --mail-user=stat0548@ox.ac.uk
 #SBATCH --mail-type=END,FAIL
 #SBATCH --array=0-1
 #SBATCH --output=jobs_files/penalised_logp_%a.log
 #SBATCH --error=jobs_files/penalised_logp_%a.log
 
 module purge
-module load Anaconda3
-source activate /data/stat-cadd/wolf7055/conda/envs/PRISM_25
+source /data/stat-cadd/stat0548/PRISM/.venv/bin/activate
 
 
 # --- 1. SETUP PATHS ---
-export PROJECT_ROOT="/data/stat-cadd/wolf7055/PRISM"
+export PROJECT_ROOT="/data/stat-cadd/stat0548/PRISM"
 
 SEEDS=(42 976)
 SEED=${SEEDS[$SLURM_ARRAY_TASK_ID]}

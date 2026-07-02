@@ -1,0 +1,1 @@
+/data/stat-cadd/stat0548/PRISM/data/cross_dock/processed_crossdock_noH_full_temp/test/3tym-A-rec-3n5v-xfh-lig-tt-min-0-pocket10_3tym-A-rec-3n5v-xfh-lig-tt-min-0.sdf 37.43793797492981

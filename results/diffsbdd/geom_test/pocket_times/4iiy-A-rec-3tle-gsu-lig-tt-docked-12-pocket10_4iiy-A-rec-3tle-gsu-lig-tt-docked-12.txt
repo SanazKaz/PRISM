@@ -1,0 +1,1 @@
+/data/stat-cadd/stat0548/PRISM/data/cross_dock/processed_crossdock_noH_full_temp/test/4iiy-A-rec-3tle-gsu-lig-tt-docked-12-pocket10_4iiy-A-rec-3tle-gsu-lig-tt-docked-12.sdf 47.021663665771484

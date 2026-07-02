@@ -1,0 +1,15 @@
+{
+    "PARP_dataset_5WS1_7U9": {
+        "pdb": "/data/stat-cadd/stat0548/PRISM/data/PARP_dataset/Test/5WS1.pdb",
+        "sdf": "/data/stat-cadd/stat0548/PRISM/data/PARP_dataset/Test/5WS1_7U9.sdf"
+      },
+      "PARP_dataset_7AAC_78P": {
+        "pdb": "/data/stat-cadd/stat0548/PRISM/data/PARP_dataset/Test/7AAC.pdb",
+        "sdf": "/data/stat-cadd/stat0548/PRISM/data/PARP_dataset/Test/7AAC_78P.sdf"
+      },
+      "PARP_dataset_7ONT_VKQ": {
+        "pdb": "/data/stat-cadd/stat0548/PRISM/data/PARP_dataset/Test/7ONT.pdb",
+        "sdf": "/data/stat-cadd/stat0548/PRISM/data/PARP_dataset/Test/7ONT_VKQ.sdf"
+      }
+    
+}

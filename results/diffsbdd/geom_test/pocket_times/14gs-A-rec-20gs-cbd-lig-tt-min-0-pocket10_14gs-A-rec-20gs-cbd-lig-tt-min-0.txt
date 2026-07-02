@@ -1,0 +1,1 @@
+/data/stat-cadd/stat0548/PRISM/data/cross_dock/processed_crossdock_noH_full_temp/test/14gs-A-rec-20gs-cbd-lig-tt-min-0-pocket10_14gs-A-rec-20gs-cbd-lig-tt-min-0.sdf 52.18322491645813
