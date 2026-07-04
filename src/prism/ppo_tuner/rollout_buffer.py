@@ -158,14 +158,11 @@ class RolloutBuffer:
 
         # Get all unique molecule IDs from the mask — DO NOT shuffle here (matches old code)
         all_mol_ids_np = np.unique(lig_mask_full.cpu().numpy())
-        print(f"All molecule IDs: {all_mol_ids_np}")
 
         # Create minibatches by positional slices over the unique IDs
         for i in range(0, num_molecules, ppo_batch_size):
             start_idx = i
-            print(f"Start index: {start_idx}")
             end_idx = min(i + ppo_batch_size, num_molecules)
-            print(f"End index: {end_idx}")
             # Pick molecule IDs for this minibatch (positional selection)
             selected_ids = all_mol_ids_np[start_idx:end_idx]
             

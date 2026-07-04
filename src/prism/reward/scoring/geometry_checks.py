@@ -132,5 +132,4 @@ class PoseBustersGeometryReward(BaseReward):
                 traceback.print_exc()
                 scores.append(0.0)
 
-        print(f"Geometry checks scores: {scores}")
         return torch.tensor(scores, dtype=torch.float32)
