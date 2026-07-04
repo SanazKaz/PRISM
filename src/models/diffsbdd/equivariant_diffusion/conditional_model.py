@@ -525,58 +525,9 @@ class ConditionalDDPM(EnVariationalDiffusion):
         )
         
         log_prob = scatter_mean(log_prob_atom, lig_mask, dim=0)
-
+        
         return log_prob
 
-    def log_p_zs_given_zt_channels(self, s, t, z_t, z_s, xh_pock, lig_mask, pock_mask):
-        """Like log_p_zs_given_zt but returns (log_p_pos, log_p_v) separately.
-
-        Both channels are Gaussian (continuous DDPM); splitting by dimension:
-          log_p_pos — Gaussian over the n_dims coordinate dims
-          log_p_v   — Gaussian over the atom_nf feature dims
-
-        NOTE: sigma here is a per-atom *scalar* broadcast of shape [N, 1] (it comes
-        from inflate_batch_array, which only inflates the molecule axis). It is NOT
-        per-dimension, so we must not slice it by channel — we broadcast it against
-        each channel's `diff` slice and scale the log-normalization term by the
-        channel's dimension count. The quadratic terms (the only part carrying
-        gradient to the network params) split exactly as n_dims + atom_nf.
-        """
-        gamma_s = self.gamma(s)
-        gamma_t = self.gamma(t)
-
-        sigma2_t_given_s, sigma_t_given_s, alpha_t_given_s = \
-            self.sigma_and_alpha_t_given_s(gamma_t, gamma_s, z_t)
-
-        sigma_s = self.sigma(gamma_s, target_tensor=z_t)
-        sigma_t = self.sigma(gamma_t, target_tensor=z_t)
-
-        eps_t_lig, _ = self.dynamics(z_t, xh_pock, t, lig_mask, pock_mask)
-
-        mu_lig = z_t / alpha_t_given_s[lig_mask] - \
-                 (sigma2_t_given_s / alpha_t_given_s / sigma_t)[lig_mask] * eps_t_lig
-
-        sigma = sigma_t_given_s * sigma_s / sigma_t
-        sigma_sq_lig = sigma[lig_mask] ** 2 + 1e-8          # [N, 1] broadcast scalar
-        log_2pi_sig = torch.log(2 * torch.pi * sigma_sq_lig).squeeze(-1)   # [N]
-        diff = z_s - mu_lig
-
-        # Position channel: first n_dims dimensions
-        diff_pos = diff[:, :self.n_dims]
-        log_p_pos_atom = -0.5 * (
-            (diff_pos ** 2 / sigma_sq_lig).sum(dim=1) +
-            diff_pos.shape[1] * log_2pi_sig
-        )
-
-        # Atom-type channel: remaining atom_nf dimensions
-        diff_v = diff[:, self.n_dims:]
-        log_p_v_atom = -0.5 * (
-            (diff_v ** 2 / sigma_sq_lig).sum(dim=1) +
-            diff_v.shape[1] * log_2pi_sig
-        )
-
-        return (scatter_mean(log_p_pos_atom, lig_mask, dim=0),
-                scatter_mean(log_p_v_atom,   lig_mask, dim=0))
 
 
     @torch.no_grad()
