@@ -91,3 +91,11 @@ eval_params:
   smiles_file: /data/stat-cadd/wolf7055/PRISM/data/BRD4_BD1/03_final_dataset/train_smiles.npy
   n_visualize_samples: 0
   keep_frames: 0
+
+# Gradient / layer-diagnostics logging (off by default; toggle per-run).
+grad_logging:
+  enabled: false
+  every_n_epochs: 1
+  log_histogram: true
+  per_block_histogram: true
+  max_hist_elements: 1000000
