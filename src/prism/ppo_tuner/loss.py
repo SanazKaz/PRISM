@@ -34,27 +34,8 @@ def compute_ppo_loss(policy_network, minibatch, timestep_idx, config):
     # dbg_tensor("compute_loss/old_log_probs", old_log_probs)
     # dbg_tensor("compute_loss/advantages", minibatch['advantages'])
                         
-    # Forward pass through the policy network to get new log probabilities.
-    #
-    # Channel-balanced PPO (optional): the policy log-prob is log_p_pos + log_p_v
-    # (continuous coordinates + categorical atom types). The Gaussian coordinate
-    # term is orders of magnitude larger in both value and gradient, so without
-    # rebalancing it swamps the atom-type term and atom-identity rewards
-    # (QED/SA/aromatic) receive almost no effective gradient. config.ppo.channel_grad_scale
-    # {pos, v} reweights how much each channel's GRADIENT counts, while leaving the
-    # log-prob VALUE (and hence the PPO importance ratio) exactly unchanged. Coordinates
-    # are never switched off (s_pos stays > 0) — this is a 3D model and the geometry must
-    # keep learning; the knob only stops coords from drowning out atom types.
-    scales = getattr(config.ppo, 'channel_grad_scale', None)
-    s_pos = float(getattr(scales, 'pos', 1.0)) if scales is not None else 1.0
-    s_v   = float(getattr(scales, 'v',   1.0)) if scales is not None else 1.0
-    if s_pos == 1.0 and s_v == 1.0:
-        # Exact original behaviour (single combined forward).
-        new_log_probs = _get_log_probs(policy_network, timestep_batch, config.model.total_timesteps)
-    else:
-        lp_pos, lp_v = _get_log_prob_channels(
-            policy_network, timestep_batch, config.model.total_timesteps)
-        new_log_probs = _scale_grad(lp_pos, s_pos) + _scale_grad(lp_v, s_v)
+    # Forward pass through the policy network to get new log probabilities
+    new_log_probs = _get_log_probs(policy_network, timestep_batch, config.model.total_timesteps)
     
     entropy = (-new_log_probs).mean()
     
@@ -131,43 +112,4 @@ def _get_log_probs(policy_network, timestep_batch, total_timesteps):
         z_t, z_s,
         xh_pock,
         new_lig_mask, new_poc_mask
-    )
-
-
-def _scale_grad(x, s):
-    """Straight-through gradient scaling: returns a tensor equal in VALUE to x
-    but whose gradient is multiplied by s.
-
-        forward:  s*x + (1-s)*x.detach()  ==  x
-        backward: d/dx = s
-
-    Used to reweight a log-prob channel's contribution to the gradient without
-    changing the PPO importance ratio (which depends only on the value).
-    """
-    if s == 1.0:
-        return x
-    return s * x + (1.0 - s) * x.detach()
-
-
-def _get_log_prob_channels(policy_network, timestep_batch, total_timesteps):
-    """Like _get_log_probs but returns the two additive channels separately:
-    (log_p_pos, log_p_v). Re-indexes per-atom masks identically to _get_log_probs
-    so the two paths are numerically consistent (their sum equals _get_log_probs)."""
-    z_t, z_s = timestep_batch["latents"], timestep_batch["next_latents"]
-    xh_lig, xh_pock = timestep_batch["molecules"]
-    lig_mask, poc_mask = timestep_batch["masks"]
-    t_int = timestep_batch["timestep"].float()
-    device = z_t.device
-
-    unique_ids, new_lig_mask = torch.unique(lig_mask, return_inverse=True)
-    mapping = -torch.ones(int(poc_mask.max()) + 1, dtype=torch.long, device=device)
-    mapping[unique_ids] = torch.arange(len(unique_ids), device=device)
-    new_poc_mask = mapping[poc_mask]
-
-    s_int = torch.clamp(t_int - 1, min=0)
-    t = (t_int / total_timesteps).unsqueeze(1)
-    s = (s_int / total_timesteps).unsqueeze(1)
-
-    return policy_network.log_p_zs_given_zt_channels(
-        s, t, z_t, z_s, xh_pock, new_lig_mask, new_poc_mask
     )

@@ -157,11 +157,17 @@ class LayerDiagnostics:
             }
 
             if self._capture_attention:
+                # Attention-entropy capture requires an in-forward hook the vendored
+                # UniTransformer doesn't expose, so these stay NaN unless a layer
+                # opts in via a _last_attn_entropy attribute. getattr keeps this
+                # robust against the stock (unmodified) vendor module.
                 x2h, h2x = self._attn_layers[l_idx]
-                if x2h is not None and x2h._last_attn_entropy is not None:
-                    rec['attn_entropy_x2h'] = float(x2h._last_attn_entropy)
-                if h2x is not None and h2x._last_attn_entropy is not None:
-                    rec['attn_entropy_h2x'] = float(h2x._last_attn_entropy)
+                x2h_ent = getattr(x2h, '_last_attn_entropy', None) if x2h is not None else None
+                h2x_ent = getattr(h2x, '_last_attn_entropy', None) if h2x is not None else None
+                if x2h_ent is not None:
+                    rec['attn_entropy_x2h'] = float(x2h_ent)
+                if h2x_ent is not None:
+                    rec['attn_entropy_h2x'] = float(h2x_ent)
 
             self._cur[l_idx] = rec
 
