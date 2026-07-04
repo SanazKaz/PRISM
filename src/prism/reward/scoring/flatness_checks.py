@@ -32,7 +32,7 @@ class PoseBustersFlatnessReward(BaseReward):
     Penalty is proportional to how much the deviation exceeds/falls below threshold.
     """
     
-    def __init__(self, threshold_flatness: float = 0.1, penalty_scale: float = 5.0):
+    def __init__(self, threshold_flatness: float = 0.1, penalty_scale: float = 2.0):
         """
         Args:
             threshold_flatness: Distance (Angstrom) cutoff for planarity.

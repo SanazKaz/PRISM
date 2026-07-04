@@ -36,6 +36,23 @@ class LigandPocketDataModule(pl.LightningDataModule):
             self.val_dataset = ProcessedLigandPocketDataset(
                 self.datadir / 'val.npz', transform=self.data_transform
             )
+
+            # Diagnostic flag: overfit a SINGLE pocket during training to isolate
+            # whether the constantly-changing pocket is what makes the model
+            # resistant to reward control. TRAIN ONLY -- val/test are loaded and
+            # used exactly as normal, so validation metrics stay comparable.
+            if getattr(self.config, 'train_single_pocket', False):
+                names = [str(n) for n in self.train_dataset.data['names']]
+                # A pocket is the receptor portion of the name (before '.pdb_').
+                pocket_key = lambda n: n.split('.pdb_')[0] if '.pdb_' in n else n
+                first_key = pocket_key(names[0])
+                keep = [i for i, n in enumerate(names) if pocket_key(n) == first_key]
+                self.train_dataset = torch.utils.data.Subset(self.train_dataset, keep)
+                print(
+                    f"[DataModule] train_single_pocket=True -> TRAIN restricted to the "
+                    f"first pocket '{first_key}' ({len(keep)} ligand "
+                    f"entr{'y' if len(keep) == 1 else 'ies'}). VAL/TEST UNCHANGED."
+                )
         if stage == 'test' or stage is None:
             self.test_dataset = ProcessedLigandPocketDataset(
                 self.datadir / 'test.npz', transform=self.data_transform
@@ -59,13 +76,26 @@ class LigandPocketDataModule(pl.LightningDataModule):
             sampler = None
             shuffle = True # careful in distributed training
 
+        # A torch Subset (single-pocket diagnostic) doesn't expose collate_fn,
+        # so reach through to the underlying dataset for it.
+        base_ds = (
+            self.train_dataset.dataset
+            if isinstance(self.train_dataset, torch.utils.data.Subset)
+            else self.train_dataset
+        )
+
+        batch_size = getattr(self.config, 'batch_size', None) or 1
+        if batch_size != self.config.batch_size:
+            print(f"[DataModule] WARNING: batch_size was {self.config.batch_size!r}, defaulting to 1. "
+                  "Set batch_size explicitly in your config to suppress this warning.")
+
         return DataLoader(
             self.train_dataset,
-            batch_size=self.config.batch_size,
+            batch_size=batch_size,
             sampler=sampler,
             shuffle=shuffle,
             num_workers=self.config.num_workers,
-            collate_fn=self.train_dataset.collate_fn,
+            collate_fn=base_ds.collate_fn,
             pin_memory=True
         )
 

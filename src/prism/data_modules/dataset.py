@@ -51,6 +51,10 @@ class ProcessedLigandPocketDataset(Dataset):
 
     @staticmethod
     def collate_fn(batch):
+        # When batch_size=None in DataLoader, auto-batching is disabled and a
+        # single dict is passed directly instead of a list of dicts.
+        if isinstance(batch, dict):
+            batch = [batch]
         out = {}
         for prop in batch[0].keys():
 
