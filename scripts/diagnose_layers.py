@@ -164,65 +164,6 @@ def _grad_norm(loss, params):
 
 
 # ----------------------------------------------------------------------
-# Diagnostic 1 — ratio / clip untangler
-# ----------------------------------------------------------------------
-
-def run_ratio_sanity(policy, minibatch, probe_idxs, total_timesteps, args, config, label):
-    """Show what each channel-weighting scheme does to the PPO ratio + clip frac.
-
-    Three schemes, all measured against the *stored* old_log_probs (= log_p_pos +
-    log_p_v from the sampling policy):
-      raw            new = log_p_pos + log_p_v                  (recomputed, same weights)
-      value-reweight new = α·log_p_pos + β·log_p_v              (the _step_log_prob edit)
-      grad-scale     value identical to raw → ratio identical to raw, only the
-                     gradient is rescaled (config.ppo.channel_grad_scale)
-
-    raw must give ratio≈1 / clipfrac≈0 (sanity). The value-reweight shifts the
-    *value*, so the ratio moves even with identical weights → clip spikes. That is
-    why putting α/β inside _step_log_prob destabilises clipping, while grad-scale
-    leaves it untouched.
-    """
-    clip_range = float(config.ppo.clip_range)
-    a, b = float(args.alpha_pos), float(args.beta_v)
-    rows = {'raw': [], 'value_reweight': []}
-    for idx in probe_idxs:
-        old = minibatch["old_log_probs"][:, idx].detach()
-        with torch.no_grad():
-            lp_pos, lp_v = _channels_for_timestep(policy, minibatch, idx, total_timesteps)
-        new_raw = lp_pos + lp_v
-        new_vr = a * lp_pos + b * lp_v
-        for name, new in (('raw', new_raw), ('value_reweight', new_vr)):
-            ratio = torch.exp(new - old)
-            rows[name].append((
-                ratio.mean().item(), ratio.min().item(), ratio.max().item(),
-                (ratio - 1.0).abs().gt(clip_range).float().mean().item(),
-            ))
-
-    def _agg(rs):
-        arr = np.array(rs)
-        return dict(ratio_mean=float(arr[:, 0].mean()),
-                    ratio_min=float(arr[:, 1].min()),
-                    ratio_max=float(arr[:, 2].max()),
-                    clipfrac=float(arr[:, 3].mean()))
-
-    out = {'raw': _agg(rows['raw']), 'value_reweight': _agg(rows['value_reweight']),
-           'alpha_pos': a, 'beta_v': b, 'clip_range': clip_range}
-    # grad-scale leaves the *value* identical to raw, so its ratio == raw's.
-    out['grad_scale'] = dict(out['raw'], note='value identical to raw; only gradient rescaled')
-
-    print(f"\n--- ratio / clip untangler: {label}  (clip_range={clip_range}) ---")
-    print(f"{'scheme':>16} {'ratio_mean':>11} {'ratio_min':>11} {'ratio_max':>11} {'clipfrac':>9}")
-    for name in ('raw', 'value_reweight', 'grad_scale'):
-        r = out[name]
-        print(f"{name:>16} {r['ratio_mean']:>11.3f} {r['ratio_min']:>11.3e} "
-              f"{r['ratio_max']:>11.3e} {r['clipfrac']:>9.3f}")
-    print(f"  α(pos)={a}  β(v)={b}.  raw≈1/clipfrac≈0 is the sanity check; a high "
-          f"value_reweight clipfrac\n  is the α/β-in-_step_log_prob instability. "
-          f"Prefer channel_grad_scale (grad-scale row) — same ratio as raw.")
-    return out
-
-
-# ----------------------------------------------------------------------
 # Diagnostic 2 — denoising trajectory (dense per-timestep, NOT averaged)
 # ----------------------------------------------------------------------
 
@@ -511,18 +452,11 @@ def analyse_checkpoint(label, ckpt, config, pocket_batch, args, device, reconstr
         'grad_v_norm': float(np.nanmean(gv)) if gv else math.nan,
         'reward_mean': float(rollout['rewards'].mean().item()),
     }
-    # Recommended channel_grad_scale.v (with pos=1.0) to make the atom-type
-    # channel's gradient comparable to the coordinate channel's.
-    gp, gvn = channels['grad_pos_norm'], channels['grad_v_norm']
-    channels['recommended_s_v'] = (gp / gvn) if (gvn and gvn > 0) else math.nan
 
     # --- optional extra diagnostics (gated by flags) ---
     out = Path(args.out_dir)
     title = f"{args.model_type} ({args.reward or 'config reward'}) — {label}"
     extra = {}
-    if getattr(args, 'ratio_sanity', False):
-        extra['ratio_sanity'] = run_ratio_sanity(
-            policy, minibatch, probe_idxs, total_timesteps, args, config, label)
     if getattr(args, 'trajectory', False):
         extra['trajectory'] = run_trajectory(
             policy, minibatch, args.trajectory_steps, total_timesteps,
@@ -587,12 +521,6 @@ def main():
                     help='How many diffusion steps to probe (spread across the chain) '
                          'for the layer/channel summary and decision lens.')
     # --- optional diagnostic modes (default off; plain run is unchanged) ---
-    ap.add_argument('--ratio-sanity', action='store_true',
-                    help='Untangle PPO ratio/clip under raw vs α/β value-reweight vs grad-scale.')
-    ap.add_argument('--alpha-pos', type=float, default=0.1,
-                    help='Coordinate-channel weight for the value-reweight scenario (ratio-sanity).')
-    ap.add_argument('--beta-v', type=float, default=1.0,
-                    help='Atom-type-channel weight for the value-reweight scenario (ratio-sanity).')
     ap.add_argument('--trajectory', action='store_true',
                     help='Dense per-timestep denoising sweep (when is the molecule decided).')
     ap.add_argument('--trajectory-steps', type=int, default=100,
@@ -659,15 +587,10 @@ def main():
               f"|log_p_pos|={abs(chan['log_p_pos_mean']):.3f}  "
               f"|log_p_v|={abs(chan['log_p_v_mean']):.3f}  "
               f"grad_pos={chan['grad_pos_norm']:.2e}  grad_v={chan['grad_v_norm']:.2e}")
-        rec = chan.get('recommended_s_v', math.nan)
-        if not math.isnan(rec):
-            print(f"[diag] {label} -> coords currently outweigh atom-types "
-                  f"{rec:.3g}:1 in gradient.\n"
-                  f"        To balance them, set in your config:\n"
-                  f"          ppo:\n"
-                  f"            channel_grad_scale:\n"
-                  f"              pos: 1.0\n"
-                  f"              v:   {rec:.3g}")
+        gp, gvn = chan['grad_pos_norm'], chan['grad_v_norm']
+        if gvn and gvn > 0 and not math.isnan(gp):
+            print(f"[diag] {label} -> coordinate channel outweighs atom-types "
+                  f"{gp / gvn:.3g}:1 in gradient (measurement only).")
 
     title = f"PRISM layer diagnostics — {args.model_type} ({args.reward or 'config reward'})"
     fig1 = plot_comparison(summaries, str(out / 'layer_diagnostics.png'), title=title)
