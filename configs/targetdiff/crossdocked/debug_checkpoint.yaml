@@ -83,7 +83,7 @@ docking_params:
 # magnitudes to wandb under the grad/* namespace. Use to diagnose vanishing
 # gradients or weights that never update.
 grad_logging:
-  enabled: true
+  enabled: false
   every_n_epochs: 1
   log_histogram: true
   per_block_histogram: true

@@ -23,7 +23,7 @@ freeze_except:
   - 'refine_net.base_block.8'
 
 grad_logging:
-  enabled: true
+  enabled: false
   every_n_epochs: 5    # cheap; 70 epochs / 5 = 14 logging points
 
 model:
