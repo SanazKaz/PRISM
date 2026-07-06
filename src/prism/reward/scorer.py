@@ -12,6 +12,14 @@ from src.prism.utils import build_molecules_from_batch
 # Set to True to log up to 20 randomly-sampled molecule rewards per batch.
 LOG_SAMPLE_REWARDS = True
 
+# Floor applied to a component score before it is raised to its weight in the
+# `product` (weighted geometric) aggregation. Guards against log/zero blow-ups
+# for scores that legitimately hit 0 (or go slightly negative); a floored
+# component drives the product toward 0 (soft-AND), which is the intended
+# behaviour. Does not touch the -0.1 invalid-mol floor, which lives on separate
+# slots that never enter the product.
+PRODUCT_SCORE_EPS = 1e-8
+
 class BaseReward(ABC):
     """
     Interface that all specific reward classes (e.g., QED, Affinity) must implement.
@@ -211,7 +219,13 @@ class RewardManager:
                     if self.aggregation == "weighted_sum":
                         total_rewards[batch_idx] += score * weight
                     elif self.aggregation == "product":
-                        total_rewards[batch_idx] *= score
+                        # Weighted geometric product: r_i ** w_i, then multiply.
+                        # With weights summing to 1 this is a weighted geometric
+                        # mean (normalisation is left to the user). Unit weights
+                        # reduce to the plain raw product.
+                        total_rewards[batch_idx] *= (
+                            torch.clamp(score, min=PRODUCT_SCORE_EPS) ** weight
+                        )
                     else:
                         raise ValueError(f"Invalid aggregation method: {self.aggregation}")
                     
