@@ -193,7 +193,7 @@ def process_ligand_and_pocket(pdbfile, sdffile, atom_dict, aa_encoder, dist_cuto
         for a in full_atoms:
             if a in atom_dict:
                 atom = np.eye(1, len(atom_dict), atom_dict[a.capitalize()]).squeeze()
-            elif a != 'H':
+            elif a not in ('H', 'D'):  # treat deuterium like hydrogen
                 atom = np.eye(1, len(atom_dict), len(atom_dict) - 1).squeeze()
             pocket_one_hot.append(atom)
         pocket_one_hot = np.stack(pocket_one_hot)
@@ -367,7 +367,11 @@ def process_ligand_and_pocket_targetdiff(pdbfile, sdffile, dist_cutoff, atom_dic
     for res in pocket_residues:
         res_name = res.get_resname()
         for atom in res.get_atoms():
-            if atom.element == 'H':
+            # Skip hydrogen and deuterium (D appears in neutron/deuterated
+            # structures, e.g. CA-II 6bc9/6bbs/4g0c). D is not a recognised
+            # element, so it would produce an all-zero element block and fall
+            # through to the amino-acid indices, crashing get_type_histograms.
+            if atom.element in ('H', 'D'):
                 continue
             feat = _targetdiff_atom_features(atom.element, res_name, atom.get_name())
             pocket_feats.append(feat)
