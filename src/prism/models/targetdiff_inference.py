@@ -63,18 +63,39 @@ def load_targetdiff_model(checkpoint_path: Path, config_path: Path, device: str)
     return policy._model
 
 
-def pocket_from_pdb(pdb_path: str, protein_featurizer) -> "ProteinLigandData":
+def pocket_from_pdb(pdb_path: str, protein_featurizer, ref_ligand_sdf: str = None,
+                    radius: int = 10) -> "ProteinLigandData":
     """
-    Parse a pocket PDB file into the ProteinLigandData format expected by
+    Parse a pocket PDB into the ProteinLigandData format expected by
     sample_diffusion_ligand.
+
+    If `ref_ligand_sdf` is given, the pocket is cut to residues within `radius` A
+    of the reference ligand (query_residues_ligand + residues_to_pdb_block), as in
+    TargetDiff's extract_pockets.py. Omit it when the input PDB is already a cut
+    pocket (e.g. crossdocked *_pocket10.pdb).
     """
     _ensure_targetdiff_utils()
 
+    import numpy as _np
     import torch as _torch
     from utils.data import PDBProtein                          # noqa: E402
     from datasets.pl_data import ProteinLigandData, torchify_dict  # noqa: E402
 
-    pocket_dict = PDBProtein(pdb_path).to_dict_atom()
+    protein = PDBProtein(pdb_path)
+    if ref_ligand_sdf is not None:
+        # query_residues_ligand only needs the ligand's atom positions. We read
+        # them with RDKit directly rather than the vendored parse_sdf_file, which
+        # uses np.compat.long (removed in NumPy 2.x).
+        from rdkit import Chem                                 # noqa: E402
+        rdmol = Chem.MolFromMolFile(ref_ligand_sdf, sanitize=False)
+        if rdmol is None:
+            raise ValueError(f"Could not read reference ligand: {ref_ligand_sdf}")
+        lig_pos = _np.array(rdmol.GetConformer().GetPositions(), dtype=_np.float32)
+        pocket_block = protein.residues_to_pdb_block(
+            protein.query_residues_ligand({"pos": lig_pos}, radius))
+        pocket_dict = PDBProtein(pocket_block).to_dict_atom()
+    else:
+        pocket_dict = protein.to_dict_atom()
     data = ProteinLigandData.from_protein_ligand_dicts(
         protein_dict=torchify_dict(pocket_dict),
         ligand_dict={
