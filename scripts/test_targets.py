@@ -310,8 +310,7 @@ def generate_for_target_targetdiff(
     print(f"[DEBUG] Device: {device}")
 
     t0 = time()
-    # Cut a 10 A pocket around the reference ligand (matches TargetDiff training;
-    # raw full-receptor input is OOD -> ~0% validity). See pocket_from_pdb.
+    # Cut a 10 A pocket around the reference ligand (matches TargetDiff training).
     pocket_data = pocket_from_pdb(str(pocket_path), protein_featurizer,
                                   ref_ligand_sdf=str(ligand_path))
     print(f"[DEBUG] Pocket loaded in {time()-t0:.2f}s  "
