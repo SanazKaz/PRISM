@@ -3,6 +3,7 @@
 import argparse
 import os
 
+from src.prism.reward.scoring.my_mol_prop_reward import (TargetProfileReward, TARGET_PROFILES) # my reward for mol prop
 from src.prism.reward.scorer import RewardManager
 from src.prism.reward.scoring.molecular_props import QEDReward, SAScoreReward, LipinskiReward, BertzReward
 from src.prism.reward.scoring.sucos import SuCOSReward
@@ -45,6 +46,7 @@ REWARD_REGISTRY = {
     "custom_sa_score": CustomSAScoreReward,
     "penalised_logp": PenalisedLogP,
     "dundee_score": DundeeScore,
+    "target_profile": TargetProfileReward, # my reward for mol prop
 }
 
 def get_reward_manager(config, dataset_info, ddpm_module=None, reconstruction_fn=None):
@@ -139,6 +141,16 @@ def get_reward_manager(config, dataset_info, ddpm_module=None, reconstruction_fn
                 dataset_info=dataset_info,
                 dataset_type=dataset_type
             ))
+        elif name == 'target_profile': # my change to have many options for my targets
+            target_name = getattr(reward_params_ns, 'target_name', None)
+            if target_name is None:
+                raise ValueError("target_profile reward requires 'target_name' in reward_params")
+            if target_name not in TARGET_PROFILES:
+                raise ValueError(
+                    f"target_name '{target_name}' not in TARGET_PROFILES. "
+                    f"Available: {list(TARGET_PROFILES.keys())}"
+                )
+            active_rewards.append(reward_cls(target_profile=TARGET_PROFILES[target_name]))
         else:
             active_rewards.append(reward_cls())
             

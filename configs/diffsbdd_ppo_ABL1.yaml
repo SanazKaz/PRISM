@@ -5,11 +5,7 @@ wandb_params:
   entity: 'sanazkazeminia97'
   project: 'CDPenalised_LogP'
 dataset: 'crossdock'
-#datadir: '/data/stat-cadd/stat0548/PRISM/data/cross_dock/processed_crossdock_noH_full_temp'
-datadir: '/data/stat-cadd/stat0548/PRISM/data/ABL_dataset/03_final_dataset'
-#pocket_representation: CA # to pevent that size_distribution.npy from training data has a different size than the Test data pockets
-#pocket_representation: full-atom
-
+datadir: '/data/stat-cadd/stat0548/PRISM/data/cross_dock/processed_crossdock_noH_full_temp'
 enable_progress_bar: False
 num_sanity_val_steps: 0
 batch_size: 64
@@ -23,11 +19,7 @@ freeze_except: ['e_block_3', 'e_block_4']
 
 model:
   total_timesteps: 500   # full DiffSBDD diffusion chain length
-#model: #neu
- # total_timesteps: 500
-  #egnn_params:
-   # joint_nf: 32
-    #hidden_nf: 128
+
 
 ppo:
   num_outer_epochs: 60

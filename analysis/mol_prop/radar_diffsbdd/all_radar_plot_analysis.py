@@ -27,13 +27,13 @@ RDLogger.DisableLog('rdApp.*')
 # =============================================================================
 # changed: paths to SDF files
 # =============================================================================
-DATA_DIR   = Path("/data/stat-cadd/stat0548/PRISM/results/diffsbdd/Test3protein_ligands")  
-OUTPUT_DIR = Path("/data/stat-cadd/stat0548/PRISM/analysis/mol_prop/radar_diffsbdd/withoutreward_summary_plot")  
+DATA_DIR   = Path("/data/stat-cadd/stat0548/PRISM/results/diffsbdd/MolProp_testgen")  
+OUTPUT_DIR = Path("/data/stat-cadd/stat0548/PRISM/analysis/mol_prop/radar_diffsbdd/molprop_reward_summary_plot")  
 
 # changed: automatically load all SDF files from folder
 INPUT_FILES = {
     sdf.stem: sdf
-    for sdf in sorted(DATA_DIR.glob("*/*_processed.sdf"))
+    for sdf in sorted(DATA_DIR.glob("*/*/*_processed.sdf"))
 }
 
 # =============================================================================

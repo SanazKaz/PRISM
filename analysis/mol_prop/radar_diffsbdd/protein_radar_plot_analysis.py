@@ -4,7 +4,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from pathlib import Path
 
-OUTPUT_DIR = Path("/data/stat-cadd/stat0548/PRISM/analysis/mol_prop/radar_diffsbdd/withoutreward_protein_plot")
+OUTPUT_DIR = Path("/data/stat-cadd/stat0548/PRISM/analysis/mol_prop/radar_diffsbdd/molprop_reward_protein_plot")
 PROPERTY_ORDER = ['MW','AliR_C','AroR_C','ChiA_C','SA','NHOH_C','HetA_C','RotB_C','BriA_C','HBD_C','HBA_C','FusedR_C','LogP_C']
 
 PROTEIN_GROUPS = {
@@ -42,7 +42,7 @@ def make_radar(ax, values, labels, color, alpha=0.25, label=None):
 
 
 def main():
-    df = pd.read_csv(Path("/data/stat-cadd/stat0548/PRISM/analysis/mol_prop/radar_diffsbdd/withoutreward_summary_plot/all_raw_properties.csv"))
+    df = pd.read_csv(Path("/data/stat-cadd/stat0548/PRISM/analysis/mol_prop/radar_diffsbdd/molprop_reward_summary_plot/all_raw_properties.csv"))
 
     for protein, sources in PROTEIN_GROUPS.items():
         subset = df[df['source'].isin(sources)]

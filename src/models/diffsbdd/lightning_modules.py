@@ -820,9 +820,10 @@ class LigandPocketDDPM(pl.LightningModule):
             pocket_types = torch.tensor(
                 [self.pocket_type_encoder[a.element.capitalize()]
                  for a in pocket_atoms], device=self.device)
-
+        print(type(pocket_types))
+        print(pocket_types.shape)
         pocket_one_hot = F.one_hot(
-            pocket_types, num_classes=len(self.pocket_type_encoder)
+            pocket_types.long(), num_classes=len(self.pocket_type_encoder)
         )
 
         pocket_size = torch.tensor([len(pocket_coord)] * repeats,
@@ -896,6 +897,7 @@ class LigandPocketDDPM(pl.LightningModule):
         pocket = self.prepare_pocket(residues, repeats=n_samples)
 
         # Pocket's center of mass
+        print({k: (v.shape if hasattr(v,'shape') else v) for k,v in pocket.items()})
         pocket_com_before = scatter_mean(pocket['x'], pocket['mask'], dim=0)
 
         # Create dummy ligands

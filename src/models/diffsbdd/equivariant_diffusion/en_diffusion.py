@@ -999,9 +999,9 @@ class DistributionNodes:
 
         m = self.n1_given_n2 if n2 is not None else self.n2_given_n1
         c = n2 if n2 is not None else n1
-
+        
         return torch.tensor([m[i].sample() for i in c], device=c.device)
-
+ 
     def log_prob(self, batch_n_nodes_1, batch_n_nodes_2):
         assert len(batch_n_nodes_1.size()) == 1
         assert len(batch_n_nodes_2.size()) == 1
