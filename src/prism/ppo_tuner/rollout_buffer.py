@@ -54,11 +54,17 @@ class RolloutBuffer:
         
 
     def compute_advantages(self):
-        """Normalise rewards into advantages using global batch statistics.
+        """Normalise rewards into advantages.
 
-        Global normalisation (across all molecules in the rollout, regardless
-        of pocket) is robust to small batches and single-sample-per-pocket
-        scenarios where per-pocket normalisation would produce NaNs.
+        Two modes, selected by ``config.ppo.use_grpo_advantages`` (default
+        False):
+          - False: GLOBAL batch normalisation across all molecules in the
+            rollout (pocket-agnostic). Robust to small batches and
+            single-sample-per-pocket scenarios.
+          - True:  GRPO — per-pocket (within-group) normalisation. Each
+            pocket's samples are z-scored against only the other samples for
+            that same pocket, removing pocket difficulty as a confound.
+            Requires several samples per pocket to carry signal.
 
         The result is clipped to [-3, 3] to prevent outlier rewards from
         producing exploding gradient updates.
@@ -66,6 +72,21 @@ class RolloutBuffer:
         if not self.data_loaded:
             raise ValueError("Cannot compute advantages before loading data.")
 
+        use_grpo = getattr(self.config.ppo, "use_grpo_advantages", False)
+        if use_grpo:
+            self.advantages = self._grpo_advantages()
+        else:
+            self.advantages = self._global_advantages()
+
+        self.advantages = torch.clamp(self.advantages, min=-3.0, max=3.0)
+
+    def _global_advantages(self):
+        """Normalise rewards against global batch statistics (default).
+
+        Global normalisation (across all molecules in the rollout, regardless
+        of pocket) is robust to small batches and single-sample-per-pocket
+        scenarios where per-pocket normalisation would produce NaNs.
+        """
         if dist.is_initialized():
             # Compute global mean/std across all ranks so advantages are
             # comparable when DDP averages gradients.
@@ -85,11 +106,36 @@ class RolloutBuffer:
             batch_std  = self.rewards.std()
 
         if self.rewards.numel() > 1 and batch_std > 1e-6:
-            self.advantages = (self.rewards - batch_mean) / (batch_std + 1e-8)
-        else:
-            self.advantages = self.rewards - batch_mean
+            return (self.rewards - batch_mean) / (batch_std + 1e-8)
+        return self.rewards - batch_mean
 
-        self.advantages = torch.clamp(self.advantages, min=-3.0, max=3.0)
+    def _grpo_advantages(self):
+        """GRPO: per-pocket (within-group) reward normalisation.
+
+        All samples for a given pocket live on the same rank (DDP splits
+        pockets across ranks), so group statistics are LOCAL — no cross-rank
+        reduction is needed (unlike the global path). Groups with fewer than 2
+        samples or zero variance are mean-subtracted (=> 0), contributing no
+        gradient. This is the correct GRPO behaviour for a degenerate group
+        and avoids the divide-by-zero NaN that naive per-pocket normalisation
+        produced previously.
+        """
+        rewards    = self.rewards
+        pocket_ids = self.pocket_indices
+        advantages = torch.zeros_like(rewards)
+        for pid in torch.unique(pocket_ids):
+            mask  = pocket_ids == pid
+            group = rewards[mask]
+            group_mean = group.mean()
+            if group.numel() > 1:
+                group_std = group.std()
+                if group_std > 1e-6:
+                    advantages[mask] = (group - group_mean) / (group_std + 1e-8)
+                else:
+                    advantages[mask] = group - group_mean   # all-equal -> 0
+            else:
+                advantages[mask] = group - group_mean        # singleton -> 0
+        return advantages
 
 
     def get_minibatches(self):
@@ -112,14 +158,11 @@ class RolloutBuffer:
 
         # Get all unique molecule IDs from the mask — DO NOT shuffle here (matches old code)
         all_mol_ids_np = np.unique(lig_mask_full.cpu().numpy())
-        print(f"All molecule IDs: {all_mol_ids_np}")
 
         # Create minibatches by positional slices over the unique IDs
         for i in range(0, num_molecules, ppo_batch_size):
             start_idx = i
-            print(f"Start index: {start_idx}")
             end_idx = min(i + ppo_batch_size, num_molecules)
-            print(f"End index: {end_idx}")
             # Pick molecule IDs for this minibatch (positional selection)
             selected_ids = all_mol_ids_np[start_idx:end_idx]
             

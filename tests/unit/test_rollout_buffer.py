@@ -309,5 +309,74 @@ class TestComputeAdvantagesDistributed(unittest.TestCase):
         self.assertGreaterEqual(buf.advantages.min().item(), -3.0 - 1e-6)
 
 
+# ---------------------------------------------------------------------------
+# Tests: compute_advantages — GRPO (per-pocket) path
+# ---------------------------------------------------------------------------
+
+def _make_grpo_config(batch_size=2):
+    return SimpleNamespace(ppo=SimpleNamespace(batch_size=batch_size,
+                                               use_grpo_advantages=True))
+
+
+class TestGRPOAdvantages(unittest.TestCase):
+    """Per-pocket (within-group) advantage normalisation."""
+
+    def _load(self, rewards, pocket_indices, grpo=True):
+        cfg = _make_grpo_config() if grpo else _make_config()
+        buf = RolloutBuffer(cfg)
+        data = _make_rollout_data(n_mols=len(rewards), rewards=rewards)
+        data["pocket_indices"] = pocket_indices
+        buf.load_rollout_data(data)
+        buf.compute_advantages()
+        return buf
+
+    def test_each_group_is_zero_mean(self):
+        """Each pocket's advantages should be centred independently."""
+        rewards = torch.tensor([0.1, 0.2, 0.3, 5.0, 7.0, 9.0])
+        pockets = torch.tensor([0, 0, 0, 1, 1, 1])
+        buf = self._load(rewards, pockets)
+        for pid in (0, 1):
+            grp = buf.advantages[pockets == pid]
+            self.assertAlmostEqual(grp.mean().item(), 0.0, places=4)
+
+    def test_differs_from_global_when_pocket_scales_differ(self):
+        """GRPO removes pocket-difficulty confound: the high-reward pocket
+        gets all-positive advantages under global norm, but is centred (has
+        negatives) under GRPO."""
+        rewards = torch.tensor([0.1, 0.2, 0.3, 5.0, 7.0, 9.0])
+        pockets = torch.tensor([0, 0, 0, 1, 1, 1])
+        grpo = self._load(rewards, pockets, grpo=True).advantages
+        glob = self._load(rewards, pockets, grpo=False).advantages
+        self.assertFalse(torch.allclose(grpo, glob, atol=1e-3))
+        self.assertTrue((glob[pockets == 1] > 0).all())   # global: easy pocket all +
+        self.assertTrue((grpo[pockets == 1] < 0).any())   # GRPO: centred -> has -
+
+    def test_singleton_group_zero_no_nan(self):
+        """A pocket with a single sample has no within-group signal -> 0."""
+        rewards = torch.tensor([0.1, 0.9, 0.5])
+        pockets = torch.tensor([0, 0, 1])
+        buf = self._load(rewards, pockets)
+        self.assertFalse(buf.advantages.isnan().any())
+        self.assertAlmostEqual(buf.advantages[pockets == 1].item(), 0.0, places=6)
+
+    def test_zero_variance_group_zero_no_nan(self):
+        """All-equal rewards within a pocket -> 0 advantages, no divide-by-zero."""
+        rewards = torch.tensor([0.7, 0.7, 0.7, 0.2, 0.9])
+        pockets = torch.tensor([0, 0, 0, 1, 1])
+        buf = self._load(rewards, pockets)
+        self.assertFalse(buf.advantages.isnan().any())
+        self.assertTrue(torch.allclose(buf.advantages[pockets == 0],
+                                       torch.zeros(3), atol=1e-6))
+
+    def test_toggle_off_matches_global(self):
+        """Default (flag off) must reproduce the existing global-norm result."""
+        rewards = torch.tensor([0.1, 0.2, 0.3, 5.0, 7.0, 9.0])
+        pockets = torch.tensor([0, 0, 0, 1, 1, 1])
+        off = self._load(rewards, pockets, grpo=False).advantages
+        mean, std = rewards.mean(), rewards.std()
+        expected = ((rewards - mean) / (std + 1e-8)).clamp(-3, 3)
+        self.assertTrue(torch.allclose(off, expected, atol=1e-4))
+
+
 if __name__ == "__main__":
     unittest.main()

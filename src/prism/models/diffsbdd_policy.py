@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 from pathlib import Path
+from torch_scatter import scatter_mean
 
 from src.prism.models.base_policy import BaseDiffusionPolicy
 from src.models.diffsbdd.lightning_modules import LigandPocketDDPM
@@ -39,6 +40,52 @@ class DiffSBDDPolicy(BaseDiffusionPolicy):
 
     def log_p_zs_given_zt(self, s, t, z_t, z_s, xh_pock, lig_mask, poc_mask):
         return self._inner.log_p_zs_given_zt(s, t, z_t, z_s, xh_pock, lig_mask, poc_mask)
+
+    def log_p_zs_given_zt_channels(self, s, t, z_t, z_s, xh_pock, lig_mask, poc_mask):
+        """Returns (log_p_pos, log_p_v) — Gaussian coord and atom-type channels separately.
+
+        Both DiffSBDD channels are continuous Gaussian; we split by dimension.
+        Implemented here (not on the vendored ConditionalDDPM) so the vendor tree
+        stays unmodified. NOTE: `sigma` is a per-atom scalar of shape [N, 1] (from
+        inflate_batch_array — molecule-axis only, NOT per-dimension), so it must not
+        be sliced by channel; broadcast it against each channel's `diff` slice and
+        scale the log-normalization term by the channel's dimension count. The
+        quadratic terms split exactly as n_dims + atom_nf.
+        """
+        inner = self._inner
+        gamma_s = inner.gamma(s)
+        gamma_t = inner.gamma(t)
+
+        sigma2_t_given_s, sigma_t_given_s, alpha_t_given_s = \
+            inner.sigma_and_alpha_t_given_s(gamma_t, gamma_s, z_t)
+        sigma_s = inner.sigma(gamma_s, target_tensor=z_t)
+        sigma_t = inner.sigma(gamma_t, target_tensor=z_t)
+
+        eps_t_lig, _ = inner.dynamics(z_t, xh_pock, t, lig_mask, poc_mask)
+
+        mu_lig = z_t / alpha_t_given_s[lig_mask] - \
+                 (sigma2_t_given_s / alpha_t_given_s / sigma_t)[lig_mask] * eps_t_lig
+
+        sigma = sigma_t_given_s * sigma_s / sigma_t
+        sigma_sq_lig = sigma[lig_mask] ** 2 + 1e-8              # [N, 1] broadcast scalar
+        log_2pi_sig = torch.log(2 * torch.pi * sigma_sq_lig).squeeze(-1)   # [N]
+        diff = z_s - mu_lig
+
+        diff_pos = diff[:, :inner.n_dims]
+        log_p_pos_atom = -0.5 * (
+            (diff_pos ** 2 / sigma_sq_lig).sum(dim=1) + diff_pos.shape[1] * log_2pi_sig
+        )
+        diff_v = diff[:, inner.n_dims:]
+        log_p_v_atom = -0.5 * (
+            (diff_v ** 2 / sigma_sq_lig).sum(dim=1) + diff_v.shape[1] * log_2pi_sig
+        )
+
+        return (scatter_mean(log_p_pos_atom, lig_mask, dim=0),
+                scatter_mean(log_p_v_atom,   lig_mask, dim=0))
+
+    @property
+    def total_timesteps(self) -> int:
+        return self._inner.T
 
     # ------------------------------------------------------------------
     # BaseDiffusionPolicy – data pre-processing

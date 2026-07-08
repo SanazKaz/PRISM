@@ -11,6 +11,7 @@ from pathlib import Path
 from .rollout_collector import RolloutCollector
 from .rollout_buffer import RolloutBuffer
 from .loss import compute_ppo_loss
+from .timestep_window import apply_timestep_window
 from src.prism.models.base_policy import BaseDiffusionPolicy
 from utils import permute_timesteps
 from tests.ppo_debug_utils import assert_same_ids, assert_latent_alignment, reset_seen_mb_ids
@@ -126,15 +127,17 @@ class PPOAlgorithm:
             'pocket_indices': self.buffer.pocket_indices
         }
         
-        # --- 2.6. DETERMINE CURRENT K (from original code) ---
-        current_k = self.config.ppo.train_timesteps
-        
-        
-        # --- 2.7. SLICE TO LAST K TIMESTEPS (from original: rollout_data[key] = rollout_data[key][:, -k:]) ---
-        for key in ("latents", "next_latents", "old_log_probs", "timesteps"):
-            if key in rollout_data_for_permute and rollout_data_for_permute[key] is not None:
-                rollout_data_for_permute[key] = rollout_data_for_permute[key][:, -current_k:]
-        
+        # --- 2.6/2.7. ALIGN old_log_probs + SLICE TO THE TRAINING WINDOW ---
+        # See apply_timestep_window(): aligns old_log_probs to the transition grid
+        # (fixing the 'first'/'band' off-by-one) and slices to the chosen window.
+        current_k = apply_timestep_window(
+            rollout_data_for_permute,
+            window=getattr(self.config.ppo, 'timestep_window', 'last'),
+            train_timesteps=self.config.ppo.train_timesteps,
+            t_lo=getattr(self.config.ppo, 't_lo', None),
+            t_hi=getattr(self.config.ppo, 't_hi', None),
+        )
+
         # --- 2.8. PERMUTE TIMESTEPS (from original) ---
         with torch.no_grad():
             rollout_data_for_permute = permute_timesteps(rollout_data_for_permute, self.device)
