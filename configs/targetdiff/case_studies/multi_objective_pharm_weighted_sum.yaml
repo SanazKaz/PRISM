@@ -1,0 +1,121 @@
+# TargetDiff PPO fine-tuning — CASE STUDY (single target), WEIGHTED_SUM.
+# Identical validated multi-obj hparams (configs/targetdiff/crossdocked/
+# multi_objective_weighted_sum.yaml); ONLY the reward block is swapped to the
+# case-study set: feature_density + property_2d + geometry_checks (0.5/0.4/0.1),
+# mirroring DiffSBDD configs/diffsbdd/exp_specific/case_study_multi.yaml.
+#
+# Target-specific paths default to BRD4_BD1 but are overridden per target by the
+# submission script (--datadir / --hotspot_path / --target_name / --dataset_name).
+
+run_identifier: 'case_pharm_molprops_geom_weighted_sum'
+logdir: 'Log_Results'
+
+wandb_params:
+  mode: 'offline'
+  entity: 'sanazkazeminia97'
+  project: 'case_study_pharm_molprops_geom'
+
+model_type: targetdiff
+
+freeze_except:
+  - 'v_inference'
+  - 'refine_net.base_block.0'
+  - 'refine_net.base_block.2'
+  - 'refine_net.base_block.8'
+
+model:
+  checkpoint: 'checkpoints/targetdiff_pretrained_diffusion.pt'
+  protein_feat_dim: 27
+  ligand_atom_types: 13
+  total_timesteps: 1000
+
+# -----------------------------------------------------------------------
+# Data — single case-study target (default BRD4_BD1; overridden per target)
+# -----------------------------------------------------------------------
+datadir: '/data/stat-cadd/wolf7055/PRISM/data/BRD4_BD1/03_final_dataset_targetdiff'
+dataset: 'crossdock'
+batch_size: 20
+num_workers: 4
+gpus: 2
+n_epochs: 1
+
+enable_progress_bar: False
+num_sanity_val_steps: 0
+
+train_single_pocket: False
+
+# -----------------------------------------------------------------------
+# PPO algorithm knobs (identical to validated multi-obj run)
+# -----------------------------------------------------------------------
+ppo:
+  use_grpo_advantages: False
+  num_outer_epochs: 60
+  num_inner_epochs: 2
+  n_steps: 40
+  ligand_chunk_size: 40
+  batch_size: 40
+  clip_range: 0.1
+  entropy_coef: 0.0
+  kl_coef: 0.0
+  max_grad_norm: 1.0
+  gradient_accumulation_steps: 400
+  train_timesteps: 500
+  timestep_window: band
+  t_lo: 500
+  t_hi: 850
+  target_kl: 0.03
+  ref_kl_coef: 0.05
+  lr: 3.0e-4
+  num_nodes_lig: 27
+
+grad_logging:
+  enabled: true
+  every_n_epochs: 5
+  log_histogram: true
+  per_block_histogram: true
+  max_hist_elements: 1000000
+
+# -----------------------------------------------------------------------
+# Rewards — feature_density + property_2d + geometry_checks (weighted_sum)
+# -----------------------------------------------------------------------
+docking_params:
+  dataset_info: custom
+
+reward_params:
+  target_name: 'BRD4_BD1'
+  aggregation: 'weighted_sum'
+  rewards:
+    qed: 0.0
+    sa_score: 0.0
+    lipinski: 0.0
+    bertz: 0.0
+    sucos: 0.0
+    interaction_fingerprints: 0.0
+    feature_density: 0.5
+    geometry_checks: 0.1
+    flatness_checks: 0.0
+    aromatic_counter: 0.0
+    aromatic_anchor: 0.0
+    multi_features: 0.0
+    silly_walks: 0.0
+    property_2d: 0.4
+    smina_docking: 0.0
+    custom_qed: 0.0
+    custom_sa_score: 0.0
+    penalised_logp: 0.0
+  reward_paths:
+    feature_density: '/data/stat-cadd/wolf7055/PRISM/data/BRD4_BD1/hotspot_analysis/BRD4_BD1_hotspot_data.pkl'
+    property_2d: 'src/prism/reward/scoring/reward_data/propeties_ref.json'
+
+# -----------------------------------------------------------------------
+# Evaluation
+# -----------------------------------------------------------------------
+eval_epochs: 5
+visualize_sample_epoch: 99999
+visualize_chain_epoch: 999999
+eval_params:
+  n_eval_samples: 20
+  eval_batch_size: 20
+  smiles_file: '/data/stat-cadd/wolf7055/PRISM/data/BRD4_BD1/03_final_dataset_targetdiff/train_smiles.npy'
+  n_visualize_samples: 0
+  keep_frames: 0
