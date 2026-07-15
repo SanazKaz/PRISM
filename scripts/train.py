@@ -136,8 +136,14 @@ def main(args):
         # Since config is a Namespace, use dot notation:
         config.reward_params.reward_paths.feature_density = args.hotspot_path
         print(f"[HOTSPOT] Overriding hotspot path to: {args.hotspot_path}")
-        
-    
+
+    if args.target_name:
+        # property_2d keys its reference-binder stats off target_name; override
+        # it per target so one config can loop over all case-study targets.
+        config.reward_params.target_name = args.target_name
+        print(f"[TARGET] Overriding reward target_name to: {args.target_name}")
+
+
     if hasattr(config, 'eval_params'):
         # We assume the file is always named 'train_smiles.npy' and lives in the datadir
         smiles_path = Path(config.datadir) / 'train_smiles.npy'
@@ -231,6 +237,7 @@ if __name__ == "__main__":
     parser.add_argument('--seed', type=int, default=42, help="Random seed for reproducibility")
     parser.add_argument('--datadir', type=str, default=None, help="Path to the dataset")
     parser.add_argument('--hotspot_path', type=str, default=None, help="Override path for FeatureDensityReward hotspot pkl")
+    parser.add_argument('--target_name', type=str, default=None, help="Override reward_params.target_name (property_2d reference-binder stats)")
     
     # [FIX 4] Added missing arguments to avoid crash
     parser.add_argument('--logdir', type=str, default=None, help="Override log directory (Safe Scratch)")
