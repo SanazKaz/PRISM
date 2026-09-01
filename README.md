@@ -1,16 +1,14 @@
 # PRISM: Policy-Reinforced Iterative Structure-Based Molecular Diffusion
 
-PPO fine-tuning for structure-based *de novo* diffusion models. Takes a pretrained
-**DiffSBDD** or **TargetDiff** checkpoint and tunes a few layers so generated
+Official implementation of PRISM: A Hybrid Diffusion-Reinforcement Learning Framework for 3D Structure-based De Novo Design. 
+
+PRISM framework takes a pretrained **DiffSBDD** or **TargetDiff** checkpoint and tunes layers so generated
 ligands optimise a chemistry reward while staying close to the pretrained prior.
 
-Two things happen in this repo: you **train** a policy, and you **generate**
-ligands from a checkpoint. Everything else is preparation for those two.
-
 ## Workshop Paper
-
+PRISM: A Hybrid Diffusion-Reinforcement Learning Framework for 3D Structure-based De Novo Design
+Sanaz Kazeminia, Lewis R. Vidler, Pushkar G. Ghanekar, Nele P Quast, Garrett M Morris
 [![Paper](https://img.shields.io/badge/OpenReview-TAeVNZ77sH-8C1B13)](https://openreview.net/forum?id=TAeVNZ77sH)
-
 
 ## Setup
 
