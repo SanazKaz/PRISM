@@ -7,8 +7,11 @@ ligands optimise a chemistry reward while staying close to the pretrained prior.
 Two things happen in this repo: you **train** a policy, and you **generate**
 ligands from a checkpoint. Everything else is preparation for those two.
 
-- `CLAUDE.md` — codebase map (where the code lives, how the abstractions fit)
-- `docs/running_experiments.md` — how to plan, run, and evaluate an experiment
+## Workshop Paper
+
+https://openreview.net/forum?id=TAeVNZ77sH&nesting=2&sort=date-desc 
+
+
 
 ## Setup
 
