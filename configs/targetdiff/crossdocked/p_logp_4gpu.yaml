@@ -8,7 +8,6 @@ logdir: 'Log_Results'
 
 wandb_params:
   mode: 'offline'
-  entity: 'sanazkazeminia97'
   project: 'Real_TargetDiff_CD_plogp'
 
 model_type: targetdiff

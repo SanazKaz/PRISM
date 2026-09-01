@@ -2,7 +2,6 @@ run_identifier: 'penalised_logp_cross_dock'
 logdir: 'Log_Results'
 wandb_params:
   mode: 'offline'
-  entity: 'sanazkazeminia97'
   project: 'CDPenalised_LogP'
 dataset: 'crossdock'
 datadir: '/data/stat-cadd/wolf7055/PRISM/data/cross_dock/processed_crossdock_noH_full_temp'

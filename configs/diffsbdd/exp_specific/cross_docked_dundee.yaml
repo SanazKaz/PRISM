@@ -2,7 +2,6 @@ run_identifier: 'dundee_following_geom'
 logdir: 'Log_Results'
 wandb_params:
   mode: 'offline' # seeing if it will reduce overhead 
-  entity: 'sanazkazeminia97'
   project: 'DundeeFollowingGeom'
 dataset: 'crossdock' #(refers to the model's dataset_info_key)
 datadir: '/data/stat-cadd/wolf7055/PRISM/data/cross_dock/processed_crossdock_noH_full_temp'

@@ -3,12 +3,12 @@
 #   python scripts/train.py --config configs/targetdiff_ppo.yaml \
 #       --datadir /path/to/crossdocked_data --seed 42
 
-run_identifier: '3e-4_log_probs_debugged_geometry_1e-3_clip_01_banded_500_850'
+# run_identifier: '3e-4_log_probs_debugged_geometry_1e-3_clip_01_banded_500_850'
+run_identifier: 'main_updat'
 logdir: 'Log_Results'
 
 wandb_params:
   mode: 'offline'
-  entity: 'sanazkazeminia97'
   project: 'Real_TargetDiff_geometry'
 
 model_type: targetdiff
@@ -36,7 +36,7 @@ datadir: '/data/stat-cadd/wolf7055/PRISM/data/cross_dock/processed_crossdock_tar
 dataset: 'crossdock'
 batch_size: 32
 num_workers: 4
-gpus: 2
+gpus: 1
 n_epochs: 1
 
 enable_progress_bar: False

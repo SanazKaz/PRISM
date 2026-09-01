@@ -177,7 +177,7 @@ if __name__ == "__main__":
         name=f"{args.run_name}_seed_{args.seed}", 
         id=f"{args.run_name}_seed_{args.seed}",
         resume='allow' if args.resume is not None else None,
-        entity=getattr(args.wandb_params, 'entity', 'sanazkazeminia97'),
+        entity=getattr(args.wandb_params, 'entity', None),
         mode=getattr(args.wandb_params, 'mode', 'online'),
         log_model=False,    
     )

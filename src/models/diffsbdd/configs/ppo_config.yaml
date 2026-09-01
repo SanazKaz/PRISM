@@ -2,7 +2,6 @@ run_name: 'Crossdock_QED(1.0)_lr3e-5_resume_Epoch37'
 logdir: 'Log_Results'
 wandb_params:
   mode: 'online' # seeing if it will reduce overhead 
-  entity: 'sanazkazeminia97'
 dataset: 'crossdock'
 datadir: 'data'
 enable_progress_bar: False
