@@ -1,175 +1,174 @@
 # PRISM: Policy-Reinforced Iterative Structure-Based Molecular Diffusion
 
-A reinforcement learning framework for structure-based _de novo_ diffusion models
+PPO fine-tuning for structure-based *de novo* diffusion models. Takes a pretrained
+**DiffSBDD** or **TargetDiff** checkpoint and tunes a few layers so generated
+ligands optimise a chemistry reward while staying close to the pretrained prior.
+
+Two things happen in this repo: you **train** a policy, and you **generate**
+ligands from a checkpoint. Everything else is preparation for those two.
+
+- `CLAUDE.md` — codebase map (where the code lives, how the abstractions fit)
+- `docs/running_experiments.md` — how to plan, run, and evaluate an experiment
 
 ## Setup
 
-### Environment Installation
-
-Choose one of the following methods:
-
-#### Option 1: Conda 
-
 ```bash
-# Create and activate environment
 conda env create -f environment.yml
-conda activate prism
-```
-
-For GPU support (Linux/Windows with CUDA):
-
-```bash
-pip install torch==2.6.0 --index-url https://download.pytorch.org/whl/cu124
-pip install torch-scatter==2.1.2 torch-cluster==1.6.3 torch-geometric==2.7.0 \
-    -f https://data.pyg.org/whl/torch-2.6.0+cu124.html
-```
-
-For Mac (Metal/MPS):
-
-```bash
-# torch already installed via environment.yml
-pip install torch-scatter==2.1.2 torch-cluster==1.6.3 torch-geometric==2.7.0 \
-    -f https://data.pyg.org/whl/torch-2.6.0+cpu.html
-```
-
-#### Option 2: pip with toml (CPU or custom CUDA setup)
-
-```bash
-# Create and activate virtual environment
-python3.12 -m venv prism_env
-source prism_env/bin/activate  # On Windows: prism_env\Scripts\activate
-
-# Install base package
+conda activate PRISM_25
 pip install -e .
-
-# Install PyG packages (required, version-specific — not in pyproject.toml)
-pip install torch-scatter==2.1.2 torch-cluster==1.6.3 torch-geometric==2.7.0 \
-    -f https://data.pyg.org/whl/torch-2.6.0+cpu.html
 ```
 
-#### Option 3: uv (Fast alternative to pip)
+`environment.yml` pins torch 2.6.0+cu124 and the CUDA-specific PyG wheels
+(`torch-scatter`, `torch-cluster`, `torch-geometric`), so there is nothing else
+to install.
+
+On the group cluster the environment already exists:
 
 ```bash
-# Create and activate environment
-uv venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-
-# Install base package
-uv pip install -e .
-
-# Install PyG packages (required, version-specific — not in pyproject.toml)
-uv pip install torch-scatter==2.1.2 torch-cluster==1.6.3 torch-geometric==2.7.0 \
-    -f https://data.pyg.org/whl/torch-2.6.0+cpu.html
+module load Mamba && conda activate PRISM_25
 ```
 
-For GPU support with uv:
+Check it worked:
 
 ```bash
-uv pip install torch==2.6.0 --index-url https://download.pytorch.org/whl/cu124
-uv pip install torch-scatter==2.1.2 torch-cluster==1.6.3 torch-geometric==2.7.0 \
-    -f https://data.pyg.org/whl/torch-2.6.0+cu124.html
+python -c "import torch, torch_scatter, torch_geometric, prism; print(torch.cuda.is_available())"
+python -m pytest tests/unit -q
 ```
 
-#### Verify Installation
+## Train
 
 ```bash
-python -c "import torch; print(f'PyTorch version: {torch.__version__}')"
-python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}')"
-python -c "import torch; print(f'MPS available: {torch.backends.mps.is_available()}')"
-python -c "import torch_scatter; print('torch-scatter imported successfully')"
-python -c "import torch_geometric; print('torch-geometric imported successfully')"
-python -c "import prism; print('PRISM imported successfully')"
-
-# Run unit tests
-python -m pytest tests/unit/ -v
+python scripts/train.py \
+    --config configs/targetdiff/crossdocked/geometry.yaml \
+    --warm_start_from_ddpm checkpoints/targetdiff_pretrained_models/targetdiff_pretrained_diffusion.pt \
+    --seed 42
 ```
 
----
+For DiffSBDD, swap in `configs/diffsbdd/ppo_config.yaml` and a DiffSBDD
+checkpoint; the config's `model_type` selects the backbone (DiffSBDD is the
+default when the key is absent).
 
-## Data Preparation
+These CLI flags override the YAML, which is how one config is reused across a
+seed × target sweep: `--seed`, `--datadir`, `--logdir`, `--dataset_name`,
+`--target_name`, `--hotspot_path`, `--resume_from_checkpoint`.
 
-PRISM uses paired **binding-pocket PDB** + **ligand SDF** files that are
-pre-processed into compressed `.npz` arrays. The pipeline has three steps:
+Checkpoints land in
+`Log_Results/<logdir>/<run_identifier>/checkpoints/<dataset>/seed=<S>/`, saved as
+both `.ckpt` (Lightning) and `.pt` (native backbone format — **this is the one
+you generate with**). Top-3 by `train/reward_mean`, plus `last`.
 
-```
-Step 1  PDB IDs ──► download .pdb/.cif files    (01_raw_pdbs/)
-Step 2  .pdb files ──► pocket .pdb + ligand .sdf (02_preprocessed/)
-Step 3  pocket/sdf pairs ──► train/val/test .npz  (03_final_dataset/)
-```
+### Config
 
-All three steps are run by a single script:
+One YAML per experiment, under `configs/<backbone>/`. Clone the closest existing
+config and change only what the experiment is asking about.
 
-```
-scripts/process_data.py
-```
+| Section | What it controls |
+|---------|------------------|
+| top level | `run_identifier` (names the output dir), `datadir`, `gpus`, `freeze_except` (which blocks to unfreeze — everything else stays frozen to anchor the prior) |
+| `model:` | checkpoint path, dims, `total_timesteps` (must match the pretrained checkpoint) |
+| `ppo:` | `num_outer_epochs`, `num_inner_epochs`, `n_steps` (mols per rollout), `lr`, `clip_range`, `target_kl`, `ref_kl_coef`, `train_timesteps`, `timestep_window` |
+| `reward_params:` | `aggregation` (`weighted_sum` or `product`), per-reward weights under `rewards:`, plus `reward_paths:` and `target_name` |
 
-### Option A — From a list of PDB IDs (downloads from RCSB)
+Rewards with weight `0.0` are inactive — only weights > 0 get instantiated. Under
+`product` aggregation the weights act as exponents, not a partition of 1.
 
-Provide a plain-text file of PDB IDs (comma- or newline-separated). The
-pipeline fetches the structures from RCSB automatically.
+Commonly used reward keys (full list in `src/prism/reward/factory.py`):
+
+| Key | What it scores |
+|-----|----------------|
+| `geometry_checks` | 3-D geometry validity (PoseBusters bounds) |
+| `smina_docking` | Docking score via Smina |
+| `feature_density` | Pharmacophore hotspot overlap — needs a hotspot `.pkl` |
+| `property_2d` | 2-D property match to a reference binder set |
+| `custom_qed`, `custom_sa_score` | Capped/normalised drug-likeness and synthesisability |
+| `penalised_logp` | Penalised LogP |
+
+To add one: implement `BaseReward` in `src/prism/reward/scoring/`, register it in
+`factory.py`, give it a weight key.
+
+## Generate
+
+Three entry points, all taking a `.pt`/`.ckpt` checkpoint, the run's config, and
+`--model diffsbdd|targetdiff`.
+
+**Held-out evaluation targets** — the fixed 6-protein / 18-structure set:
 
 ```bash
-# DiffSBDD (default — 10-dim element one-hots)
+python -m scripts.test_targets \
+    <checkpoint> \
+    --model targetdiff \
+    --config configs/targetdiff/crossdocked/geometry.yaml \
+    --targets_dir data \
+    --outdir results/targetdiff/<run> \
+    --n_samples 1000 --batch_size 84 --num_steps 1000
+
+# one structure at a time, for parallel SLURM submission
+python -m scripts.test_targets ... --target BRD4_BD1_4whw
+```
+
+Target keys are defined in `scripts/test_targets.py::_TARGET_SPECS`. Output is
+`<outdir>/<TARGET>/<TARGET>_processed.sdf` plus a `_stats.txt`. Pass
+`--targets_file <json>` instead of `--targets_dir` to use your own pocket/ligand
+pairs.
+
+**CrossDocked test set** — a directory of pocket/ligand pairs:
+
+```bash
+python -m scripts.test_crossdocked \
+    <checkpoint> \
+    --model targetdiff \
+    --config configs/targetdiff/crossdocked/geometry.yaml \
+    --test_dir data/cross_dock/.../test \
+    --outdir results/targetdiff/<run> \
+    --n_samples 100 --batch_size 84
+```
+
+The script pairs each `<stem>.sdf` reference ligand (which names the output) with
+`<stem>_pocket.pdb` (what `process_crossdock.py` produces), falling back to
+`<pdb_id>.pdb` for raw full-structure PDBs. DiffSBDD additionally accepts an
+optional `<stem>.txt` residue list.
+
+**A single pocket** — `scripts.generate_diffsbdd` / `scripts.generate_targetdiff`:
+
+```bash
+python -m scripts.generate_targetdiff \
+    <checkpoint> \
+    --config configs/targetdiff/crossdocked/geometry.yaml \
+    --pdbfile path/to/pocket.pdb \
+    --outfile results/generated.sdf \
+    --n_samples 100
+```
+
+Evaluate the resulting SDFs with `val_analysis/metrics.py` (QED, SA, diversity,
+PoseBusters) and `val_analysis/smina_docking.py`.
+
+## Data preparation
+
+Datasets are paired **pocket PDB** + **ligand SDF**, processed into `.npz`.
+`--model` picks the pocket featurisation: `diffsbdd` (10-dim element one-hots) or
+`targetdiff` (27-dim element + amino acid + backbone).
+
+**Your own targets** — `scripts/process_data.py` runs fetch → preprocess → dataset
+in one go:
+
+```bash
+# from a list of PDB IDs (downloaded from RCSB)
 python -m scripts.process_data \
     --pdb_list data/example_pdbs.txt \
-    --output_dir data/my_dataset
+    --output_dir data/my_dataset \
+    --model targetdiff
 
-# TargetDiff (27-dim element + AA + backbone features)
+# from PDB/CIF files you already have
 python -m scripts.process_data \
-    --pdb_list data/example_pdbs.txt \
-    --output_dir data/my_dataset_td \
+    --skip_fetch --pdb_dir /path/to/pdbs \
+    --output_dir data/my_dataset \
     --model targetdiff
 ```
 
-A sample list (`data/example_pdbs.txt`) with ten PDB IDs is included for
-testing.
-
-### Option B — From local PDB/CIF files you already have
-
-If you have a directory of `.pdb` or `.cif` files on disk, skip the download
-step with `--skip_fetch`:
+**CrossDocked** — download `crossdocked_pocket10.tar.gz` and `split_by_name.pt`
+from [Pocket2Mol](https://github.com/pengxingang/Pocket2Mol), extract, then:
 
 ```bash
-python -m scripts.process_data \
-    --skip_fetch \
-    --pdb_dir /path/to/your/pdb_files \
-    --output_dir data/my_dataset \
-    --model diffsbdd    # or targetdiff
-```
-
-### Option C — CrossDocked dataset (DiffSBDD or TargetDiff)
-
-The CrossDocked2020 benchmark dataset used to train both models is distributed
-by [Pocket2Mol](https://github.com/pengxingang/Pocket2Mol).
-
-**Step 1 — Download from Pocket2Mol**
-
-Follow the Pocket2Mol data instructions to download:
-
-- `crossdocked_pocket10.tar.gz` — pocket PDB files
-- `split_by_name.pt` — train/test split
-
-**Step 2 — Extract**
-
-```bash
-tar -xzvf crossdocked_pocket10.tar.gz
-# produces: crossdocked_pocket10/
-```
-
-**Step 3 — Process**
-
-Use the unified `process_crossdock.py` script with `--model diffsbdd` or
-`--model targetdiff`:
-
-```bash
-# DiffSBDD (10-dim element one-hots)
-python -m scripts.process_crossdock \
-    --crossdocked_dir /path/to/crossdocked_pocket10 \
-    --split_path      /path/to/split_by_name.pt \
-    --output_dir      data/crossdock_diffsbdd \
-    --model           diffsbdd
-
-# TargetDiff (27-dim element + AA + backbone features)
 python -m scripts.process_crossdock \
     --crossdocked_dir /path/to/crossdocked_pocket10 \
     --split_path      /path/to/split_by_name.pt \
@@ -177,235 +176,46 @@ python -m scripts.process_crossdock \
     --model           targetdiff
 ```
 
-Run `--smoke_test` first to verify shapes on 2 pairs before the full ~2 h job.
+Run with `--smoke_test` first to check shapes on 2 pairs before the full ~2 h job.
 
-Point `datadir` in `configs/ppo_config.yaml` (DiffSBDD) or
-`configs/targetdiff_ppo.yaml` (TargetDiff) at the output directory.
-
-### Output structure
-
-After the pipeline completes, `--output_dir` will contain:
+Either way you get:
 
 ```
 my_dataset/
-├── 01_raw_pdbs/              # Downloaded .pdb / .cif files (Option A only)
-├── 02_preprocessed/
-│   ├── pocket_files/         # Ligand-free pocket .pdb files
-│   ├── sdf_files/            # Ligand .sdf files
-│   ├── all_data.txt          # All extracted basename pairs
-│   └── train_data.txt        # After test-set filtering
-└── 03_final_dataset/
-    ├── train.npz             # Training set
-    ├── val.npz               # Validation set
-    ├── test.npz              # Test set
-    ├── train_smiles.npy      # Pre-computed SMILES for training ligands
-    ├── size_distribution.npy # Joint ligand/pocket size histogram
-    └── summary.txt           # Atom/AA histograms and dataset statistics
+├── 01_raw_pdbs/          # downloaded .pdb / .cif
+├── 02_preprocessed/      # pocket_files/, sdf_files/, basename lists
+└── 03_final_dataset/     # train/val/test .npz, size_distribution.npy, summary.txt
 ```
 
-Set `datadir` in your training config to the `03_final_dataset/` path.
+Point `datadir` (or `--datadir`) at the `03_final_dataset/` path.
 
-### Key options
+Useful flags: `--preprocess_distance` (15 Å, initial pocket cut),
+`--dataset_distance` (5 Å, final pocket in the `.npz`), `--test_pdbs` (exclusion
+list, `none` to skip), `--keep_duplicates`, `--include_common`. Reference lists
+live in `data/`: `example_pdbs.txt` (10 IDs for a quick test),
+`crossdocked_{train,test}_pdbs.txt`, `pdb_block_list.txt`.
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--pdb_list` | — | Text file of PDB IDs to download |
-| `--skip_fetch` | off | Use existing local PDB files instead |
-| `--pdb_dir` | — | Directory of local PDB files (required with `--skip_fetch`) |
-| `--output_dir` | `data/custom_<name>_data` | Root output directory |
-| `--preprocess_distance` | `15.0` | Å cutoff for initial pocket extraction |
-| `--dataset_distance` | `5.0` | Å cutoff for final pocket definition in .npz |
-| `--test_pdbs` | `data/crossdocked_test_pdbs.txt` | Test PDB exclusion list; pass `none` to skip |
-| `--keep_duplicates` | off | Keep all chain instances of the same ligand |
-| `--include_common` | off | Include crystallographic additives (skips block list) |
-| `--dataset_info_key` | `crossdock_full` | Atom encoder key from `constants.py` |
-| `--model` | `diffsbdd` | Pocket feature format: `diffsbdd` (10-dim) or `targetdiff` (27-dim) |
+## Layout
 
-### Reference files in `data/`
-
-| File | Purpose |
-|------|---------|
-| `example_pdbs.txt` | 10 PDB IDs for a quick test run |
-| `crossdocked_train_pdbs.txt` | Full CrossDocked training PDB list |
-| `crossdocked_test_pdbs.txt` | CrossDocked test set (excluded from training) |
-| `pdb_block_list.txt` | Crystallographic additives / solvents to ignore |
-
----
-
-## Generating Ligands
-
-### Single pocket
-
-Two scripts handle single-pocket generation — one per model architecture.
-Both accept a checkpoint, a config, and a pocket PDB file.
-
-```bash
-# DiffSBDD
-python -m scripts.generate_diffsbdd \
-    checkpoints/crossdocked_fullatom_cond.ckpt \
-    --config configs/ppo_config.yaml \
-    --pdbfile path/to/pocket.pdb \
-    --outfile results/generated.sdf \
-    --n_samples 100 --batch_size 25 --sanitize
-
-# TargetDiff
-python -m scripts.generate_targetdiff \
-    checkpoints/targetdiff.pt \
-    --config configs/targetdiff_ppo.yaml \
-    --pdbfile path/to/pocket.pdb \
-    --outfile results/generated.sdf \
-    --n_samples 100
+```
+configs/            one YAML per experiment, split by backbone
+scripts/            train.py, generate_*, test_*, process_*
+bash/               SLURM submission scripts (gitignored)
+src/
+  models/           vendored DiffSBDD and TargetDiff backbones
+  prism/            PRISM's own code
+    models/         policy wrappers + factories (the backbone abstraction)
+    ppo_tuner/      PPO algorithm, rollout, loss, Lightning module
+    reward/         reward factory, manager, and scoring/*
+    data_modules/   Lightning DataModule + Dataset
+    data_processing/ PDB → NPZ pipeline
+val_analysis/       post-hoc metrics + Smina docking
+Log_Results/        training outputs (gitignored)
+results/            generation outputs (SDFs)
 ```
 
-Obtain the original DiffSBDD checkpoint:
+Get the pretrained DiffSBDD checkpoint with:
 
 ```bash
 wget -P checkpoints/ https://zenodo.org/record/8183747/files/crossdocked_fullatom_cond.ckpt
-```
-
-### Test set / custom target set
-
-`scripts/test_crossdocked.py` generates ligands for a directory of pockets and works
-with both models via `--model`:
-
-```bash
-python -m scripts.test_crossdocked \
-    checkpoints/my_run.ckpt \
-    --model diffsbdd \          # or targetdiff
-    --config configs/ppo_config.yaml \
-    --test_dir /path/to/test_pockets \
-    --outdir results/test \
-    --n_samples 100 --batch_size 120
-```
-
-Expected layout under `--test_dir`:
-
-```
-test_pockets/
-├── <stem>.sdf               reference ligand (used as output name key)
-├── <stem>_pocket.pdb        pocket PDB (CrossDocked extracted-pocket convention)
-│   — or —
-├── <pdb_id>.pdb             full-structure PDB (DiffSBDD raw-PDB convention)
-└── <stem>.txt               residue list (DiffSBDD only; optional)
-```
-
-The script first looks for `<stem>_pocket.pdb` (the naming convention produced by
-`process_crossdock.py`), then falls back to `<pdb_id>.pdb` (first `_`-separated
-component of the stem, used when the directory contains raw full-structure PDB files).
-For TargetDiff the `.txt` file is not needed.
-
-### Held-out evaluation targets
-
-`scripts/test_targets.py` runs generation over a fixed set of 6 proteins
-(18 structures) and also supports `--model diffsbdd|targetdiff`:
-
-```bash
-python -m scripts.test_targets \
-    checkpoints/my_run.ckpt \
-    --model diffsbdd \
-    --config configs/ppo_config.yaml \
-    --targets_dir /data/targets \
-    --outdir results/eval_targets \
-    --n_samples 10000
-
-# Single target (useful for parallel submission)
-python -m scripts.test_targets ... --target BRD4_BD1_4whw
-```
-
----
-
-## Training
-
-Train PRISM with reinforcement learning:
-
-```bash
-python scripts/train.py \
-    --config configs/ppo_config.yaml \
-    --warm_start_from_ddpm checkpoints/crossdocked_fullatom_cond.ckpt \
-    --seed 42
-```
-
-### Configuration
-
-Training is controlled through `configs/ppo_config.yaml`. Key parameters:
-
-**Top-level settings:**
-
-| Key | Description |
-|-----|-------------|
-| `run_identifier` | Experiment name for logging |
-| `datadir` | Path to the `03_final_dataset/` directory |
-| `batch_size` | Number of protein pockets per data-loading batch |
-| `freeze_except` | List of EGNN blocks to unfreeze (e.g. `['e_block_3', 'e_block_4']`) |
-
-**`model:` section:**
-
-| Key | Description |
-|-----|-------------|
-| `total_timesteps` | Total diffusion timesteps (must match the pre-trained checkpoint) |
-
-**`ppo:` section:**
-
-| Key | Description |
-|-----|-------------|
-| `num_outer_epochs` | Number of PPO training cycles |
-| `num_inner_epochs` | PPO gradient updates per rollout |
-| `n_steps` | Molecules generated per rollout |
-| `batch_size` | Mini-batch size for PPO updates |
-| `clip_range` | PPO clipping parameter (typically `0.1`) |
-| `entropy_coef` | Entropy bonus coefficient |
-| `lr` | Optimizer learning rate |
-| `train_timesteps` | Diffusion timesteps sampled during training |
-| `gradient_accumulation_steps` | Steps before an optimizer update |
-| `target_kl` | Early-stop KL threshold per inner epoch |
-| `num_nodes_lig` | Expected ligand size for rollout sampling |
-
-**`reward_params:` section:**
-
-Set a weight > 0 to enable a reward component. All weights should sum to 1.
-
-| Key | Description |
-|-----|-------------|
-| `smina_docking` | Docking score (Smina/Gnina) |
-| `custom_qed` | Drug-likeness (QED) |
-| `custom_sa_score` | Synthetic accessibility |
-| `geometry_checks` | 3-D geometry validity |
-| `feature_density` | Hotspot pharmacophore overlap |
-| `property_2d` | 2-D molecular property matching |
-
----
-
-## Project Structure
-
-```
-.
-├── configs/                     # YAML configuration files
-│   ├── ppo_config.yaml          # Main training config
-│   ├── ablations/               # Ablation study configs
-│   └── exp_specific/            # Experiment-specific configs
-├── checkpoints/                 # Model checkpoints
-├── data/
-│   ├── example_pdbs.txt         # 10-entry PDB list for quick tests
-│   ├── crossdocked_train_pdbs.txt
-│   ├── crossdocked_test_pdbs.txt
-│   └── pdb_block_list.txt
-├── scripts/
-│   ├── process_data.py                 # Data pipeline: PDB IDs → NPZ (custom datasets)
-│   ├── process_crossdock.py            # CrossDocked pocket10 → NPZ (--model diffsbdd|targetdiff)
-│   ├── process_crossdock_targetdiff.py # Legacy: TargetDiff CrossDocked processor
-│   ├── train.py                        # PPO training entry point
-│   ├── generate_diffsbdd.py            # Single-pocket inference (DiffSBDD)
-│   ├── generate_targetdiff.py          # Single-pocket inference (TargetDiff)
-│   ├── test_crossdocked.py             # Test-set generation (--model diffsbdd|targetdiff)
-│   └── test_targets.py                 # Eval-target generation (--model diffsbdd|targetdiff)
-├── src/
-│   ├── models/diffsbdd/         # DiffSBDD diffusion model (vendored)
-│   ├── models/targetdiff/       # TargetDiff diffusion model (vendored)
-│   └── prism/
-│       ├── data_processing/     # fetch_pdbs, preprocess_data, create_dataset
-│       ├── data_modules/        # PyTorch Lightning DataModule + Dataset
-│       ├── models/              # Policy wrappers + targetdiff_inference helpers
-│       ├── ppo_tuner/           # PPO algorithm, rollout, loss, Lightning module
-│       └── reward/              # Reward function implementations
-└── results/                     # Generation outputs
 ```
