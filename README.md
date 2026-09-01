@@ -9,8 +9,7 @@ ligands from a checkpoint. Everything else is preparation for those two.
 
 ## Workshop Paper
 
-https://openreview.net/forum?id=TAeVNZ77sH&nesting=2&sort=date-desc 
-
+[![Paper](https://img.shields.io/badge/OpenReview-TAeVNZ77sH-8C1B13)](https://openreview.net/forum?id=TAeVNZ77sH)
 
 
 ## Setup
