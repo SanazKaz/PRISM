@@ -2,7 +2,6 @@ run_name: 'practise_clip_lr_increase_2e-4_acc_flush_2'
 logdir: 'Log_Results'
 wandb_params:
   mode: 'online' # seeing if it will reduce overhead 
-  entity: 'sanazkazeminia97'
 dataset: 'crossdock'
 datadir: 'data'
 enable_progress_bar: False

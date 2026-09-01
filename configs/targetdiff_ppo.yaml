@@ -8,7 +8,6 @@ logdir: 'Log_Results'
 
 wandb_params:
   mode: 'offline'
-  entity: 'sanazkazeminia97'
   project: 'TargetDiff-PRISM'
 
 model_type: targetdiff

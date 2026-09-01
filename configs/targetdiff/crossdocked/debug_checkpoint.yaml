@@ -19,7 +19,6 @@ logdir: '/tmp/ckpt_test'
 
 wandb_params:
   mode: 'disabled'
-  entity: 'sanazkazeminia97'
   project: 'PRISM-debug'
 
 model_type: targetdiff

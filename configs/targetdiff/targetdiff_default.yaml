@@ -1,0 +1,105 @@
+# TargetDiff PPO fine-tuning — default config.
+#
+# Rewards: QED + synthetic accessibility only. Everything else (PPO knobs,
+# frozen layers, timestep window) is identical to the validated multi-objective
+# run, so this is a known-good starting point to add rewards to.
+#
+#   python scripts/train.py \
+#       --config configs/targetdiff/targetdiff_default.yaml \
+#       --warm_start_from_ddpm checkpoints/targetdiff_pretrained_models/targetdiff_pretrained_diffusion.pt
+
+run_identifier: 'targetdiff_default'
+logdir: 'Log_Results'
+
+wandb_params:
+  mode: 'offline'
+  project: 'PRISM'
+
+model_type: targetdiff
+
+# TargetDiff's UniTransformer has 9 layers (indices 0-8). Everything not listed
+# here stays frozen, which anchors the policy to the pretrained prior.
+freeze_except:
+  - 'v_inference'
+  - 'refine_net.base_block.0'
+  - 'refine_net.base_block.2'
+  - 'refine_net.base_block.8'
+
+model:
+  checkpoint: 'checkpoints/targetdiff_pretrained_models/targetdiff_pretrained_diffusion.pt'
+  protein_feat_dim: 27
+  ligand_atom_types: 13
+  total_timesteps: 1000
+
+# -----------------------------------------------------------------------
+# Data — override with --datadir
+# -----------------------------------------------------------------------
+datadir: 'data/cross_dock/processed_crossdock_targetdiff'
+dataset: 'crossdock'
+batch_size: 20
+num_workers: 4
+gpus: 2
+n_epochs: 1
+
+enable_progress_bar: False
+num_sanity_val_steps: 0
+
+train_single_pocket: False
+
+# -----------------------------------------------------------------------
+# PPO algorithm knobs
+# -----------------------------------------------------------------------
+ppo:
+  use_grpo_advantages: False
+  num_outer_epochs: 60
+  num_inner_epochs: 2
+  n_steps: 40
+  ligand_chunk_size: 40
+  batch_size: 60
+  clip_range: 0.1
+  entropy_coef: 0.0
+  kl_coef: 0.0
+  max_grad_norm: 1.0
+  gradient_accumulation_steps: 400
+  train_timesteps: 500
+  # Which part of the reverse chain PPO trains on (t: 0=clean, 999=noisiest).
+  # A middle band trades leverage for lower seed variance.
+  timestep_window: band
+  t_lo: 500
+  t_hi: 850
+  target_kl: 0.03
+  ref_kl_coef: 0.05
+  lr: 3.0e-4
+  num_nodes_lig: 27
+
+# Gradient / weight-update diagnostics — off by default, toggle per run.
+grad_logging:
+  enabled: false
+  every_n_epochs: 5
+  log_histogram: true
+  per_block_histogram: true
+  max_hist_elements: 1000000
+
+# -----------------------------------------------------------------------
+# Rewards — only weights > 0 are instantiated.
+# weighted_sum accumulates without normalising, so keep the weights summing to 1.
+# -----------------------------------------------------------------------
+reward_params:
+  aggregation: 'weighted_sum'
+  rewards:
+    custom_qed: 0.5
+    custom_sa_score: 0.5
+
+# -----------------------------------------------------------------------
+# Evaluation
+# -----------------------------------------------------------------------
+eval_epochs: 5
+visualize_sample_epoch: 99999
+visualize_chain_epoch: 999999
+eval_params:
+  n_eval_samples: 20
+  eval_batch_size: 20
+  # Repointed automatically to <datadir>/train_smiles.npy by train.py.
+  smiles_file: 'data/cross_dock/processed_crossdock_targetdiff/train_smiles.npy'
+  n_visualize_samples: 0
+  keep_frames: 0

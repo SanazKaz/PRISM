@@ -2,7 +2,6 @@ run_identifier: 'BM_final_geometry_checks_lr4e-7'
 logdir: 'Log_Results'
 wandb_params:
   mode: 'online'
-  entity: 'sanazkazeminia97'
   project: 'final_geometry_checks_BM'
 dataset: 'bindingmoad'
 datadir: '/data/stat-cadd/wolf7055/PRISM/data/BRD4_BD1/03_final_dataset'

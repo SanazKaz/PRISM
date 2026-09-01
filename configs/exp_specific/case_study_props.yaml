@@ -2,7 +2,6 @@ run_identifier: 'molprops_geom'
 logdir: 'Log_Results'
 wandb_params:
   mode: 'offline'
-  entity: 'sanazkazeminia97'
   project: 'case_study_molprops_geom_03_04'
 dataset: 'crossdock'
 datadir: '/data/stat-cadd/wolf7055/PRISM/data/cross_dock/processed_crossdock_noH_full_temp'

@@ -2,7 +2,6 @@ run_name: 'SE3-cond-full'
 logdir: '/data/stat-cadd/wolf7055/diffsbdd-ppo/logdir'
 wandb_params:
   mode: 'online'  # disabled, offline, online
-  entity: 'sanazkazeminia97'
 dataset: 'crossdock'
 datadir: '/data/stat-cadd/wolf7055/diffsbdd-ppo/data'
 enable_progress_bar: True

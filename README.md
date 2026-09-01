@@ -6,12 +6,17 @@ PRISM framework takes a pretrained **DiffSBDD** or **TargetDiff** checkpoint and
 ligands optimise a chemistry reward while staying close to the pretrained prior.
 
 ## Workshop Paper
-PRISM: A Hybrid Diffusion-Reinforcement Learning Framework for 3D Structure-based De Novo Design
+
+**PRISM: A Hybrid Diffusion-Reinforcement Learning Framework for 3D Structure-based De Novo Design**
+
 Sanaz Kazeminia, Lewis R. Vidler, Pushkar G. Ghanekar, Nele P Quast, Garrett M Morris
 
 [![Paper](https://img.shields.io/badge/OpenReview-TAeVNZ77sH-8C1B13)](https://openreview.net/forum?id=TAeVNZ77sH)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-## Setup
+![PRISM training loop](assets/prism_overview.png)
+
+## Environment
 
 ```bash
 conda env create -f environment.yml
@@ -20,14 +25,7 @@ pip install -e .
 ```
 
 `environment.yml` pins torch 2.6.0+cu124 and the CUDA-specific PyG wheels
-(`torch-scatter`, `torch-cluster`, `torch-geometric`), so there is nothing else
-to install.
-
-On the group cluster the environment already exists:
-
-```bash
-module load Mamba && conda activate PRISM_25
-```
+(`torch-scatter`, `torch-cluster`, `torch-geometric`).
 
 Check it worked:
 
@@ -36,18 +34,51 @@ python -c "import torch, torch_scatter, torch_geometric, prism; print(torch.cuda
 python -m pytest tests/unit -q
 ```
 
+## Checkpoints and data
+
+Fine-tuned checkpoints from the paper, and the estrogen receptor alpha
+case-study inputs: **https://zenodo.org/records/22229237**
+
+Each `.pt` is the native backbone format the generation scripts load.
+
+| File | Backbone | Reward | Seed | Epoch |
+|---|---|---|---|---|
+| `prism_diffsbdd_penalised_logp_seed42_ep25.pt` | DiffSBDD | penalised LogP | 42 | 25 |
+| `prism_targetdiff_penalised_logp_seed976_ep13.pt` | TargetDiff | penalised LogP | 976 | 13 |
+| `prism_diffsbdd_geometry_seed42_ep09.pt` | DiffSBDD | geometry | 42 | 9 |
+| `prism_diffsbdd_multiobj_seed976_ep27.pt` | DiffSBDD | geometry + docking + QED + SA (weighted sum) | 976 | 27 |
+| `prism_targetdiff_multiobj_seed789_ep17.pt` | TargetDiff | geometry + docking + QED + SA (product) | 789 | 17 |
+| `prism_targetdiff_case_estrogen_receptor_alpha_seed976_ep54.pt` | TargetDiff | ERα: feature density + property_2d + geometry (product) | 976 | 54 |
+
+`era_case_study_data.zip` holds what the ERα case study needs beyond the code:
+the PDB list fed to `scripts/process_data.py`, the pharmacophore hotspot `.pkl`
+for `feature_density`, `propeties_ref.json` for `property_2d`, and the three
+held-out pocket/ligand pairs used for generation. Everything else in the
+pipeline regenerates from the PDB list.
+
+PPO training is not bitwise reproducible across GPUs, so use these checkpoints
+to reproduce the paper numbers rather than retraining.
+
 ## Train
+
+PPO fine-tunes a pretrained checkpoint, so download one first and put it under
+`checkpoints/`:
+
+- DiffSBDD — https://github.com/arneschneuing/DiffSBDD
+- TargetDiff — https://github.com/guanjq/targetdiff
 
 ```bash
 python scripts/train.py \
-    --config configs/targetdiff/crossdocked/geometry.yaml \
-    --warm_start_from_ddpm checkpoints/targetdiff_pretrained_models/targetdiff_pretrained_diffusion.pt \
-    --seed 42
+    --config configs/targetdiff/targetdiff_default.yaml \
+    --warm_start_from_ddpm checkpoints/targetdiff_pretrained_models/targetdiff_pretrained_diffusion.pt
 ```
 
-For DiffSBDD, swap in `configs/diffsbdd/ppo_config.yaml` and a DiffSBDD
-checkpoint; the config's `model_type` selects the backbone (DiffSBDD is the
-default when the key is absent).
+For DiffSBDD, swap in `configs/diffsbdd/diffsbdd_default.yaml` and a DiffSBDD
+checkpoint; the config's `model_type` selects the backbone.
+
+Both default configs reward QED and synthetic accessibility only
+(`weighted_sum`, 0.5 each). Their PPO settings match the validated
+multi-objective runs, so they are a working baseline to add rewards to.
 
 These CLI flags override the YAML, which is how one config is reused across a
 seed × target sweep: `--seed`, `--datadir`, `--logdir`, `--dataset_name`,
@@ -60,8 +91,9 @@ you generate with**). Top-3 by `train/reward_mean`, plus `last`.
 
 ### Config
 
-One YAML per experiment, under `configs/<backbone>/`. Clone the closest existing
-config and change only what the experiment is asking about.
+One YAML per experiment, under `configs/<backbone>/`. Clone
+`targetdiff_default.yaml` or `diffsbdd_default.yaml` and change only what the
+experiment is asking about.
 
 | Section | What it controls |
 |---------|------------------|
@@ -98,7 +130,7 @@ Three entry points, all taking a `.pt`/`.ckpt` checkpoint, the run's config, and
 python -m scripts.test_targets \
     <checkpoint> \
     --model targetdiff \
-    --config configs/targetdiff/crossdocked/geometry.yaml \
+    --config configs/targetdiff/targetdiff_default.yaml \
     --targets_dir data \
     --outdir results/targetdiff/<run> \
     --n_samples 1000 --batch_size 84 --num_steps 1000
@@ -118,7 +150,7 @@ pairs.
 python -m scripts.test_crossdocked \
     <checkpoint> \
     --model targetdiff \
-    --config configs/targetdiff/crossdocked/geometry.yaml \
+    --config configs/targetdiff/targetdiff_default.yaml \
     --test_dir data/cross_dock/.../test \
     --outdir results/targetdiff/<run> \
     --n_samples 100 --batch_size 84
@@ -134,7 +166,7 @@ optional `<stem>.txt` residue list.
 ```bash
 python -m scripts.generate_targetdiff \
     <checkpoint> \
-    --config configs/targetdiff/crossdocked/geometry.yaml \
+    --config configs/targetdiff/targetdiff_default.yaml \
     --pdbfile path/to/pocket.pdb \
     --outfile results/generated.sdf \
     --n_samples 100
@@ -142,6 +174,69 @@ python -m scripts.generate_targetdiff \
 
 Evaluate the resulting SDFs with `val_analysis/metrics.py` (QED, SA, diversity,
 PoseBusters) and `val_analysis/smina_docking.py`.
+
+## Case study: estrogen receptor alpha
+
+The case studies fine-tune on one target instead of the whole CrossDocked set.
+The reward is a pharmacophore hotspot match, a 2D property match to known
+binders, and geometry, combined as a product. Here is the full ERα run.
+
+**1. Get the inputs.** Download `era_case_study_data.zip` from the Zenodo
+record above. It has the PDB list, the hotspot `.pkl`, `propeties_ref.json`,
+and the three held-out pockets we generate for.
+
+**2. Build the dataset.** The PDB list is every ERα structure from an RCSB
+sequence search. `process_data.py` fetches them, cuts the pockets, and writes
+the `.npz` files. It also drops the three held-out structures, so the model
+never sees the pockets it is later asked to design for:
+
+```bash
+python -m scripts.process_data \
+    --pdb_list estrogen_recep_alpha_pdb_list.txt \
+    --output_dir data/Estrogen_recep_alpha \
+    --model targetdiff
+```
+
+Put the hotspot `.pkl` in `data/Estrogen_recep_alpha/hotspot_analysis/` and
+`propeties_ref.json` in `src/prism/reward/scoring/reward_data/`.
+
+**3. Train.** `--target_name` picks both the hotspot and the reference-binder
+stats for that target, so one config serves every case study:
+
+```bash
+python scripts/train.py \
+    --config configs/targetdiff/case_studies/multi_objective_pharm_product.yaml \
+    --warm_start_from_ddpm checkpoints/targetdiff_pretrained_models/targetdiff_pretrained_diffusion.pt \
+    --datadir data/Estrogen_recep_alpha/03_final_dataset_targetdiff \
+    --hotspot_path data/Estrogen_recep_alpha/hotspot_analysis/Estrogen_recep_alpha_hotspot_data.pkl \
+    --target_name Estrogen_recep_alpha \
+    --dataset_name Estrogen_recep_alpha \
+    --logdir Log_Results/case_studies \
+    --seed 976
+```
+
+To sweep seeds and all six targets on SLURM instead, see
+`bash/target_diff/train_case_study_targets.sh`.
+
+**4. Generate.** Pick the checkpoint with the best `train/reward_mean`, or skip
+training and use ours from the Zenodo record
+(`prism_targetdiff_case_estrogen_receptor_alpha_seed976_ep54.pt`):
+
+```bash
+python -m scripts.test_targets <checkpoint> \
+    --model targetdiff \
+    --config configs/targetdiff/case_studies/multi_objective_pharm_product.yaml \
+    --targets_dir data \
+    --target Estrogen_recep_alpha_2qzo \
+    --outdir results/era \
+    --n_samples 1000 --batch_size 84 --num_steps 1000
+```
+
+Drop `--target` to run all three ERα structures. Score the SDFs with
+`val_analysis/metrics.py` and `val_analysis/smina_docking.py`.
+
+The other five targets work the same way — swap the target name and its data
+directory. The configs are in `configs/targetdiff/case_studies/`.
 
 ## Data preparation
 
@@ -194,7 +289,7 @@ Useful flags: `--preprocess_distance` (15 Å, initial pocket cut),
 `--dataset_distance` (5 Å, final pocket in the `.npz`), `--test_pdbs` (exclusion
 list, `none` to skip), `--keep_duplicates`, `--include_common`. Reference lists
 live in `data/`: `example_pdbs.txt` (10 IDs for a quick test),
-`crossdocked_{train,test}_pdbs.txt`, `pdb_block_list.txt`.
+`case_study_train_pdbs.txt`, `heldout_eval_pdbs.txt`, `pdb_block_list.txt`.
 
 ## Layout
 
@@ -215,14 +310,24 @@ Log_Results/        training outputs (gitignored)
 results/            generation outputs (SDFs)
 ```
 
-Get the pretrained DiffSBDD checkpoint with:
+## Citation
 
-```bash
-wget -P checkpoints/ https://zenodo.org/record/8183747/files/crossdocked_fullatom_cond.ckpt
+If you use PRISM in your work, please cite:
+
+```bibtex
+@inproceedings{kazeminia2026prism,
+    title     = {{PRISM}: A Hybrid Diffusion-Reinforcement Learning Framework for 3D Structure-based De Novo Design},
+    author    = {Sanaz Kazeminia and Lewis R. Vidler and Pushkar G. Ghanekar and Nele P Quast and Garrett M Morris},
+    booktitle = {ICLR 2026 Workshop on Generative and Experimental Perspectives for Biomolecular Design},
+    year      = {2026},
+    url       = {https://openreview.net/forum?id=TAeVNZ77sH}
+}
 ```
 
 We thank the authors of DiffSBDD and TargetDiff as this repo builds on their work.
+
 DiffSBDD: https://github.com/arneschneuing/DiffSBDD
+
 TargetDiff: https://github.com/guanjq/targetdiff
 
 

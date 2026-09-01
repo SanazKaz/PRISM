@@ -2,7 +2,6 @@ run_identifier: 'docking_alone_CD_multi'
 logdir: 'Log_Results'
 wandb_params:
   mode: 'offline'
-  entity: 'sanazkazeminia97'
   project: 'ablations_CD_multi'
 dataset: 'crossdock'
 datadir: '/data/stat-cadd/wolf7055/PRISM/data/cross_dock/processed_crossdock_noH_full_temp'

@@ -18,7 +18,7 @@ From local PDB files you already have on disk:
 
 Reproduce the CrossDocked training set:
     python -m scripts.process_data \\
-        --pdb_list data/crossdocked_train_pdbs.txt \\
+        --pdb_list data/case_study_train_pdbs.txt \\
         --output_dir data/crossdocked
 """
 
@@ -30,7 +30,7 @@ from src.prism.data_processing import fetch_pdbs, preprocess_data, create_datase
 
 # Bundled reference files that ship with the repo
 _REPO_ROOT = Path(__file__).parent.parent
-_DEFAULT_TEST_PDBS = _REPO_ROOT / "data" / "crossdocked_test_pdbs.txt"
+_DEFAULT_TEST_PDBS = _REPO_ROOT / "data" / "heldout_eval_pdbs.txt"
 
 
 def filter_test_pdbs_from_split(
