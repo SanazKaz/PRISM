@@ -80,14 +80,10 @@ Both default configs reward QED and synthetic accessibility only
 (`weighted_sum`, 0.5 each). Their PPO settings match the validated
 multi-objective runs, so they are a working baseline to add rewards to.
 
-These CLI flags override the YAML, which is how one config is reused across a
-seed × target sweep: `--seed`, `--datadir`, `--logdir`, `--dataset_name`,
-`--target_name`, `--hotspot_path`, `--resume_from_checkpoint`.
 
 Checkpoints land in
 `Log_Results/<logdir>/<run_identifier>/checkpoints/<dataset>/seed=<S>/`, saved as
-both `.ckpt` (Lightning) and `.pt` (native backbone format — **this is the one
-you generate with**). Top-3 by `train/reward_mean`, plus `last`.
+both `.ckpt` (Lightning) and `.pt`. Top-3 by `train/reward_mean`, plus `last`.
 
 ### Config
 
