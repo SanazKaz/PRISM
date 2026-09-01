@@ -8,6 +8,7 @@ ligands optimise a chemistry reward while staying close to the pretrained prior.
 ## Workshop Paper
 PRISM: A Hybrid Diffusion-Reinforcement Learning Framework for 3D Structure-based De Novo Design
 Sanaz Kazeminia, Lewis R. Vidler, Pushkar G. Ghanekar, Nele P Quast, Garrett M Morris
+
 [![Paper](https://img.shields.io/badge/OpenReview-TAeVNZ77sH-8C1B13)](https://openreview.net/forum?id=TAeVNZ77sH)
 
 ## Setup
@@ -219,3 +220,9 @@ Get the pretrained DiffSBDD checkpoint with:
 ```bash
 wget -P checkpoints/ https://zenodo.org/record/8183747/files/crossdocked_fullatom_cond.ckpt
 ```
+
+We thank the authors of DiffSBDD and TargetDiff as this repo builds on their work.
+DiffSBDD: https://github.com/arneschneuing/DiffSBDD
+TargetDiff: https://github.com/guanjq/targetdiff
+
+
