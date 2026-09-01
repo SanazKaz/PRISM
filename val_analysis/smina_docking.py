@@ -18,6 +18,10 @@ from rdkit import Chem
 
 from src.prism.utils import center_pocket_on_ligand_com
 
+# The smina binary ships in this directory, so resolve it relative to this
+# file rather than any one machine's checkout.
+DEFAULT_SMINA_PATH = str(Path(__file__).resolve().parent / "smina.static")
+
 
 VALID_DATASET_TYPES = ("crossdock", "custom")
 
@@ -41,7 +45,7 @@ class SminaDocking:
 
     def __init__(
         self,
-        smina_path: str = "/data/stat-cadd/wolf7055/PRISM/val_analysis/smina.static",
+        smina_path: str = DEFAULT_SMINA_PATH,
         dataset_info: Dict = None,
         dataset_type: str = "crossdock",
         local_opt: bool = False,

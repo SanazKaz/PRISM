@@ -26,8 +26,10 @@ conda activate PRISM_25
 pip install -e .
 ```
 
-`environment.yml` pins torch 2.6.0+cu124 and the CUDA-specific PyG wheels
-(`torch-scatter`, `torch-cluster`, `torch-geometric`).
+`environment.yml` pins torch 2.6.0+cu124 and the matching PyG wheels. For a
+different CUDA version, change `cu124` in the two index URLs and in the three
+`+cu124`/`+pt26cu124` pins at the top of the `pip:` section. torch 2.6.0 has PyG
+wheels for `cpu`, `cu118`, `cu124` and `cu126` — there is no `cu121` build.
 
 Check it worked:
 
@@ -70,7 +72,7 @@ PPO fine-tunes a pretrained checkpoint, so download one first and put it under
 ```bash
 python scripts/train.py \
     --config configs/targetdiff/targetdiff_default.yaml \
-    --warm_start_from_ddpm checkpoints/targetdiff_pretrained_models/targetdiff_pretrained_diffusion.pt
+    --warm_start_from_ddpm checkpoints/targetdiff_pretrained_diffusion.pt
 ```
 
 For DiffSBDD, swap in `configs/diffsbdd/diffsbdd_default.yaml` and a DiffSBDD
@@ -115,8 +117,9 @@ To add one: implement `BaseReward` in `src/prism/reward/scoring/`, register it i
 
 ## Inference
 
-Both entry points take a `.pt`/`.ckpt` checkpoint, the run's config, and
-`--model diffsbdd|targetdiff`.
+The `test_*` scripts take a `.pt`/`.ckpt` checkpoint, the run's config, and
+`--model diffsbdd|targetdiff`. The `generate_*` scripts are per-backbone and
+take no `--model`.
 
 **CrossDocked test set** — a directory of pocket/ligand pairs:
 
@@ -141,9 +144,14 @@ python -m scripts.generate_targetdiff \
     <checkpoint> \
     --config configs/targetdiff/targetdiff_default.yaml \
     --pdbfile path/to/pocket.pdb \
+    --ref_ligand path/to/ref_ligand.sdf \
     --outfile results/generated.sdf \
     --n_samples 100
 ```
+
+`--ref_ligand` cuts the pocket to 10 Å around the reference ligand, matching
+TargetDiff training. Omit it only if the PDB is already a cut pocket — on a full
+protein it drops validity sharply.
 
 Evaluate the resulting SDFs with `val_analysis/metrics.py` (QED, SA, diversity,
 PoseBusters) and `val_analysis/smina_docking.py`.
@@ -175,7 +183,7 @@ Put the hotspot `.pkl` in `data/Estrogen_recep_alpha/hotspot_analysis/` and
 ```bash
 python scripts/train.py \
     --config configs/targetdiff/case_studies/multi_objective_pharm_product.yaml \
-    --warm_start_from_ddpm checkpoints/targetdiff_pretrained_models/targetdiff_pretrained_diffusion.pt \
+    --warm_start_from_ddpm checkpoints/targetdiff_pretrained_diffusion.pt \
     --datadir data/Estrogen_recep_alpha/03_final_dataset_targetdiff \
     --hotspot_path data/Estrogen_recep_alpha/hotspot_analysis/Estrogen_recep_alpha_hotspot_data.pkl \
     --target_name Estrogen_recep_alpha \
@@ -202,6 +210,28 @@ python -m scripts.test_targets <checkpoint> \
 
 Drop `--target` to run all three ERα structures. Score the SDFs with
 `val_analysis/metrics.py` and `val_analysis/smina_docking.py`.
+
+`--targets_dir` expects the step-2 layout (`<target>/01_raw_pdbs/`,
+`<target>/02_preprocessed/sdf_files/`). To generate straight from the held-out
+pockets in `era_case_study_data.zip`, skip steps 2-3 and pass `--targets_file`:
+
+```json
+{
+  "Estrogen_recep_alpha_2qzo": {
+    "pdb": "test_pockets/2qzo_KN1_E_1_pocket.pdb",
+    "sdf": "test_pockets/2qzo_KN1_E_1.sdf"
+  }
+}
+```
+
+```bash
+python -m scripts.test_targets <checkpoint> \
+    --model targetdiff \
+    --config configs/targetdiff/case_studies/multi_objective_pharm_product.yaml \
+    --targets_file era_targets.json \
+    --outdir results/era \
+    --n_samples 1000 --batch_size 84 --num_steps 1000
+```
 
 The other five targets work the same way. Configs in
 `configs/targetdiff/case_studies/`.

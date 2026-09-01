@@ -3,7 +3,7 @@ import numpy as np
 from typing import List
 from rdkit import Chem
 from src.prism.reward.scorer import BaseReward
-from val_analysis.smina_docking import SminaDocking
+from val_analysis.smina_docking import SminaDocking, DEFAULT_SMINA_PATH
 
 
 class SminaDockingReward(BaseReward):
@@ -35,7 +35,7 @@ class SminaDockingReward(BaseReward):
 
     def __init__(
         self,
-        smina_path: str = "/data/stat-cadd/wolf7055/PRISM/val_analysis/smina.static",
+        smina_path: str = DEFAULT_SMINA_PATH,
         local_opt: bool = False,
         dataset_type: str = "custom",
         timeout: int = 45,

@@ -14,7 +14,7 @@ from posebusters import PoseBusters
 
 import sys
 from pathlib import Path
-sys.path.append(str(Path(__file__).parent.parent.parent / 'models' / 'diffsbdd'))
+sys.path.append(str(Path(__file__).parent.parent / 'src' / 'models' / 'diffsbdd'))
 from analysis.SA_Score.sascorer import calculateScore
 
 RDLogger.DisableLog('rdApp.*')
