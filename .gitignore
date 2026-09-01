@@ -48,3 +48,11 @@ jobs_files/
 
 # System
 .DS_Store
+
+# Private planning docs (kept local — do not commit/push)
+plan.md
+PLAN*.md
+CLAUDE.md
+docs/running_experiments.md
+# Local post-hoc analysis (not part of the pipeline)
+analysis/
