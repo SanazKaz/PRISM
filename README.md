@@ -115,30 +115,11 @@ Commonly used reward keys (full list in `src/prism/reward/factory.py`):
 To add one: implement `BaseReward` in `src/prism/reward/scoring/`, register it in
 `factory.py`, give it a weight key.
 
-## Generate
+## Inference
 
-Three entry points, all taking a `.pt`/`.ckpt` checkpoint, the run's config, and
-`--model diffsbdd|targetdiff`.
-
-**Held-out evaluation targets** — the fixed 6-protein / 18-structure set:
-
-```bash
-python -m scripts.test_targets \
-    <checkpoint> \
-    --model targetdiff \
-    --config configs/targetdiff/targetdiff_default.yaml \
-    --targets_dir data \
-    --outdir results/targetdiff/<run> \
-    --n_samples 1000 --batch_size 84 --num_steps 1000
-
-# one structure at a time, for parallel SLURM submission
-python -m scripts.test_targets ... --target BRD4_BD1_4whw
-```
-
-Target keys are defined in `scripts/test_targets.py::_TARGET_SPECS`. Output is
-`<outdir>/<TARGET>/<TARGET>_processed.sdf` plus a `_stats.txt`. Pass
-`--targets_file <json>` instead of `--targets_dir` to use your own pocket/ligand
-pairs.
+Both entry points take a `.pt`/`.ckpt` checkpoint, the run's config, and
+`--model diffsbdd|targetdiff`. You can use your own checkpoint or one of ours
+from the Zenodo record above.
 
 **CrossDocked test set** — a directory of pocket/ligand pairs:
 
