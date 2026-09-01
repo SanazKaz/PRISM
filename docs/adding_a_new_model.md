@@ -370,9 +370,8 @@ print(f"Trainable: {len(trainable)}, Frozen: {len(frozen)}")
 
 ## Step 9 — Create the SLURM script
 
-**File:** `bash/<newmodel>_CD_training.sh`
-
-Use `bash/targetdiff_CD_training.sh` as the template. Key points:
+SLURM scripts are not tracked in this repo. Whatever you write, the key points
+are:
 
 - `--logdir` must point to the **root** log dir (e.g. `$PROJECT_ROOT/Log_Results`),
   not the run subdirectory. `train.py` appends `run_identifier/checkpoints/dataset/seed=N`
