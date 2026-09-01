@@ -16,6 +16,8 @@ Sanaz Kazeminia, Lewis R. Vidler, Pushkar G. Ghanekar, Nele P Quast, Garrett M M
 
 ![PRISM training loop](assets/prism_overview.png)
 
+[Environment](#environment) · [Checkpoints and data](#checkpoints-and-data) · [Train](#train) · [Inference](#inference) · [Case study](#case-study-estrogen-receptor-alpha) · [Data preparation](#data-preparation) · [Layout](#layout) · [Citation](#citation)
+
 ## Environment
 
 ```bash
