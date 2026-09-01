@@ -184,8 +184,8 @@ python scripts/train.py \
     --seed 976
 ```
 
-For a seed × target sweep on SLURM, see
-`bash/target_diff/train_case_study_targets.sh`.
+For a seed × target sweep, loop the command over seeds and targets, overriding
+`--datadir`, `--hotspot_path` and `--target_name` per target.
 
 **4. Generate.** Use the checkpoint with the best `train/reward_mean`, or
 `prism_targetdiff_case_estrogen_receptor_alpha_seed976_ep54.pt` from Zenodo:
@@ -263,7 +263,6 @@ live in `data/`: `example_pdbs.txt` (10 IDs for a quick test),
 ```
 configs/            one YAML per experiment, split by backbone
 scripts/            train.py, generate_*, test_*, process_*
-bash/               SLURM submission scripts (gitignored)
 src/
   models/           vendored DiffSBDD and TargetDiff backbones
   prism/            PRISM's own code
