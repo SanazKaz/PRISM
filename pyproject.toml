@@ -32,8 +32,9 @@ dependencies = [
     "selfies==2.2.0",
     "medchem==2.0.5",
     
-    # TargetDiff dependency
+    # TargetDiff dependencies
     "easydict==1.13",
+    "lmdb==2.2.0",
 
     # Utilities
     "pyyaml==6.0.3",
@@ -46,9 +47,9 @@ dependencies = [
     "wandb==0.25.1",
 ]
 
-# PyTorch Geometric packages (torch-scatter, torch-geometric, torch-cluster) must
-# be installed separately — their wheels are CUDA-version-specific and not on PyPI.
-# See README.md for the correct pip install commands.
+# torch-scatter, torch-cluster and torch-geometric are not installed from here:
+# their wheels are built per (torch, CUDA) pair. Use environment.yml, which pins
+# the CUDA 12.4 build and carries the right wheel index.
 
 [project.optional-dependencies]
 dev = [

@@ -20,8 +20,10 @@ import torch
 
 _PROJECT_ROOT    = Path(__file__).resolve().parents[1]
 _TARGETDIFF_ROOT = _PROJECT_ROOT / "src" / "models" / "targetdiff"
+_DIFFSBDD_ROOT   = _PROJECT_ROOT / "src" / "models" / "diffsbdd"
 sys.path.insert(0, str(_PROJECT_ROOT))
 sys.path.insert(1, str(_TARGETDIFF_ROOT))
+sys.path.insert(2, str(_DIFFSBDD_ROOT))
 
 from src.prism.utils import write_sdf_file
 from src.prism.models.targetdiff_inference import (
@@ -42,7 +44,12 @@ def main():
     parser.add_argument("--config", type=Path, required=True,
                         help="PRISM TargetDiff YAML config (e.g. configs/targetdiff_ppo.yaml)")
     parser.add_argument("--pdbfile", type=str, required=True,
-                        help="Pocket PDB file (ligand-free)")
+                        help="Protein or pocket PDB file (ligand-free)")
+    parser.add_argument("--ref_ligand", type=str, default=None,
+                        help="Reference ligand SDF. The pocket is cut to residues "
+                             "within 10 A of it, matching TargetDiff training. "
+                             "Strongly recommended: omitting it on a full protein "
+                             "or a differently-cut pocket sharply lowers validity.")
     parser.add_argument("--outfile", type=Path, required=True,
                         help="Output SDF file path")
     parser.add_argument("--n_samples", type=int, default=100)
@@ -50,9 +57,9 @@ def main():
     parser.add_argument("--num_steps", type=int, default=1000,
                         help="Diffusion steps (default: 1000, matches TargetDiff training)")
     parser.add_argument("--sample_num_atoms", type=str, default="prior",
-                        choices=["prior", "ref"],
-                        help="How to pick ligand size: 'prior' samples from the learned "
-                             "distribution; 'ref' requires a reference ligand")
+                        choices=["prior"],
+                        help="How to pick ligand size: 'prior' samples from the "
+                             "learned size distribution")
     parser.add_argument("--center_pos_mode", type=str, default="protein",
                         help="How to centre coordinates before sampling")
     args = parser.parse_args()
@@ -63,8 +70,12 @@ def main():
     model = load_targetdiff_model(args.checkpoint, args.config, device)
     protein_featurizer = trans.FeaturizeProteinAtom()
 
+    if args.ref_ligand is None:
+        print("WARNING: no --ref_ligand given; the PDB is used as-is. "
+              "Pass one unless it is already a TargetDiff-style cut pocket.")
     print(f"Parsing pocket: {args.pdbfile}")
-    pocket_data = pocket_from_pdb(args.pdbfile, protein_featurizer)
+    pocket_data = pocket_from_pdb(args.pdbfile, protein_featurizer,
+                                  ref_ligand_sdf=args.ref_ligand)
 
     print(f"Generating {args.n_samples} molecules in batches of {args.batch_size}…")
     with torch.no_grad():
