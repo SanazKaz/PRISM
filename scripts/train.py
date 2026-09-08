@@ -18,7 +18,9 @@ sys.path.insert(1, str(diffsbdd_path))
 
 
 import argparse
+import json
 from argparse import Namespace
+from datetime import datetime, timezone
 from pathlib import Path
 import yaml
 import numpy as np
@@ -41,7 +43,52 @@ class PTModelCheckpoint(ModelCheckpoint):
     every time a .ckpt file is saved (and deletes it when the .ckpt is deleted).
     Supports both DiffSBDD (saves ddpm_model state_dict) and TargetDiff
     (saves the inner ScorePosNet3D state_dict via policy._model).
+
+    Also writes a sidecar `<name>.meta.json` next to every `.pt` recording the
+    provenance needed to identify a checkpoint later (rewards + weights,
+    aggregation, epoch, monitored reward value, seed, run name, config path and
+    the wandb run URL). The sidecar is removed alongside the checkpoint.
     """
+
+    def __init__(self, *args, meta=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Static provenance shared by every checkpoint of this run. Per-checkpoint
+        # fields (epoch, reward value, wandb url, filenames) are filled in at save.
+        self._meta = dict(meta) if meta else {}
+
+    def _write_meta_sidecar(self, trainer, filepath, pt_path):
+        """Best-effort provenance sidecar. Never let a metadata error abort a save."""
+        try:
+            meta = dict(self._meta)
+            meta["epoch"] = int(trainer.current_epoch)
+            meta["monitor"] = self.monitor
+            try:
+                candidates = self._monitor_candidates(trainer)
+                val = candidates.get(self.monitor)
+                meta["monitor_value"] = float(val) if val is not None else None
+            except Exception:
+                meta["monitor_value"] = None
+
+            # wandb run URL/id — the experiment is live by the time we save.
+            meta["wandb_url"] = None
+            meta["wandb_run_id"] = None
+            try:
+                exp = trainer.logger.experiment
+                meta["wandb_url"] = getattr(exp, "url", None)
+                meta["wandb_run_id"] = getattr(exp, "id", None)
+            except Exception:
+                pass
+
+            meta["checkpoint_ckpt"] = os.path.basename(filepath)
+            meta["checkpoint_pt"] = os.path.basename(pt_path)
+            meta["saved_at"] = datetime.now(timezone.utc).isoformat()
+
+            meta_path = pt_path[:-3] + ".meta.json"  # pt_path ends with '.pt'
+            with open(meta_path, "w") as f:
+                json.dump(meta, f, indent=2, default=str)
+            print(f"[PT Checkpoint] Wrote metadata sidecar {meta_path}")
+        except Exception as e:
+            print(f"[PT Checkpoint] WARNING: failed to write metadata sidecar: {e}")
 
     def on_train_epoch_end(self, trainer, pl_module):
         # Fix 1 — PL 2.6.0 regression: _save_topk_checkpoint internally compares
@@ -93,15 +140,21 @@ class PTModelCheckpoint(ModelCheckpoint):
             pt_path = str(filepath).replace('.ckpt', '.pt')
             lm = trainer.lightning_module
 
+            _pt_saved = False
             if hasattr(lm, 'ddpm_model') and lm.ddpm_model is not None:
                 # DiffSBDD path
                 torch.save(lm.ddpm_model.state_dict(), pt_path)
                 print(f"[PT Checkpoint] Saved DiffSBDD .pt to {pt_path}")
+                _pt_saved = True
             elif hasattr(lm, 'policy') and hasattr(lm.policy, '_model'):
                 # TargetDiff path – save in the native TargetDiff format so the
                 # checkpoint can be reloaded by load_targetdiff_policy()
                 torch.save({'model': lm.policy._model.state_dict()}, pt_path)
                 print(f"[PT Checkpoint] Saved TargetDiff .pt to {pt_path}")
+                _pt_saved = True
+
+            if _pt_saved:
+                self._write_meta_sidecar(trainer, filepath, pt_path)
 
     def _remove_checkpoint(self, trainer, filepath):
         super()._remove_checkpoint(trainer, filepath)
@@ -111,6 +164,10 @@ class PTModelCheckpoint(ModelCheckpoint):
             if os.path.exists(pt_path):
                 os.remove(pt_path)
                 print(f"[PT Checkpoint] Removed old .pt file {pt_path}")
+            meta_path = pt_path[:-3] + '.meta.json'
+            if os.path.exists(meta_path):
+                os.remove(meta_path)
+                print(f"[PT Checkpoint] Removed old metadata sidecar {meta_path}")
 
 def main(args):
     # --- 1. Load Configuration ---
@@ -191,18 +248,41 @@ def main(args):
         checkpoint_dir=checkpoint_dir)
     
 
+    run_name = f"{config.run_identifier}_{dataset_name}_seed{args.seed}"
+
+    # Provenance recorded in a sidecar next to every saved .pt so a checkpoint can
+    # always be traced back to its rewards/weights/run without spelunking logs.
+    reward_params = config_dict.get('reward_params', {}) if isinstance(config_dict, dict) else {}
+    all_rewards = reward_params.get('rewards', {}) or {}
+    active_rewards = {
+        k: v for k, v in all_rewards.items()
+        if isinstance(v, (int, float)) and v > 0
+    }
+    checkpoint_meta = {
+        "run_identifier": getattr(config, 'run_identifier', None),
+        "run_name": run_name,
+        "seed": args.seed,
+        "dataset_name": dataset_name,
+        "model_type": model_type,
+        "aggregation": reward_params.get('aggregation'),
+        "rewards_active": active_rewards,
+        "rewards_all": all_rewards,
+        "reward_paths": reward_params.get('reward_paths', {}),
+        "target_name": reward_params.get('target_name'),
+        "config_path": str(args.config),
+    }
+
     checkpoint_callback = PTModelCheckpoint(
         dirpath=str(checkpoint_dir),
-        monitor='train/reward_mean', 
+        monitor='train/reward_mean',
         mode='max',
         save_last=True,
         filename="epoch={epoch:02d}-reward={train/reward_mean:.2f}",
         save_top_k=3,
         save_on_train_epoch_end=True,
-        auto_insert_metric_name=False 
+        auto_insert_metric_name=False,
+        meta=checkpoint_meta,
     )
-    
-    run_name = f"{config.run_identifier}_{dataset_name}_seed{args.seed}"
 
     wandb_logger = WandbLogger(
         entity=getattr(config.wandb_params, 'entity', None),
