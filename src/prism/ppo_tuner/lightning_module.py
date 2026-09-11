@@ -55,15 +55,12 @@ class PPOFineTuner(pl.LightningModule):
             reconstruction_fn = make_targetdiff_reconstruction_fn()
             # Frozen reference policy — never updated, anchors KL penalty to pretrained prior
             if getattr(self.config.ppo, 'ref_kl_coef', 0.0) > 0.0:
-                self.ref_policy, _ = build_targetdiff_policy(
+                ref_policy, _ = build_targetdiff_policy(
                     config=self.config,
                     device=device,
                     warm_start_checkpoint=warm_start_checkpoint,
                 )
-                self.ref_policy.eval()
-                for p in self.ref_policy.parameters():
-                    p.requires_grad_(False)
-                print("[Init] Frozen reference policy loaded for KL anchor.")
+                self.ref_policy = self._freeze_ref_policy(ref_policy)
             else:
                 self.ref_policy = None
         else:
@@ -74,6 +71,17 @@ class PPOFineTuner(pl.LightningModule):
                 warm_start_checkpoint=warm_start_checkpoint,
             )
             reconstruction_fn = None  # DiffSBDD uses build_molecule (default)
+            # Frozen reference policy — never updated, anchors KL penalty to pretrained prior
+            if getattr(self.config.ppo, 'ref_kl_coef', 0.0) > 0.0:
+                ref_policy, _, _ = build_diffsbdd_policy(
+                    config=self.config,
+                    device=device,
+                    node_histogram=node_histogram,
+                    warm_start_checkpoint=warm_start_checkpoint,
+                )
+                self.ref_policy = self._freeze_ref_policy(ref_policy)
+            else:
+                self.ref_policy = None
 
         # Attach the data directory so reward functions can resolve relative paths.
         self.dataset_info['datadir'] = self.config.datadir
@@ -100,6 +108,16 @@ class PPOFineTuner(pl.LightningModule):
         )
         self.freeze_parameters()
         self._init_grad_logging()
+
+    @staticmethod
+    def _freeze_ref_policy(ref_policy):
+        """Put a freshly-built policy into eval mode with grads disabled, for
+        use as the frozen KL anchor. Same treatment for either backbone."""
+        ref_policy.eval()
+        for p in ref_policy.parameters():
+            p.requires_grad_(False)
+        print("[Init] Frozen reference policy loaded for KL anchor.")
+        return ref_policy
 
     # ------------------------------------------------------------------
     # Parameter freezing

@@ -4,7 +4,6 @@ import argparse
 import os
 
 from src.prism.reward.scorer import RewardManager
-from src.prism.reward.scoring.molecular_props import QEDReward, SAScoreReward, LipinskiReward, BertzReward
 from src.prism.reward.scoring.sucos import SuCOSReward
 from src.prism.reward.scoring.interaction_fingerprints import InteractionFingerprintsReward
 from src.prism.reward.scoring.feature_density import FeatureDensityReward
@@ -25,10 +24,11 @@ from src.prism.reward.scoring.dundee_filter import DundeeScore
 # 1. The Registry
 
 REWARD_REGISTRY = {
-    "qed": QEDReward,
-    "sa_score": SAScoreReward,
-    "lipinski": LipinskiReward,
-    "bertz": BertzReward,
+    # "qed" removed along with molecular_props.py (2026-09-11) — still referenced
+    # with weight 1.0 by configs/targetdiff/crossdocked/qed_noisy.yaml, which
+    # will now raise KeyError rather than silently resolve to a different
+    # reward. Flagged, not auto-repointed to CustomQEDReward: that's a
+    # different scorer and would silently change what that run computes.
     "sucos": SuCOSReward,
     "interaction_fingerprints": InteractionFingerprintsReward,
     "feature_density": FeatureDensityReward,
@@ -88,6 +88,17 @@ def get_reward_manager(config, dataset_info, ddpm_module=None, reconstruction_fn
     else:
         raise TypeError(f"Unexpected type for config.reward_params.rewards: {type(rewards_ns)}")
 
+    # Optional REINVENT-style per-component score transforms, keyed by reward name.
+    # Shapes the score the PPO advantage sees; logged component scores stay raw.
+    transforms_ns = getattr(reward_params_ns, 'score_transforms', None)
+    if isinstance(transforms_ns, argparse.Namespace):
+        score_transforms = {k: (vars(v) if isinstance(v, argparse.Namespace) else v)
+                            for k, v in vars(transforms_ns).items()}
+    elif isinstance(transforms_ns, dict):
+        score_transforms = transforms_ns
+    else:
+        score_transforms = {}
+
     reward_paths_ns = getattr(reward_params_ns, 'reward_paths', None)
     if isinstance(reward_paths_ns, argparse.Namespace):
         reward_paths = vars(reward_paths_ns)
@@ -113,8 +124,15 @@ def get_reward_manager(config, dataset_info, ddpm_module=None, reconstruction_fn
         reward_cls = REWARD_REGISTRY[name]
 
         # Only pass dataset_info to rewards that need it (like SuCOS)
-        if name == 'sucos' or name == 'interaction_fingerprints':
-            active_rewards.append(reward_cls(dataset_info))
+        if name == 'sucos':
+            # reward_paths.sucos pins one reference ligand for the whole run;
+            # omitting it keeps the legacy per-batch reference sampling.
+            active_rewards.append(reward_cls(dataset_info, reference_sdf=reward_paths.get('sucos')))
+        elif name == 'interaction_fingerprints':
+            # Tanimoto IFP similarity to the reference ligand when
+            # ifp_use_reference is set; otherwise the legacy diversity score.
+            use_ref = bool(getattr(reward_params_ns, 'ifp_use_reference', False))
+            active_rewards.append(reward_cls(dataset_info, use_reference=use_ref))
         elif name == 'feature_density':
             active_rewards.append(reward_cls(reward_paths['feature_density']))
             ########## TODO: remove later:
@@ -139,6 +157,12 @@ def get_reward_manager(config, dataset_info, ddpm_module=None, reconstruction_fn
                 dataset_info=dataset_info,
                 dataset_type=dataset_type
             ))
+        elif name == 'custom_qed':
+            # Optional reward_params.custom_qed block, e.g. {K_FUSED: 0.8}.
+            # Absent -> plain CustomQEDReward(), identical to every run so far.
+            cq_ns = getattr(reward_params_ns, 'custom_qed', None)
+            cq = vars(cq_ns) if isinstance(cq_ns, argparse.Namespace) else (cq_ns or {})
+            active_rewards.append(reward_cls(**cq))
         else:
             active_rewards.append(reward_cls())
             
@@ -152,4 +176,5 @@ def get_reward_manager(config, dataset_info, ddpm_module=None, reconstruction_fn
         ddpm_module=ddpm_module,
         aggregation=aggregation,
         reconstruction_fn=reconstruction_fn,
+        score_transforms=score_transforms,
     )
