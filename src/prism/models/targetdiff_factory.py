@@ -28,6 +28,7 @@ if _TARGETDIFF_ROOT_STR not in sys.path:
 from models.molopt_score_model import ScorePosNet3D  # noqa: E402
 
 from src.prism.models.targetdiff_policy import TargetDiffPolicy
+from src.prism.models.targetdiff_grad_checkpoint import apply_targetdiff_grad_checkpointing
 
 
 # ---------------------------------------------------------------------------
@@ -150,6 +151,12 @@ def load_targetdiff_policy(
 
     model.to(device)
     model.eval()
+
+    # Opt-in activation checkpointing (PRISM_GRAD_CKPT=1) — patches
+    # model.refine_net.base_block's layers in place rather than editing the
+    # vendored uni_transformer.py; see targetdiff_grad_checkpoint.py. No-ops
+    # for non-transformer refine nets and when the env var is unset.
+    apply_targetdiff_grad_checkpointing(model)
 
     policy = TargetDiffPolicy(
         model=model,
