@@ -44,36 +44,43 @@ class PPOFineTuner(pl.LightningModule):
         print(f"[INIT] PPOFineTuner | LOCAL_RANK={local_rank} | device={device}")
         model_type = getattr(self.config, 'model_type', 'diffsbdd')
 
-        if model_type == 'targetdiff':
-            self.policy, self.dataset_info = build_targetdiff_policy(
-                config=self.config,
-                device=device,
-                warm_start_checkpoint=warm_start_checkpoint,
-            )
-            self.ddpm_model = None  # no LigandPocketDDPM when using TargetDiff
-            from src.prism.models.targetdiff_inference import make_targetdiff_reconstruction_fn
-            reconstruction_fn = make_targetdiff_reconstruction_fn()
-            # Frozen reference policy — never updated, anchors KL penalty to pretrained prior
-            if getattr(self.config.ppo, 'ref_kl_coef', 0.0) > 0.0:
-                self.ref_policy, _ = build_targetdiff_policy(
+        def build_policy():
+            """Backbone-specific construction, normalised to one 3-tuple so the
+            caller below never needs to know which backbone it got. Called once
+            for the trainable policy, and again for the frozen ref policy below
+            if the KL anchor is on — so the two are guaranteed to match (same
+            backbone, same warm-start checkpoint), and the model_type branch
+            only has to be written once."""
+            if model_type == 'targetdiff':
+                policy, dataset_info = build_targetdiff_policy(
                     config=self.config,
                     device=device,
                     warm_start_checkpoint=warm_start_checkpoint,
                 )
-                self.ref_policy.eval()
-                for p in self.ref_policy.parameters():
-                    p.requires_grad_(False)
-                print("[Init] Frozen reference policy loaded for KL anchor.")
-            else:
-                self.ref_policy = None
-        else:
-            self.policy, self.ddpm_model, self.dataset_info = build_diffsbdd_policy(
+                return policy, None, dataset_info  # no LigandPocketDDPM for TargetDiff
+            return build_diffsbdd_policy(
                 config=self.config,
                 device=device,
                 node_histogram=node_histogram,
                 warm_start_checkpoint=warm_start_checkpoint,
             )
+
+        self.policy, self.ddpm_model, self.dataset_info = build_policy()
+
+        if model_type == 'targetdiff':
+            from src.prism.models.targetdiff_inference import make_targetdiff_reconstruction_fn
+            reconstruction_fn = make_targetdiff_reconstruction_fn()
+        else:
             reconstruction_fn = None  # DiffSBDD uses build_molecule (default)
+
+        # Frozen reference policy — never updated, anchors KL penalty to pretrained
+        # prior. Same build_policy() as above, so it's built the same way as the
+        # trainable policy regardless of backbone; only the freeze differs.
+        if getattr(self.config.ppo, 'ref_kl_coef', 0.0) > 0.0:
+            ref_policy, _, _ = build_policy()
+            self.ref_policy = self._freeze_ref_policy(ref_policy)
+        else:
+            self.ref_policy = None
 
         # Attach the data directory so reward functions can resolve relative paths.
         self.dataset_info['datadir'] = self.config.datadir
@@ -100,6 +107,16 @@ class PPOFineTuner(pl.LightningModule):
         )
         self.freeze_parameters()
         self._init_grad_logging()
+
+    @staticmethod
+    def _freeze_ref_policy(ref_policy):
+        """Put a freshly-built policy into eval mode with grads disabled, for
+        use as the frozen KL anchor. Same treatment for either backbone."""
+        ref_policy.eval()
+        for p in ref_policy.parameters():
+            p.requires_grad_(False)
+        print("[Init] Frozen reference policy loaded for KL anchor.")
+        return ref_policy
 
     # ------------------------------------------------------------------
     # Parameter freezing
